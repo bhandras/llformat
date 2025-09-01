@@ -21,6 +21,9 @@ var (
 	thisIsAReallyLongIdentifierNameThatGoesOnAndOnAndProbablyExceedsEightyColumnsWhenPrintedOut = 123
 )
 
+// Provide an entry point so this single file builds as an executable.
+func main() {}
+
 // example1: Long error format string followed by one expression.
 //   - Exercises splitting a single long text arg and keeping the following expr
 //     on the same line when possible.
@@ -236,5 +239,77 @@ func example24ReturnErr(x int) error {
 	return nil
 }
 
-// Provide an entry point so this single file builds as an executable.
-func main() {}
+// example25: Deeper code nesting with loops and conditionals.
+// - Exercises formatter inside multiple nested blocks.
+func example25DeepNesting(vals []int, threshold int) {
+	for i := 0; i < len(vals); i++ {
+		if vals[i] > 0 {
+			for j := 0; j < 2; j++ {
+				if j%2 == 0 {
+					log.Infof("Deep nesting i=%d j=%d "+
+						"with a message that likely "+
+						"needs wrapping and should "+
+						"remain readable across "+
+						"continuation lines", i, j)
+				} else {
+					log.Warnf("Alternate path i=%d j=%d "+
+						"with another long message "+
+						"to exercise the formatter "+
+						"and ensure continuity", i, j)
+				}
+			}
+		}
+	}
+}
+
+// example26: Tricky concatenations with placeholders split across pieces.
+// - Exercises flattening while preserving spaces exactly.
+func example26TrickyConcat(user string, action string, when interface{}) {
+	log.Debugf("User %s performed %s at %v with flags A and B set", user,
+		action, when)
+}
+
+// example27: fmt.Sprintf in a return statement returning string.
+// - Ensures return + fmt.Sprintf gets formatted like other calls.
+func example27ReturnSprintf(a, b int) string {
+	return fmt.Sprintf("Computing a result with two integers a=%d and "+
+		"b=%d while adding some longer description to wrap nicely", a,
+		b)
+}
+
+// example28: fmt.Sprintf returns in conditional branches.
+// - Exercises mixed placement of return + call.
+func example28BranchReturn(flag bool, name string) string {
+	if flag {
+		return fmt.Sprintf("Flag true for name=%s with an extended "+
+			"tail that should wrap correctly here as well", name)
+	}
+	return fmt.Sprintf("Flag false for name=%s with a similarly long "+
+		"tail requiring a wrap", name)
+}
+
+// example29: defer and goroutine with targeted calls.
+// - Ensures detection in defer/go contexts.
+func example29DeferGo(i int) {
+	defer log.Infof("Deferred logging for i=%d with a long enough "+
+		"sentence to need wrapping and still look good", i)
+	go log.Warnf("Goroutine warning for i=%d including some more words "+
+		"to force wrapping on continuation", i)
+}
+
+// example30: switch-case with long messages.
+// - Exercises switch formatting inside cases.
+func example30Switch(v int) {
+	switch v {
+	case 0:
+		log.Tracef("Value is zero which triggers a verbose " +
+			"explanation that continues across multiple lines " +
+			"for clarity")
+	case 1:
+		log.Tracef("Value one encountered; this message should also " +
+			"wrap correctly under switch-case indentation")
+	default:
+		log.Errorf("Unexpected value %d requiring attention with a "+
+			"description that certainly should be wrapped", v)
+	}
+}
