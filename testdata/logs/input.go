@@ -365,3 +365,85 @@ func example30Switch(v int) {
 		)
 	}
 }
+
+// example31: No-space very long string with wide runes and emoji
+// - Hard-cut only; ensure we don't break mid-UTF-8 and width is visual.
+func example31NoSpaceUnicode() {
+	log.Infof("測試測試測試測試測試測試測試測試😅😅😅😅😅😅😅😅😅😅測試測試測試測試測試測試測試測試")
+}
+
+// example32: Combining marks and zero-width characters
+//   - Ensure combining marks don't add width; split at space not combining
+//     boundary.
+func example32Combining() {
+	log.Infof("Café and déjà vu occur in this sentence repeatedly to test combining width handling")
+}
+
+// example33: Non-breaking spaces should be preserved and count as width 1.
+func example33NBSP() {
+	log.Infof("A B C with non breaking spaces and a longer tail to wrap cleanly")
+}
+
+// example34: Mixed tabs in indent and inside string.
+func example34Tabs() {
+	log.Infof("Column	separated	values with tabs and a long trailer that should wrap here nicely")
+}
+
+// example35: Raw backtick string that would overflow on the head.
+// - Must break before it; no splitting of raw string literal.
+func example35RawOverflow() {
+	log.Infof(`AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`)
+}
+
+// example36: Nested targeted call deeply, with long head and long tail.
+func example36DeepNested() {
+	log.Infof("Head %s", fmt.Sprintf("Nested %s", fmt.Sprintf("Inner %s", fmt.Sprintf("Leaf %d %d %d %d and then some text that will wrap", 1, 2, 3, 4))))
+}
+
+// example37: Percent verbs near boundary.
+func example37Percents(x, y int) {
+	log.Infof("Values %%d= %d and %%d= %d placed near the boundary for packing", x, y)
+}
+
+// example38: Escaped quotes and backslashes.
+func example38Escapes() {
+	log.Infof("path=\"C:\\Program Files\\App\" arguments=--flag=\"value with a fairly long description to wrap\"")
+}
+
+// example39: Leading comment on next arg and block comment.
+func example39Comments() {
+	log.Warnf("First arg", // trailing comment stays
+		/* block between args */ longVariableNameHere)
+}
+
+// example40: Multiple expressions after wrapped text; ensure lookahead break.
+func example40Lookahead(a, b, c int) {
+	log.Infof("This header will wrap because it is too long to fit on one line with the following expressions:", a, b, c)
+}
+
+// example41: Long fmt.Sprintf in return in nested position.
+func example41ReturnNested() string {
+	return fmt.Sprintf("outer %s", fmt.Sprintf("inner %s", fmt.Sprintf("leaf %d %d %d %d wrapped nicely here", 7, 8, 9, 10)))
+}
+
+// example42: Raw string with backticks that contains quotes and percent verbs,
+// no split.
+func example42RawMixed() {
+	log.Infof(`raw "quoted" %d with %s that should not be split across lines even if very long raw backtick literal`)
+}
+
+// example43: Mix of wide, emoji, combining and ASCII to stress width
+// accounting.
+func example43Mix() {
+	log.Infof("混合🙂é and A B with long tail to enforce split here and still keep expressions:", 123)
+}
+
+// example44: Nested targeted call as first argument content.
+func example44NestedFirst() {
+	log.Infof(fmt.Sprintf("A very very long head that will wrap inside nested call while still being attached correctly to the outer call: %d %d", 1, 2))
+}
+
+// example45: String with many consecutive spaces and tabs mixed.
+func example45SpacesTabs() {
+	log.Infof("one   two		three    four     five with a long sentence that ensures wrapping")
+}
