@@ -329,13 +329,13 @@ func example32Combining() {
 		"test combining width handling")
 }
 
-// example33: Non-breaking spaces should be preserved and count as width 1
+// example33: Non-breaking spaces should be preserved and count as width 1.
 func example33NBSP() {
 	log.Infof("A B C with non breaking spaces and a longer tail to wrap " +
 		"cleanly")
 }
 
-// example34: Mixed tabs in indent and inside string
+// example34: Mixed tabs in indent and inside string.
 func example34Tabs() {
 	log.Infof("Column	separated	values with tabs and a long " +
 		"trailer that should wrap here nicely")
@@ -360,7 +360,7 @@ func example37Percents(x, y int) {
 		"packing", x, y)
 }
 
-// example38: Escaped quotes and backslashes
+// example38: Escaped quotes and backslashes.
 func example38Escapes() {
 	log.Infof("path=\"C:\\Program Files\\App\" arguments=--flag=\"value " +
 		"with a fairly long description to wrap\"")
@@ -368,7 +368,7 @@ func example38Escapes() {
 
 // example39: Leading comment on next arg and block comment.
 func example39Comments() {
-	log.Warnf("First arg", /* block between args */ // trailing comment stays
+	log.Warnf("First arg", // trailing comment stays /* block between args */
 		longVariableNameHere)
 }
 
@@ -380,8 +380,8 @@ func example40Lookahead(a, b, c int) {
 
 // example41: Long fmt.Sprintf in return in nested position.
 func example41ReturnNested() string {
-	return fmt.Sprintf("outer %s", fmt.Sprintf("inner %s", fmt.Sprintf("le"+
-		"af %d %d %d %d wrapped nicely here", 7, 8, 9, 10)))
+	return fmt.Sprintf("outer %s", fmt.Sprintf("inner %s", fmt.Sprintf(
+		"leaf %d %d %d %d wrapped nicely here", 7, 8, 9, 10)))
 }
 
 // example42: Raw string with backticks that contains quotes and percent verbs,
@@ -409,4 +409,3 @@ func example45SpacesTabs() {
 	log.Infof("one   two		three    four     five with a long " +
 		"sentence that ensures wrapping")
 }
-

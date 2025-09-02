@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"os"
 	"strconv"
 	"strings"
 	"unicode"
@@ -17,10 +18,27 @@ import (
 // targeted call's argument list to guide nested breaking heuristics.
 var nestedDepth int
 
+// columnLimit is the maximum line width (boundary at this column). Default 80.
+var columnLimit = 80
+
+// tabStop is the visual width of a tab stop. Default 8.
+var tabStop = 8
+
 // FormatFile applies log/printf wrapping rules to the provided Go source.
 // It keeps unrelated content intact and aims to be resilient even if the file
 // is not fully valid Go.
 func FormatFile(src []byte) []byte {
+	// Optional configuration via environment for width and tabstop.
+	if v := os.Getenv("LLFORMAT_COLUMNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 40 && n <= 200 {
+			columnLimit = n
+		}
+	}
+	if v := os.Getenv("LLFORMAT_TABSTOP"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 2 && n <= 16 {
+			tabStop = n
+		}
+	}
 	targets := []string{
 		"log.Infof(", "log.Debugf(", "log.Tracef(", "log.Errorf(", "log.Warnf(",
 		"fmt.Printf(", "fmt.Sprintf(", "fmt.Errorf(",
@@ -169,7 +187,7 @@ func formatCall(call []byte, wsIndent string, baseLen int) string {
 	}
 
 	// Now layout lines <= 80 columns.
-	const width = 80
+	width := columnLimit
 	// Base line starts with indent + head + "("
 	var b strings.Builder
 	b.WriteString(head)
@@ -579,7 +597,7 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 		normArgs = append(normArgs, arg{kind: argExpr, expr: trimmed})
 	}
 
-	const width = 80
+	width := columnLimit
 	var b strings.Builder
 	b.WriteString(head)
 	b.WriteByte('(')
@@ -589,7 +607,7 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 	writeSplit := func(seg string) {
 		q := quoteGoString(seg)
 		b.WriteString(q)
-		curLen += visualLen(q)
+		curLen = advanceCols(curLen, q)
 		b.WriteByte(' ')
 		b.WriteByte('+')
 		curLen += 2
@@ -598,6 +616,7 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 		curLen = visualLen(contIndent)
 	}
 
+	// Track if the previous string argument wrapped across lines.
 	lastTextWrapped := false
 	for i, a := range normArgs {
 		justBroke := false
@@ -624,27 +643,28 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 					}
 				}
 			}
-			// Place block comment immediately before the separator as
-			// trailing comment of the previous arg.
-			if blockCommentPrefix != "" {
-				b.WriteByte(' ')
-				b.WriteString(blockCommentPrefix)
-				curLen += 1 + visualLen(blockCommentPrefix)
-			}
 			if hasInlineComment {
+				// Separator on same line; attach trailing line comment to
+				// previous arg, then place any block comment before next arg.
 				b.WriteString(", ")
 				curLen += 2
 				if lineCommentPrefix != "" {
 					b.WriteString(lineCommentPrefix)
 					curLen += visualLen(lineCommentPrefix)
 				}
+				if blockCommentPrefix != "" {
+					b.WriteByte(' ')
+					b.WriteString(blockCommentPrefix)
+					curLen += 1 + visualLen(blockCommentPrefix)
+				}
 				// Fall through to printing arg on same line.
 			} else {
-				// Optional lookahead: after a text arg, if keeping this expr on
-				// the current line would force the next expr to wrap, break now so
-				// both exprs can sit together on the continuation line.
+				// After a wrapped text, keep pairs of expressions together on
+				// the continuation line when the pair wouldn't both fit on the
+				// current line. This is a minimal, deterministic lookahead to
+				// match the intended greedy flow without ad-hoc tie-breakers.
 				forceBreak := false
-				if a.kind == argExpr && lastTextWrapped {
+				if lastTextWrapped && a.kind == argExpr {
 					if i+1 < len(normArgs) && normArgs[i+1].kind == argExpr {
 						need1 := firstLineLen(a.expr)
 						need2 := firstLineLen(normArgs[i+1].expr)
@@ -666,28 +686,63 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 							b.WriteString(lineCommentPrefix)
 							curLen += visualLen(lineCommentPrefix)
 						}
+						if blockCommentPrefix != "" {
+							b.WriteByte(' ')
+							b.WriteString(blockCommentPrefix)
+							curLen += 1 + visualLen(blockCommentPrefix)
+						}
+						// Only consider the lookahead for the very first
+						// expression after a wrapped text.
+						lastTextWrapped = false
 					} else {
+						// Put trailing line comment on the same line as the comma.
 						b.WriteByte(',')
+						if lineCommentPrefix != "" {
+							b.WriteByte(' ')
+							b.WriteString(lineCommentPrefix)
+						}
 						b.WriteByte('\n')
 						b.WriteString(contIndent)
 						curLen = visualLen(contIndent)
 						justBroke = true
+						if blockCommentPrefix != "" {
+							// Place block comment before the arg on the new line.
+							b.WriteString(blockCommentPrefix)
+							b.WriteByte(' ')
+							curLen += visualLen(blockCommentPrefix) + 1
+						}
+						// Reset lookahead after the first decision.
+						lastTextWrapped = false
 					}
 				case argText:
 					// minimal placeable segment on same line: "X" +
-					if curLen+2+(2+1+2) < width { // ", " + (quotes+char+ +)
+					if curLen+2+(2+1+2) <= width { // ", " + (quotes+char+ +)
 						b.WriteString(", ")
 						curLen += 2
 						if lineCommentPrefix != "" {
 							b.WriteString(lineCommentPrefix)
 							curLen += visualLen(lineCommentPrefix)
 						}
+						if blockCommentPrefix != "" {
+							b.WriteByte(' ')
+							b.WriteString(blockCommentPrefix)
+							curLen += 1 + visualLen(blockCommentPrefix)
+						}
 					} else {
 						b.WriteByte(',')
+						if lineCommentPrefix != "" {
+							b.WriteByte(' ')
+							b.WriteString(lineCommentPrefix)
+						}
 						b.WriteByte('\n')
 						b.WriteString(contIndent)
 						curLen = visualLen(contIndent)
 						justBroke = true
+						if blockCommentPrefix != "" {
+							b.WriteString(blockCommentPrefix)
+							b.WriteByte(' ')
+							curLen += visualLen(blockCommentPrefix) + 1
+						}
 					}
 				}
 			}
@@ -699,7 +754,7 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 			if isTargetedCallStart(a.expr) {
 				need = exprHeadLen(a.expr)
 			}
-			if !justBroke && !isRawStringLiteral(a.expr) && curLen+need >= width {
+			if !justBroke && !isRawStringLiteral(a.expr) && curLen+need > width {
 				b.WriteByte('\n')
 				b.WriteString(contIndent)
 				curLen = visualLen(contIndent)
@@ -712,9 +767,8 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 				curLen = lastLineLen(formatted)
 			} else {
 				b.WriteString(a.expr)
-				curLen += visualLen(a.expr)
+				curLen = advanceCols(curLen, a.expr)
 			}
-			lastTextWrapped = false
 			continue
 		}
 
@@ -728,20 +782,16 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 			if i < len(normArgs)-1 {
 				suffix = 2
 			}
-			if curLen+visualLen(q)+suffix < width {
+			if advanceCols(curLen, q)+suffix <= width {
 				b.WriteString(q)
-				curLen += visualLen(q)
+				curLen = advanceCols(curLen, q)
 				rest = ""
 				break
 			}
-			// Base capacity for content (excluding quotes and " +").
+			// Capacity for content (excluding quotes and " +") of this split
+			// segment. This is a non-final segment (we are splitting), so we
+			// allow exact fill up to the boundary with the trailing " +".
 			capCols := (width) - curLen - 2 - 2 // quotes + " +"
-			// For the last string argument, enforce strict boundary (no
-			// exact fill). For earlier args, allow exact fill to match golden
-			// packing around subsequent expressions.
-			if i == len(normArgs)-1 {
-				capCols-- // strict for last string arg
-			}
 			if capCols <= 0 {
 				b.WriteByte('\n')
 				b.WriteString(contIndent)
@@ -751,36 +801,45 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 					capCols = 1
 				}
 			}
-			cut := lastSpaceBefore(rest, capCols)
+			// Choose the last ASCII space whose QUOTED prefix fits, taking
+			// into account escape expansion inside the literal.
+			cut := lastQuotedSpaceBefore(curLen, rest, width)
 			if cut <= 0 {
-				// Hard cut by visual columns
-				cols := 0
-				idx := 0
-				// Allow exact-fill in the hard-cut case (no spaces) by
-				// permitting one extra content column compared to the strict
-				// space-split path.
-				hardCap := capCols + 1
-				for idx < len(rest) {
-					r, sz := utf8.DecodeRuneInString(rest[idx:])
-					w := runeWidth(r)
-					if cols+w > hardCap {
-						break
+				// No space within capacity.
+				// If we are not on a continuation line and the upcoming word
+				// (up to the next space) would fit on a continuation line,
+				// wrap before it to avoid splitting a word on the head line.
+				if curLen != visualLen(contIndent) {
+					if sp := strings.IndexByte(rest, ' '); sp > 0 {
+						base := visualLen(contIndent)
+						// compute content width of the first word at cont indent
+						wordCols := advanceCols(base, rest[:sp]) - base
+						nextCap := (width) - base - 2 - 2 // quotes + " +"
+						if wordCols <= nextCap {
+							b.WriteByte('\n')
+							b.WriteString(contIndent)
+							curLen = visualLen(contIndent)
+							// Recompute capacity on the fresh continuation line
+							capCols = (width) - curLen - 2 - 2
+							if capCols <= 0 {
+								capCols = 1
+							}
+							continue
+						}
 					}
-					cols += w
-					idx += sz
 				}
-				if idx <= 0 {
-					idx = 1
-				}
+				// Hard cut by visual columns.
+				idx := cutIndexForWidthFrom(curLen, rest, capCols)
 				seg := rest[:idx]
 				writeSplit(seg)
 				didSplit = true
 				rest = rest[idx:]
 				continue
 			}
+			// Pure greedy: no additional word-pushing heuristics.
 			// Pure greedy: take the last space within capacity.
 			seg := rest[:cut+1] // keep the space at end
-			writeSplit(seg)
+            writeSplit(seg)
 			didSplit = true
 			rest = rest[cut+1:]
 		}
@@ -982,7 +1041,43 @@ func splitTopLevel(s string) []string {
 	return out
 }
 
-func quoteGoString(s string) string { return strconv.Quote(s) }
+func quoteGoString(s string) string {
+	// Emit a double-quoted Go string literal, preserving runes as-is where
+	// possible. Escape only what Go requires or what would break the literal:
+	// - '"' and '\\' are escaped
+	// - tabs are kept as a literal tab (not \t)
+	// - control runes below space (except tab) are emitted as \xNN
+	// - newlines should not appear in segments (we split lines before), but
+	//   if present, escape as \n
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"', '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case '\n':
+			b.WriteString("\\n")
+		case '\r':
+			b.WriteString("\\r")
+		case '\t':
+			// Keep literal tab to match golden behavior
+			b.WriteByte('\t')
+		default:
+			if r < 0x20 {
+				// Other control chars: emit as \xNN
+				b.WriteString("\\x")
+				const hexdigits = "0123456789abcdef"
+				b.WriteByte(hexdigits[(r>>4)&0xF])
+				b.WriteByte(hexdigits[r&0xF])
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
 
 // chunkText splits s into segments suitable for line-wrapping with ` +` between
 // lines. It prefers splitting on spaces and ensures that every segment except
@@ -1207,9 +1302,8 @@ func chooseSuffixStart(s string, lastAvail, firstAvail, nextAvail int) int {
 }
 
 func lastSpaceBefore(s string, maxCols int) int {
-	// Return the last byte index of a space rune whose position is within
-	// maxCols visual columns from the start of s. Counts runes using
-	// runeWidth to approximate terminal width.
+	// Return the last byte index of an ASCII space character within maxCols
+	// visual columns from the start of s.
 	col := 0
 	last := -1
 	for i, r := range s {
@@ -1217,7 +1311,7 @@ func lastSpaceBefore(s string, maxCols int) int {
 		if col+w > maxCols {
 			break
 		}
-		if unicode.IsSpace(r) {
+		if r == ' ' {
 			last = i
 		}
 		col += w
@@ -1240,14 +1334,131 @@ func visualLen(s string) int {
 			col = 0
 			continue
 		case '\t':
-			// Tabs as 8-column stops.
-			next := ((col / 8) + 1) * 8
+			// Tabs advance to the next tab stop.
+			ts := tabStop
+			if ts <= 0 {
+				ts = 8
+			}
+			next := ((col / ts) + 1) * ts
 			col = next
 			continue
 		}
 		col += runeWidth(r)
 	}
 	return col
+}
+
+// advanceCols returns the absolute column after writing s starting from
+// startCol, accounting for tabs advancing to the next tab stop.
+func advanceCols(startCol int, s string) int {
+	col := startCol
+	for _, r := range s {
+		switch r {
+		case '\n':
+			col = 0
+			continue
+		case '\t':
+			ts := tabStop
+			if ts <= 0 {
+				ts = 8
+			}
+			next := ((col / ts) + 1) * ts
+			col = next
+			continue
+		}
+		col += runeWidth(r)
+	}
+	return col
+}
+
+// lastSpaceBeforeFrom returns the last byte index of an ASCII space such that
+// the substring up to that index fits within maxCols additional columns when
+// starting from startCol.
+func lastSpaceBeforeFrom(startCol int, s string, maxCols int) int {
+	col := startCol
+	last := -1
+	i := 0
+	for i < len(s) {
+		r, sz := utf8.DecodeRuneInString(s[i:])
+		var w int
+		if r == '\t' {
+			ts := tabStop
+			if ts <= 0 {
+				ts = 8
+			}
+			next := ((col / ts) + 1) * ts
+			w = next - col
+		} else if r == '\n' {
+			// Stop at newline; callers expect single-line handling.
+			break
+		} else {
+			w = runeWidth(r)
+		}
+		if (col + w - startCol) >= maxCols {
+			break
+		}
+		if r == ' ' {
+			last = i
+		}
+		col += w
+		i += sz
+	}
+	return last
+}
+
+// lastQuotedSpaceBefore returns the last index of an ASCII space in s such
+// that the quoted prefix up to and including that space would fit within the
+// boundary when starting from startCol and accounting for " +" at the end of
+// the segment. Returns -1 if no such boundary exists.
+func lastQuotedSpaceBefore(startCol int, s string, boundary int) int {
+	last := -1
+	// Scan forward; the quoted width is monotonic with i.
+	for i := 0; i < len(s); i++ {
+		if s[i] != ' ' {
+			continue
+		}
+		piece := s[:i+1]
+		used := advanceCols(startCol, quoteGoString(piece)) + 2 // account for " +"
+		if used <= boundary {
+			last = i
+		} else {
+			break
+		}
+	}
+	return last
+}
+
+// cutIndexForWidthFrom returns the number of bytes from the start of s that
+// fit within maxCols additional columns when starting from startCol. It avoids
+// splitting runes.
+func cutIndexForWidthFrom(startCol int, s string, maxCols int) int {
+	col := startCol
+	i := 0
+	for i < len(s) {
+		r, sz := utf8.DecodeRuneInString(s[i:])
+		var w int
+		if r == '\t' {
+			ts := tabStop
+			if ts <= 0 {
+				ts = 8
+			}
+			next := ((col / ts) + 1) * ts
+			w = next - col
+		} else if r == '\n' {
+			break
+		} else {
+			w = runeWidth(r)
+		}
+		if (col + w - startCol) > maxCols {
+			break
+		}
+		col += w
+		i += sz
+	}
+	if i <= 0 {
+		return 1
+	}
+	return i
 }
 
 func runeWidth(r rune) int {
@@ -1261,7 +1472,7 @@ func runeWidth(r rune) int {
 	if unicode.Is(unicode.Mn, r) {
 		return 0
 	}
-	if isWideRune(r) {
+	if isWideRune(r) || isEmojiRune(r) {
 		return 2
 	}
 	return 1
