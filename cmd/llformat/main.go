@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/lightninglabs/llformat/internal/format"
+	"github.com/lightninglabs/llformat/formatter"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	out := format.FormatFile(data)
+	out := formatter.FormatFile(data)
 
 	if write {
 		if err := ioutil.WriteFile(path, out, 0644); err != nil {

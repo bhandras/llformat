@@ -1,4 +1,4 @@
-package format
+package formatter
 
 import (
 	"os"
@@ -7,12 +7,13 @@ import (
 )
 
 func TestLogsExamples(t *testing.T) {
-	dir := filepath.Join("..", "..", "testdata", "logs")
+	dir := filepath.Join("..", "testdata", "logs")
 	in, err := os.ReadFile(filepath.Join(dir, "input.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := FormatFile(in)
+	f := NewLeftFlowFormatter(Config{})
+	got := f.FormatFile(in)
 	want, err := os.ReadFile(filepath.Join(dir, "output.go"))
 	if err != nil {
 		t.Fatal(err)
