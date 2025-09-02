@@ -27,7 +27,8 @@ type Config struct {
 // LeftFlowFormatter implements the simple left-flowing greedy formatting.
 type LeftFlowFormatter struct{ cfg Config }
 
-// NewLeftFlowFormatter creates a new left-flowing greedy formatter with defaults.
+// NewLeftFlowFormatter creates a new left-flowing greedy formatter with
+// defaults.
 func NewLeftFlowFormatter(cfg Config) *LeftFlowFormatter {
 	if cfg.ColumnLimit <= 0 {
 		cfg.ColumnLimit = 80
@@ -52,8 +53,8 @@ func defaultTargets() []string {
 	}
 }
 
-// FormatFile applies formatting with default config and default targets.
-// This is a convenience wrapper for callers that don't need custom config.
+// FormatFile applies formatting with default config and default targets. This
+// is a convenience wrapper for callers that don't need custom config.
 func FormatFile(src []byte) []byte {
 	// Reset to defaults for single-shot formatting.
 	columnLimit = 80
@@ -78,12 +79,13 @@ var currentTargets []string
 
 func formatWithTargets(src []byte, targets []string) []byte {
 	currentTargets = targets
-	// We'll scan for target callsites and rewrite them in-place into a buffer.
+	// We'll scan for target callsites and rewrite them in-place into a
+	// buffer.
 	var out bytes.Buffer
 	i := 0
 	for i < len(src) {
-		// Try to match any target at this position (skipping when inside string/comment
-		// handled by a lightweight scanner).
+		// Try to match any target at this position (skipping when
+		// inside string/comment handled by a lightweight scanner).
 		if isStringStart(src, i) {
 			// Copy string literal as-is.
 			start := i
@@ -117,13 +119,15 @@ func formatWithTargets(src []byte, targets []string) []byte {
 			continue
 		}
 
-		// We found a target call. Find its full extent (balanced parentheses).
+		// We found a target call. Find its full extent (balanced
+		// parentheses).
 		callStart := i
 		// Find the opening parenthesis index right after the target.
 		openIdx := callStart + len(matched) - 1 // points to '('
 		endIdx := scanBalancedParen(src, openIdx)
 		if endIdx <= openIdx {
-			// Could not find a balanced call; copy verbatim and continue to avoid mangling.
+			// Could not find a balanced call; copy verbatim and
+			// continue to avoid mangling.
 			out.Write(src[callStart : callStart+len(matched)])
 			i = callStart + len(matched)
 			continue
@@ -131,8 +135,8 @@ func formatWithTargets(src []byte, targets []string) []byte {
 
 		// Split around to get indent and call head.
 		lineStart := lastLineStart(src, callStart)
-		// indentBytes is the entire slice from line start to call start (may include
-		// non-whitespace like "return ").
+		// indentBytes is the entire slice from line start to call start
+		// (may include non-whitespace like "return ").
 		indentBytes := src[lineStart:callStart]
 		// wsIndent is only the leading whitespace of the line.
 		wsIndent := leadingWhitespace(src, lineStart)
@@ -151,9 +155,9 @@ func formatWithTargets(src []byte, targets []string) []byte {
 }
 
 // formatCallGreedy applies a simple greedy layout: keep arguments on the
-// current line if they fit (including a preceding ", "), otherwise break
-// before the argument. String literals are split at the last space before the
-// boundary (or hard-cut) and joined with " +" on continuation lines.
+// current line if they fit (including a preceding ", "), otherwise break before
+// the argument. String literals are split at the last space before the boundary
+// (or hard-cut) and joined with " +" on continuation lines.
 func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 	s := string(call)
 	open := strings.IndexByte(s, '(')
@@ -163,9 +167,8 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 	head := s[:open]
 	argsBody := s[open+1 : len(s)-1]
 
-	// No pre-scan; we will attach leading comments of the next arg (// or /* */)
-	// to the previous argument inline when emitting.
-
+	// No pre-scan; we will attach leading comments of the next arg (// or
+	// /* */) to the previous argument inline when emitting.
 	rawArgs := splitTopLevel(argsBody)
 	hasInlineComment := strings.Contains(argsBody, "/*") || strings.Contains(argsBody, "//")
 	normArgs := make([]arg, 0, len(rawArgs))
@@ -204,8 +207,9 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 	for i, a := range normArgs {
 		justBroke := false
 		if i > 0 {
-			// If this arg starts with a comment, detach it so we can place it
-			// next to the preceding argument in the correct position.
+			// If this arg starts with a comment, detach it so we
+			// can place it next to the preceding argument in the
+			// correct position.
 			lineCommentPrefix := ""
 			blockCommentPrefix := ""
 			if a.kind == argExpr {
@@ -227,8 +231,9 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 				}
 			}
 			if hasInlineComment {
-				// Separator on same line; attach trailing line comment to
-				// previous arg, then place any block comment before next arg.
+				// Separator on same line; attach trailing line
+				// comment to previous arg, then place any block
+				// comment before next arg.
 				b.WriteString(", ")
 				curLen += 2
 				if lineCommentPrefix != "" {
@@ -242,10 +247,12 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 				}
 				// Fall through to printing arg on same line.
 			} else {
-				// After a wrapped text, keep pairs of expressions together on
-				// the continuation line when the pair wouldn't both fit on the
-				// current line. This is a minimal, deterministic lookahead to
-				// match the intended greedy flow without ad-hoc tie-breakers.
+				// After a wrapped text, keep pairs of
+				// expressions together on the continuation line
+				// when the pair wouldn't both fit on the
+				// current line. This is a minimal,
+				// deterministic lookahead to match the intended
+				// greedy flow without ad-hoc tie-breakers.
 				forceBreak := false
 				if lastTextWrapped && a.kind == argExpr {
 					if i+1 < len(normArgs) && normArgs[i+1].kind == argExpr {
@@ -274,11 +281,13 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 							b.WriteString(blockCommentPrefix)
 							curLen += 1 + visualLen(blockCommentPrefix)
 						}
-						// Only consider the lookahead for the very first
-						// expression after a wrapped text.
+						// Only consider the lookahead
+						// for the very first expression
+						// after a wrapped text.
 						lastTextWrapped = false
 					} else {
-						// Put trailing line comment on the same line as the comma.
+						// Put trailing line comment on
+						// the same line as the comma.
 						b.WriteByte(',')
 						if lineCommentPrefix != "" {
 							b.WriteByte(' ')
@@ -289,16 +298,20 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 						curLen = visualLen(contIndent)
 						justBroke = true
 						if blockCommentPrefix != "" {
-							// Place block comment before the arg on the new line.
+							// Place block comment
+							// before the arg on the
+							// new line.
 							b.WriteString(blockCommentPrefix)
 							b.WriteByte(' ')
 							curLen += visualLen(blockCommentPrefix) + 1
 						}
-						// Reset lookahead after the first decision.
+						// Reset lookahead after the
+						// first decision.
 						lastTextWrapped = false
 					}
 				case argText:
-					// minimal placeable segment on same line: "X" +
+					// minimal placeable segment on same
+					// line: "X" +
 					if curLen+2+(2+1+2) <= width { // ", " + (quotes+char+ +)
 						b.WriteString(", ")
 						curLen += 2
@@ -332,7 +345,8 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 		}
 
 		if a.kind == argExpr {
-			// For nested targeted calls, use the head length to decide fit.
+			// For nested targeted calls, use the head length to
+			// decide fit.
 			need := firstLineLen(a.expr)
 			if isTargetedCallStart(a.expr) {
 				need = exprHeadLen(a.expr)
@@ -358,7 +372,8 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 		didSplit := false
 		for len(rest) > 0 {
 			q := quoteGoString(rest)
-			// If there are more args after this string, reserve ", " suffix.
+			// If there are more args after this string, reserve ",
+			// " suffix.
 			suffix := 0
 			if i < len(normArgs)-1 {
 				suffix = 2
@@ -369,9 +384,10 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 				rest = ""
 				break
 			}
-			// Capacity for content (excluding quotes and " +") of this split
-			// segment. This is a non-final segment (we are splitting), so we
-			// allow exact fill up to the boundary with the trailing " +".
+			// Capacity for content (excluding quotes and " +") of
+			// this split segment. This is a non-final segment (we
+			// are splitting), so we allow exact fill up to the
+			// boundary with the trailing " +".
 			capCols := (width) - curLen - 2 - 2 // quotes + " +"
 			if capCols <= 0 {
 				b.WriteByte('\n')
@@ -382,25 +398,30 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 					capCols = 1
 				}
 			}
-			// Choose the last ASCII space whose QUOTED prefix fits, taking
-			// into account escape expansion inside the literal.
+			// Choose the last ASCII space whose QUOTED prefix fits,
+			// taking into account escape expansion inside the
+			// literal.
 			cut := lastQuotedSpaceBefore(curLen, rest, width)
 			if cut <= 0 {
-				// No space within capacity.
-				// If we are not on a continuation line and the upcoming word
-				// (up to the next space) would fit on a continuation line,
-				// wrap before it to avoid splitting a word on the head line.
+				// No space within capacity. If we are not on a
+				// continuation line and the upcoming word (up
+				// to the next space) would fit on a
+				// continuation line, wrap before it to avoid
+				// splitting a word on the head line.
 				if curLen != visualLen(contIndent) {
 					if sp := strings.IndexByte(rest, ' '); sp > 0 {
 						base := visualLen(contIndent)
-						// compute content width of the first word at cont indent
+						// compute content width of the
+						// first word at cont indent
 						wordCols := advanceCols(base, rest[:sp]) - base
 						nextCap := (width) - base - 2 - 2 // quotes + " +"
 						if wordCols <= nextCap {
 							b.WriteByte('\n')
 							b.WriteString(contIndent)
 							curLen = visualLen(contIndent)
-							// Recompute capacity on the fresh continuation line
+							// Recompute capacity on
+							// the fresh
+							// continuation line
 							capCols = (width) - curLen - 2 - 2
 							if capCols <= 0 {
 								capCols = 1
@@ -611,7 +632,8 @@ func splitTopLevel(s string) []string {
 
 func quoteGoString(s string) string {
 	// Emit a double-quoted Go string literal, preserving runes as-is where
-	// possible. Escape only what Go requires or what would break the literal:
+	// possible. Escape only what Go requires or what would break the
+	// literal:
 	// - '"' and '\\' are escaped
 	// - tabs are kept as a literal tab (not \t)
 	// - control runes below space (except tab) are emitted as \xNN
@@ -656,14 +678,12 @@ func quoteGoString(s string) string {
 // chunkTextFitWithLastLimit splits s into segments honoring different limits
 // for the first/middle segments and a tighter limit for the final segment. All
 // limits are total per-line available columns including the two surrounding
-// quotes.
-// (legacy chunkTextFitWithLastLimit removed)
+// quotes. (legacy chunkTextFitWithLastLimit removed)
 
 // chooseSuffixStart returns an index in s where a final suffix segment can
 // start so that the quoted suffix fits in lastAvail columns. It prefers
 // starting at word boundaries (the character after a space). Returns 0 if no
-// reasonable boundary is found.
-// (legacy chooseSuffixStart removed)
+// reasonable boundary is found. (legacy chooseSuffixStart removed)
 
 // (legacy lastSpaceBefore removed)
 
@@ -672,8 +692,9 @@ func visualLen(s string) int {
 	for _, r := range s {
 		switch r {
 		case '\n':
-			// Treat newline as reset of column; visualLen is generally used on
-			// single-line segments, but guard anyway.
+			// Treat newline as reset of column; visualLen is
+			// generally used on single-line segments, but guard
+			// anyway.
 			col = 0
 			continue
 		case '\t':
@@ -716,11 +737,10 @@ func advanceCols(startCol int, s string) int {
 
 // lastSpaceBeforeFrom returns the last byte index of an ASCII space such that
 // the substring up to that index fits within maxCols additional columns when
-// starting from startCol.
-// (legacy lastSpaceBeforeFrom removed)
+// starting from startCol. (legacy lastSpaceBeforeFrom removed)
 
-// lastQuotedSpaceBefore returns the last index of an ASCII space in s such
-// that the quoted prefix up to and including that space would fit within the
+// lastQuotedSpaceBefore returns the last index of an ASCII space in s such that
+// the quoted prefix up to and including that space would fit within the
 // boundary when starting from startCol and accounting for " +" at the end of
 // the segment. Returns -1 if no such boundary exists.
 func lastQuotedSpaceBefore(startCol int, s string, boundary int) int {
@@ -741,8 +761,8 @@ func lastQuotedSpaceBefore(startCol int, s string, boundary int) int {
 	return last
 }
 
-// cutIndexForWidthFrom returns the number of bytes from the start of s that
-// fit within maxCols additional columns when starting from startCol. It avoids
+// cutIndexForWidthFrom returns the number of bytes from the start of s that fit
+// within maxCols additional columns when starting from startCol. It avoids
 // splitting runes.
 func cutIndexForWidthFrom(startCol int, s string, maxCols int) int {
 	col := startCol
@@ -792,7 +812,8 @@ func runeWidth(r rune) int {
 }
 
 func isWideRune(r rune) bool {
-	// Heuristic: treat common East Asian scripts and fullwidth ranges as wide.
+	// Heuristic: treat common East Asian scripts and fullwidth ranges as
+	// wide.
 	if unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hangul, r) {
 		return true
 	}
@@ -888,7 +909,8 @@ func exprHeadLen(s string) int {
 			// Include the '('
 			return visualLen(s[:i+1])
 		}
-		// Stop on newline since we only want head of first line by default.
+		// Stop on newline since we only want head of first line by
+		// default.
 		if c == '\n' {
 			return visualLen(s[:i])
 		}
@@ -913,15 +935,14 @@ func exprHeadLen(s string) int {
 // (legacy splitPrefixIntoTwo removed)
 
 // splitPrefixHeadCont tries to split s into 1 or 2 segments so that:
-// - segment 1 fits within firstAvail (including quotes), ending on a word boundary
-// - the remainder fits within nextAvail (including quotes)
-// Returns nil if it can't satisfy the constraints.
-// (legacy splitPrefixHeadCont removed)
+// - segment 1 fits within firstAvail (including quotes), ending on a word
+//   boundary
+// - the remainder fits within nextAvail (including quotes) Returns nil if it
+//   can't satisfy the constraints. (legacy splitPrefixHeadCont removed)
 
-// ensureHeadFits splits segs[0] if needed so that the first quoted segment
-// fits within firstAvail columns. It preserves word boundaries and adds a
-// trailing space to the first part if split.
-// (legacy ensureHeadFits removed)
+// ensureHeadFits splits segs[0] if needed so that the first quoted segment fits
+// within firstAvail columns. It preserves word boundaries and adds a trailing
+// space to the first part if split. (legacy ensureHeadFits removed)
 
 // leadingWhitespace returns the whitespace prefix of the line starting at idx.
 func leadingWhitespace(b []byte, idx int) []byte {
