@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,9 +31,8 @@ func TestCommentsGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if normalize(string(got)) != normalize(string(want)) {
-		t.Fatalf("formatted comment output mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	ng, nw := normalize(string(got)), normalize(string(want))
+	require.Equal(t, nw, ng)
 }
 
 func normalize(s string) string {
@@ -65,7 +65,6 @@ func TestCommentsGoldenWithInline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if normalize(string(got)) != normalize(string(want)) {
-		t.Fatalf("formatted comment output (inline mode) mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	ng, nw := normalize(string(got)), normalize(string(want))
+	require.Equal(t, nw, ng)
 }

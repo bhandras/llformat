@@ -1,23 +1,21 @@
 GO       ?= go
 BIN_DIR  ?= bin
+BIN      := $(BIN_DIR)/llformat
 
-.PHONY: all build unit test clean
+.PHONY: all build install unit test clean
 
-# Default: build all commands under cmd/*
 all: build
 
-# Discover command directories and map to binaries in bin/
-CMD_DIRS   := $(wildcard cmd/*)
-BINARIES   := $(patsubst cmd/%,$(BIN_DIR)/%,$(CMD_DIRS))
+# Build the llformat CLI
+build: $(BIN)
 
-# Rebuild when sources change
-SRC := $(shell find formatter -name '*.go') $(shell find cmd -name '*.go') go.mod
-
-build: $(BINARIES)
-
-$(BIN_DIR)/%: $(SRC)
+$(BIN): $(shell find formatter -name '*.go') $(shell find cmd -name '*.go') go.mod go.sum
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -o $@ ./cmd/$*
+	$(GO) build -o $@ ./cmd/llformat
+
+# Install llformat to GOPATH/bin
+install: build
+	$(GO) install ./cmd/llformat
 
 # Run unit tests
 unit test:

@@ -1,6 +1,8 @@
 package formatter
 
 import (
+	"github.com/stretchr/testify/require"
+	formatstd "go/format"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,13 +14,14 @@ func TestLogsExamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := NewLeftFlowFormatter(Config{})
+	f := NewCompactCallFormatter(Config{})
 	got := f.FormatFile(in)
 	want, err := os.ReadFile(filepath.Join(dir, "output.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != string(want) {
-		t.Fatalf("formatted output mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	if formatted, err := formatstd.Source(want); err == nil {
+		want = formatted
 	}
+	require.Equal(t, string(want), string(got))
 }

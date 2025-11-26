@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/lightninglabs/llformat/formatter"
 )
 
 func main() {
 	var (
-		write      bool
-		colLimit   int
-		tabStop    int
-		moveInline bool
+		write            bool
+		colLimit         int
+		tabStop          int
+		moveInline       bool
+		multilineExclude string
 	)
 
 	flag.BoolVar(&write, "w", false, "write result to (source) file instead of stdout")
@@ -22,10 +24,11 @@ func main() {
 	flag.IntVar(&colLimit, "col", 80, "column limit for formatting")
 	flag.IntVar(&tabStop, "tab", 8, "tab stop width for column calculations")
 	flag.BoolVar(&moveInline, "wrap-inline-comments", false, "when formatting comments, hoist trailing inline comments above for wrapping")
+	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
 	flag.Parse()
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--comments] [--wrap-inline-comments] [--col N] [--tab N] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] <path>")
 		os.Exit(2)
 	}
 
@@ -36,21 +39,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	out := data
+	// Parse multiline exclude list
+	var excludes []string
+	if multilineExclude != "" {
+		excludes = strings.Split(multilineExclude, ",")
+		for i := range excludes {
+			excludes[i] = strings.TrimSpace(excludes[i])
+		}
+	}
 
-	// Optionally format standalone comments first, then apply left-flow call formatting.
-	cf := formatter.NewCommentFormatter(formatter.CommentConfig{
+	// Use the unified formatting pipeline
+	pipeline := formatter.NewPipeline(formatter.PipelineConfig{
 		ColumnLimit:     colLimit,
 		TabStop:         tabStop,
 		MoveInlineAbove: moveInline,
+		Excludes:        excludes,
 	})
-	out = cf.FormatFile(out)
-
-	lf := formatter.NewLeftFlowFormatter(formatter.Config{
-		ColumnLimit: colLimit,
-		TabStop:     tabStop,
-	})
-	out = lf.FormatFile(out)
+	out := pipeline.Format(data)
 
 	if write {
 		if err := ioutil.WriteFile(path, out, 0644); err != nil {
