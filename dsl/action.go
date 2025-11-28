@@ -95,9 +95,9 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 		return nil, false
 	}
 
-	// Check if it already fits
+	// Check if the line already fits (not just the node)
 	original := string(ctx.Source[start:end])
-	if ctx.NodeWidth(call) <= ctx.ColumnLimit {
+	if ctx.LineWidth(call) <= ctx.ColumnLimit {
 		return nil, false
 	}
 

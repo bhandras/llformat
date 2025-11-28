@@ -17,6 +17,7 @@ func main() {
 		tabStop          int
 		moveInline       bool
 		multilineExclude string
+		useDSL           bool
 	)
 
 	flag.BoolVar(&write, "w", false, "write result to (source) file instead of stdout")
@@ -25,10 +26,11 @@ func main() {
 	flag.IntVar(&tabStop, "tab", 8, "tab stop width for column calculations")
 	flag.BoolVar(&moveInline, "wrap-inline-comments", false, "when formatting comments, hoist trailing inline comments above for wrapping")
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
+	flag.BoolVar(&useDSL, "dsl", false, "use DSL-based expression formatter (experimental)")
 	flag.Parse()
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--dsl] <path>")
 		os.Exit(2)
 	}
 
@@ -54,6 +56,7 @@ func main() {
 		TabStop:         tabStop,
 		MoveInlineAbove: moveInline,
 		Excludes:        excludes,
+		UseDSLExpr:      useDSL,
 	})
 	out := pipeline.Format(data)
 

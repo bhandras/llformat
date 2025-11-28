@@ -54,16 +54,46 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 	return stages, nil
 }
 
+// StageOptions contains options for configuring the stage pipeline.
+type StageOptions struct {
+	CommentMoveInline bool
+	Excludes          []string
+	UseDSLExpr        bool // Use DSL-based expression formatter
+}
+
 // DefaultStages returns the standard llformat stage configuration.
 // This creates stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
+	return DefaultStagesWithOptions(cfg, StageOptions{
+		CommentMoveInline: commentMoveInline,
+		Excludes:          excludes,
+		UseDSLExpr:        false,
+	})
+}
+
+// DefaultStagesWithOptions returns stages with full configuration options.
+func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
+	// Choose expression formatter based on options
+	var exprFormatter Formatter
+	if opts.UseDSLExpr {
+		exprFormatter = NewDSLExprFormatter(DSLExprConfig{
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+		})
+	} else {
+		exprFormatter = NewLongExprFormatter(LongExprConfig{
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+		})
+	}
+
 	return []Stage{
 		{
 			Name: "comments",
 			Formatter: NewCommentFormatter(CommentConfig{
 				ColumnLimit:     cfg.ColumnLimit,
 				TabStop:         cfg.TabStop,
-				MoveInlineAbove: commentMoveInline,
+				MoveInlineAbove: opts.CommentMoveInline,
 			}),
 			Requires: nil, // First stage, no dependencies
 		},
@@ -77,19 +107,16 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 			Requires: []string{"comments"}, // After comment formatting
 		},
 		{
-			Name: "expressions",
-			Formatter: NewLongExprFormatter(LongExprConfig{
-				ColumnLimit: cfg.ColumnLimit,
-				TabStop:     cfg.TabStop,
-			}),
-			Requires: []string{"compact-calls"}, // After call formatting
+			Name:      "expressions",
+			Formatter: exprFormatter,
+			Requires:  []string{"compact-calls"}, // After call formatting
 		},
 		{
 			Name: "multiline-calls",
 			Formatter: NewMultiLineCallFormatter(MultiLineConfig{
 				ColumnLimit: cfg.ColumnLimit,
 				TabStop:     cfg.TabStop,
-				Excludes:    excludes,
+				Excludes:    opts.Excludes,
 				SkipGofmt:   true,
 			}),
 			Requires: []string{"expressions"}, // After expression formatting

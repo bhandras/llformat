@@ -10,6 +10,7 @@ type PipelineConfig struct {
 	TabStop         int
 	MoveInlineAbove bool     // For comment formatter
 	Excludes        []string // Functions to exclude from multiline formatting
+	UseDSLExpr      bool     // Use DSL-based expression formatter
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -28,7 +29,11 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
-	stages := DefaultStages(baseCfg, cfg.MoveInlineAbove, cfg.Excludes)
+	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
+		CommentMoveInline: cfg.MoveInlineAbove,
+		Excludes:          cfg.Excludes,
+		UseDSLExpr:        cfg.UseDSLExpr,
+	})
 
 	return &Pipeline{
 		cfg:    cfg,
