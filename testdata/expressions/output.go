@@ -88,7 +88,9 @@ func example11(f *formatter, trimmedLongVariable string, inSwitch,
 	inInterface int) {
 
 	lineType := f.classifyLine(
-		trimmedLongVariable, inSwitch > 0, inInterface > 0,
+		trimmedLongVariable,
+		inSwitch > 0,
+		inInterface > 0,
 	)
 	_ = lineType
 }
@@ -99,9 +101,7 @@ func example12(alpha, beta, gamma int) {
 		if beta > 0 {
 			if gamma > 0 {
 				if len(
-					fmt.Sprintf(
-						"%d%d%d", alpha, beta, gamma,
-					),
+					fmt.Sprintf("%d%d%d", alpha, beta, gamma),
 				) > 10 {
 					doSomething()
 				}
