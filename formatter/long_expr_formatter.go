@@ -240,34 +240,47 @@ func (f *LongExprFormatter) findBreakPoint(line string, indentLen int, isCaseStm
 			i += 2
 			continue
 		}
-		// Comparison operators
+		// Comparison operators - only add as candidates if not followed by a simple literal
+		// This avoids breaking "x > 0" into "x >" and "0"
 		if i+1 < len(b) && b[i] == '=' && b[i+1] == '=' {
-			candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "=="})
+			if !isFollowedBySimpleLiteral(b, i+2) {
+				candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "=="})
+			}
 			i += 2
 			continue
 		}
 		if i+1 < len(b) && b[i] == '!' && b[i+1] == '=' {
-			candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "!="})
+			if !isFollowedBySimpleLiteral(b, i+2) {
+				candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "!="})
+			}
 			i += 2
 			continue
 		}
 		if i+1 < len(b) && b[i] == '<' && b[i+1] == '=' {
-			candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "<="})
+			if !isFollowedBySimpleLiteral(b, i+2) {
+				candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "<="})
+			}
 			i += 2
 			continue
 		}
 		if i+1 < len(b) && b[i] == '>' && b[i+1] == '=' {
-			candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: ">="})
+			if !isFollowedBySimpleLiteral(b, i+2) {
+				candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: ">="})
+			}
 			i += 2
 			continue
 		}
 		if b[i] == '<' && (i+1 >= len(b) || b[i+1] != '<') {
-			candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "<"})
+			if !isFollowedBySimpleLiteral(b, i+1) {
+				candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: "<"})
+			}
 			i++
 			continue
 		}
 		if b[i] == '>' && (i+1 >= len(b) || b[i+1] != '>') {
-			candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: ">"})
+			if !isFollowedBySimpleLiteral(b, i+1) {
+				candidates = append(candidates, breakCandidate{pos: i, priority: 3, op: ">"})
+			}
 			i++
 			continue
 		}
@@ -356,6 +369,59 @@ func isIdentStart(c byte) bool {
 
 func isIdentChar(c byte) bool {
 	return isIdentStart(c) || (c >= '0' && c <= '9')
+}
+
+// isFollowedBySimpleLiteral checks if the position after the operator is followed
+// by a simple literal (number, true, false, nil) that would look bad on its own line.
+// This prevents breaking "x > 0" into "x >" and "0".
+func isFollowedBySimpleLiteral(b []byte, pos int) bool {
+	// Skip whitespace
+	for pos < len(b) && (b[pos] == ' ' || b[pos] == '\t') {
+		pos++
+	}
+	if pos >= len(b) {
+		return false
+	}
+
+	// Check for number literal
+	if b[pos] >= '0' && b[pos] <= '9' {
+		// Scan past the number
+		end := pos
+		for end < len(b) && (b[end] >= '0' && b[end] <= '9' || b[end] == '.') {
+			end++
+		}
+		// Check what follows the number - if it's end of expression or simple terminator, it's simple
+		for end < len(b) && (b[end] == ' ' || b[end] == '\t') {
+			end++
+		}
+		if end >= len(b) || b[end] == ')' || b[end] == ',' || b[end] == '{' ||
+			b[end] == '&' || b[end] == '|' {
+			return true
+		}
+		return false
+	}
+
+	// Check for true, false, nil
+	keywords := []string{"true", "false", "nil"}
+	for _, kw := range keywords {
+		if pos+len(kw) <= len(b) && string(b[pos:pos+len(kw)]) == kw {
+			end := pos + len(kw)
+			// Make sure it's not part of a longer identifier
+			if end < len(b) && isIdentChar(b[end]) {
+				continue
+			}
+			// Check what follows
+			for end < len(b) && (b[end] == ' ' || b[end] == '\t') {
+				end++
+			}
+			if end >= len(b) || b[end] == ')' || b[end] == ',' || b[end] == '{' ||
+				b[end] == '&' || b[end] == '|' {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // tryReformatStringConcat checks if the line contains a string concatenation

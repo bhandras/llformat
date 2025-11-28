@@ -83,16 +83,46 @@ func example10(val, min, max int, enabled, active bool) bool {
 		someCheck(val) && anotherCheck(val)
 }
 
+// Example 11: Assignment with method call and comparison operators
+func example11(f *formatter, trimmedLongVariable string, inSwitch,
+	inInterface int) {
+
+	lineType := f.classifyLine(
+		trimmedLongVariable, inSwitch > 0, inInterface > 0,
+	)
+	_ = lineType
+}
+
+// example 12: Deeply nested if statements with a nested function call
+func example12(alpha, beta, gamma int) {
+	if alpha > 0 {
+		if beta > 0 {
+			if gamma > 0 {
+				if len(
+					fmt.Sprintf(
+						"%d%d%d", alpha, beta, gamma,
+					),
+				) > 10 {
+					doSomething()
+				}
+			}
+		}
+	}
+}
+
 // Stubs to make the file compile
-func doSomething()                          {}
-func checkPermission(interface{}) bool      { return false }
-func validateInput(interface{}) bool        { return false }
-func verifySignature(interface{}) bool      { return false }
-func process(int)                           {}
-func someVeryLongFunctionName(int, int) int { return 0 }
-func anotherLongFunction(int, int) int      { return 0 }
-func someCheck(int) bool                    { return false }
-func anotherCheck(int) bool                 { return false }
+type formatter struct{}
+
+func (*formatter) classifyLine(string, bool, bool) string { return "" }
+func doSomething()                                        {}
+func checkPermission(interface{}) bool                    { return false }
+func validateInput(interface{}) bool                      { return false }
+func verifySignature(interface{}) bool                    { return false }
+func process(int)                                         {}
+func someVeryLongFunctionName(int, int) int               { return 0 }
+func anotherLongFunction(int, int) int                    { return 0 }
+func someCheck(int) bool                                  { return false }
+func anotherCheck(int) bool                               { return false }
 
 type clientType struct{}
 
