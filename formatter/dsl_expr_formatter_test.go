@@ -14,7 +14,7 @@ func TestDSLExprFormatterBasic(t *testing.T) {
 		TabStop:     8,
 	})
 
-	// Test that simple code passes through unchanged
+	// Test that simple code is formatted (blank line added before return)
 	src := []byte(`package main
 
 func foo() {
@@ -22,8 +22,16 @@ func foo() {
 	return x > 0
 }
 `)
+	expected := `package main
+
+func foo() {
+	x := 1
+
+	return x > 0
+}
+`
 	result := f.FormatFile(src)
-	require.Equal(t, string(src), string(result))
+	require.Equal(t, expected, string(result))
 }
 
 func TestDSLExprFormatterKeepsSimpleComparison(t *testing.T) {

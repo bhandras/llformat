@@ -492,7 +492,8 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 		}
 		// Pretty-format composite literals only for keyed maps/structs; keep
 		// slices/arrays inline to avoid over-wrapping short literals.
-		if fa, ok := FormatCompositeLiteralArg(a, contIndent); ok {
+		// If we've already seen a multiline call, force expand maps/structs.
+		if fa, ok := FormatCompositeLiteralArg(a, contIndent, seenMultilineCall); ok {
 			a = fa
 		}
 		// If the argument is itself a call expression and it doesn't fit,
@@ -759,13 +760,26 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 	curLen := baseLen + visualLen(head) + 1
 	contIndent := wsIndent + "\t"
 
-	writeSplit := func(seg string) {
+	writeSplit := func(seg string, hasTrailingArgs bool) {
 		q := quoteGoString(seg)
 		b.WriteString(q)
 		curLen = advanceCols(curLen, q)
-		b.WriteByte(' ')
-		b.WriteByte('+')
-		curLen += 2
+		// gofmt normalizes string concatenation spacing based on context:
+		// - When string ends with space AND has trailing args: gofmt removes space before +
+		// - When string ends with space AND no trailing args: gofmt keeps space before +
+		// - When string ends with non-space: gofmt keeps space before +
+		// To be idempotent with gofmt, we output what gofmt would produce.
+		endsWithSpace := len(seg) > 0 && seg[len(seg)-1] == ' '
+		if endsWithSpace && hasTrailingArgs {
+			// gofmt removes space before + in this case
+			b.WriteByte('+')
+			curLen += 1
+		} else {
+			// gofmt keeps space before + in these cases
+			b.WriteByte(' ')
+			b.WriteByte('+')
+			curLen += 2
+		}
 		b.WriteByte('\n')
 		b.WriteString(contIndent)
 		curLen = visualLen(contIndent)
@@ -1002,7 +1016,7 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 				// Hard cut by visual columns.
 				idx := cutIndexForWidthFrom(curLen, rest, capCols)
 				seg := rest[:idx]
-				writeSplit(seg)
+				writeSplit(seg, i < len(normArgs)-1)
 				didSplit = true
 				rest = rest[idx:]
 				continue
@@ -1010,7 +1024,7 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 			// Pure greedy: no additional word-pushing heuristics.
 			// Pure greedy: take the last space within capacity.
 			seg := rest[:cut+1] // keep the space at end
-			writeSplit(seg)
+			writeSplit(seg, i < len(normArgs)-1)
 			didSplit = true
 			rest = rest[cut+1:]
 		}
@@ -1321,4 +1335,64 @@ func exprHeadLen(s string) int {
 // ensureHeadFits splits segs[0] if needed so that the first quoted segment fits
 // within firstAvail columns. It preserves word boundaries and adds a trailing
 // space to the first part if split. (legacy ensureHeadFits removed)
+
+// FormatCallGreedy formats a function call using the greedy left-flow packing
+// algorithm. This is exported for use by the DSL LeftFlowCallAction to ensure
+// identical output between the DSL formatter and the legacy pipeline.
+//
+// Parameters:
+//   - call: the raw bytes of the call expression (e.g., "log.Infof(...)")
+//   - wsIndent: the leading whitespace of the line
+//   - baseLen: visual width from line start to call start
+//   - colLimit: column limit (e.g., 80)
+//   - ts: tab stop width (e.g., 8)
+//
+// Returns the formatted call as a string.
+func FormatCallGreedy(call []byte, wsIndent string, baseLen int, colLimit, ts int) string {
+	// Temporarily set package-level config for helpers that rely on them
+	oldColumnLimit := columnLimit
+	oldTabStop := tabStop
+	oldTargets := currentTargets
+
+	columnLimit = colLimit
+	tabStop = ts
+	currentTargets = defaultTargets()
+
+	result := formatCallGreedy(call, wsIndent, baseLen)
+
+	// Restore previous values
+	columnLimit = oldColumnLimit
+	tabStop = oldTabStop
+	currentTargets = oldTargets
+
+	return result
+}
+
+// FormatCallPackedMultiLine is an exported wrapper around formatCallPackedMultiLine
+// for use by the DSL engine. It formats a generic function call into a packed
+// multi-line style when the single-line form would exceed the column limit.
+//
+// Parameters:
+//   - call: the raw call expression bytes
+//   - wsIndent: the whitespace indent string for continuation lines
+//   - colLimit: column limit (e.g., 80)
+//   - ts: tab stop width (e.g., 8)
+//
+// Returns the formatted call as a string.
+func FormatCallPackedMultiLine(call []byte, wsIndent string, colLimit, ts int) string {
+	// Temporarily set package-level config for helpers that rely on them
+	oldColumnLimit := columnLimit
+	oldTabStop := tabStop
+
+	columnLimit = colLimit
+	tabStop = ts
+
+	result := formatCallPackedMultiLine(call, wsIndent, wsIndent, true)
+
+	// Restore previous values
+	columnLimit = oldColumnLimit
+	tabStop = oldTabStop
+
+	return result
+}
 

@@ -9,7 +9,13 @@ import (
 // FormatCompositeLiteralArg detects a top-level composite literal in arg and
 // formats its elements across multiple lines, indented under contIndent. It
 // returns the formatted string and true if a composite literal was reformatted.
-func FormatCompositeLiteralArg(arg, contIndent string) (string, bool) {
+// If forceExpand is true, keyed maps/structs will always be expanded even if
+// they fit inline. This is used when the containing call already has multiline
+// elements.
+func FormatCompositeLiteralArg(arg, contIndent string, forceExpand ...bool) (string, bool) {
+	// forceExpand is reserved for future use to force-expand keyed maps.
+	// Currently keyed maps/structs are always expanded, so this is a no-op.
+	_ = forceExpand
 	// We rely on brace scan and a simple guard to avoid function literals.
 	open, close := findTopLevelBraces(arg)
 	if open < 0 || close <= open {
@@ -56,6 +62,9 @@ func FormatCompositeLiteralArg(arg, contIndent string) (string, bool) {
 		}
 	} else {
 		// Slices/arrays: keep inline if they fit; otherwise pack greedily.
+		// Note: Unlike keyed maps/structs, we don't force-expand slices even
+		// when the containing call has multiline elements - slices stay inline
+		// if they fit.
 		inline := strings.TrimSpace(arg)
 		if visualLen(inline)+visualLen(contIndent) <= columnLimit {
 			return "", false

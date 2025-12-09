@@ -241,8 +241,28 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	// Parse the signature parts
 	// Format: [func ][(receiver) ][name](params)[ (returns)][ {]
 
-	// Check if it already fits
-	if width.VisualLenWithTab(indent+sig, f.cfg.TabStop) <= f.cfg.ColumnLimit {
+	// Check if it already fits and doesn't need formatting for readability
+	// For multiline signatures, check each line
+	needsFormatting := false
+	if strings.Contains(sig, "\n") {
+		// Multiline signature - check if any line exceeds limit
+		for _, line := range strings.Split(sig, "\n") {
+			if width.VisualLenWithTab(indent+line, f.cfg.TabStop) > f.cfg.ColumnLimit {
+				needsFormatting = true
+				break
+			}
+		}
+		// Also check if there are func types with multiline content that need breaking
+		if !needsFormatting && strings.Contains(sig, "func(") && strings.Contains(sig, "struct") {
+			needsFormatting = true
+		}
+	} else {
+		// Single line - simple check
+		if width.VisualLenWithTab(indent+sig, f.cfg.TabStop) > f.cfg.ColumnLimit {
+			needsFormatting = true
+		}
+	}
+	if !needsFormatting {
 		return indent + sig
 	}
 
@@ -360,6 +380,16 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			separator = ", "
 		}
 
+		// Check if this param is a function type that needs breaking
+		// We break func types when they contain nested complex types (struct{}, etc.)
+		paramToWrite := param
+		isFuncParam := strings.Contains(param, "func(")
+		needsFuncBreak := false
+		if isFuncParam && f.funcParamNeedsBreaking(param, contIndent) {
+			needsFuncBreak = true
+			paramToWrite = f.formatFuncTypeParam(param, contIndent)
+		}
+
 		testAdd := separator + param
 		testLine := currentLine + testAdd
 
@@ -375,20 +405,34 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			lineWithTrailing = testLine
 		}
 
-		if width.VisualLenWithTab(lineWithTrailing, f.cfg.TabStop) > f.cfg.ColumnLimit {
-			// Need to break
+		if needsFuncBreak {
+			// For func params that need internal breaking, try to keep the func header
+			// inline (e.g., ", handler func(") and only break the internal params
+			if i > 0 {
+				result.WriteString(", ")
+			}
+			result.WriteString(paramToWrite)
+			if strings.Contains(paramToWrite, "\n") {
+				// Get the last line of the formatted param to track current position
+				lines := strings.Split(paramToWrite, "\n")
+				currentLine = lines[len(lines)-1]
+			} else {
+				currentLine = currentLine + ", " + paramToWrite
+			}
+		} else if width.VisualLenWithTab(lineWithTrailing, f.cfg.TabStop) > f.cfg.ColumnLimit {
+			// Need to break - put param on new line
 			if i > 0 {
 				result.WriteByte(',')
 			}
 			result.WriteByte('\n')
 			result.WriteString(contIndent)
-			currentLine = contIndent + param
-			result.WriteString(param)
+			result.WriteString(paramToWrite)
+			currentLine = contIndent + paramToWrite
 		} else {
 			if i > 0 {
 				result.WriteString(", ")
 			}
-			result.WriteString(param)
+			result.WriteString(paramToWrite)
 			currentLine = testLine
 		}
 	}
@@ -583,6 +627,129 @@ func (f *FuncSigFormatter) findMatchingParen(s string, start int) int {
 // splitParams splits parameter list by commas, respecting nested parens/brackets.
 func (f *FuncSigFormatter) splitParams(params string) []string {
 	return scanner.SplitTopLevel(params)
+}
+
+// funcParamNeedsBreaking checks if a function-typed parameter needs to be broken
+// into multiple lines. This is true when the param contains a nested complex type
+// like struct{} that will be expanded by gofmt, or already contains multiline content.
+func (f *FuncSigFormatter) funcParamNeedsBreaking(param, baseIndent string) bool {
+	// Check for inline struct definition with semicolons (will be expanded by gofmt)
+	if strings.Contains(param, "struct{") && strings.Contains(param, ";") {
+		return true
+	}
+
+	// Check if the param is a func type containing a multiline struct (already expanded)
+	if strings.Contains(param, "func(") && strings.Contains(param, "struct") {
+		// If param contains newlines, it has embedded multiline content
+		if strings.Contains(param, "\n") {
+			return true
+		}
+	}
+
+	// Check if the param itself exceeds the limit when placed on a continuation line
+	testLine := baseIndent + param
+	if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.cfg.ColumnLimit {
+		// Only break if it's a func type with complex params
+		if strings.Contains(param, "func(") && strings.Contains(param, "struct") {
+			return true
+		}
+	}
+	return false
+}
+
+// formatFuncTypeParam formats a function-typed parameter, breaking its inner params
+// if they exceed the column limit. Returns the formatted parameter text.
+// param should be like "handler func(cfg struct{ ... }) error"
+// baseIndent is the indent for the parameter itself (e.g., "\t" if on a continuation line).
+func (f *FuncSigFormatter) formatFuncTypeParam(param, baseIndent string) string {
+	// Find "func(" in the parameter
+	funcIdx := strings.Index(param, "func(")
+	if funcIdx == -1 {
+		return param
+	}
+
+	// Get the prefix (variable name before func)
+	prefix := param[:funcIdx+4] // includes "func"
+	rest := param[funcIdx+4:]   // starts with "("
+
+	// Find matching close paren for the func params
+	if len(rest) == 0 || rest[0] != '(' {
+		return param
+	}
+
+	paramEnd := f.findMatchingParen(rest, 0)
+	if paramEnd == -1 {
+		return param
+	}
+
+	innerParams := rest[1:paramEnd]
+	afterParams := rest[paramEnd+1:] // e.g., " error"
+
+	// Split inner params
+	innerList := f.splitParams(innerParams)
+	if len(innerList) == 0 {
+		return param
+	}
+
+	// Check if inner params need breaking
+	// They need breaking if:
+	// 1. Any param is multiline (contains struct expansion), or
+	// 2. The full line exceeds the limit
+	needsBreaking := false
+	for _, p := range innerList {
+		p = strings.TrimSpace(p)
+		if strings.Contains(p, "\n") {
+			// Inner param is multiline - needs breaking for readability
+			needsBreaking = true
+			break
+		}
+	}
+
+	if !needsBreaking {
+		// Check if the single line form exceeds the limit
+		testLine := baseIndent + prefix + "("
+		for i, p := range innerList {
+			p = strings.TrimSpace(p)
+			if i > 0 {
+				testLine += ", "
+			}
+			testLine += p
+		}
+		testLine += ")" + afterParams
+		if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.cfg.ColumnLimit {
+			needsBreaking = true
+		}
+	}
+
+	if !needsBreaking {
+		return param // Fits on one line and no multiline content
+	}
+
+	// Need to break the inner function params
+	// Inner params use one tab indent (same as outer signature continuation)
+	innerIndent := "\t"
+	closingIndent := ""
+
+	var result strings.Builder
+	result.WriteString(prefix)
+	result.WriteString("(\n")
+
+	// Put each param on its own line with trailing comma
+	for _, p := range innerList {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		result.WriteString(innerIndent)
+		result.WriteString(p)
+		result.WriteString(",\n")
+	}
+
+	result.WriteString(closingIndent)
+	result.WriteString(")")
+	result.WriteString(afterParams)
+
+	return result.String()
 }
 
 // formatInterfaceMethod formats a long interface method declaration.
@@ -825,4 +992,33 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 	}
 
 	return result.String()
+}
+
+// FormatFuncSignature formats a function signature (the line starting with "func"
+// up to and including the opening brace) using left-flow packing. This function
+// is exported for use by the DSL engine.
+// The signature parameter should be the complete func line ending with "{".
+// Returns the formatted signature with a trailing newline if multi-line, and
+// a boolean indicating if a blank line should be added after the opening brace.
+func FormatFuncSignature(signature, indent string, colLimit, tabStop int) (string, bool) {
+	f := &FuncSigFormatter{cfg: FuncSigConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+	}}
+
+	formatted := f.breakSignature(signature, indent)
+	isMultiLine := strings.Count(formatted, "\n") > 0
+
+	return formatted, isMultiLine
+}
+
+// FormatInterfaceMethod formats an interface method declaration using left-flow
+// packing. This function is exported for use by the DSL engine.
+func FormatInterfaceMethod(method, indent string, colLimit, tabStop int) string {
+	f := &FuncSigFormatter{cfg: FuncSigConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+	}}
+
+	return f.breakInterfaceMethod(method, indent)
 }

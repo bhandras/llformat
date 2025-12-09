@@ -3,6 +3,7 @@ package dsl
 import (
 	"go/ast"
 	"go/token"
+	"strings"
 )
 
 // Rule represents a formatting rule.
@@ -41,6 +42,9 @@ type Context struct {
 
 	// atomicNodes tracks nodes that should not be broken.
 	atomicNodes map[ast.Node]bool
+
+	// parentMap maps each node to its parent in the AST.
+	parentMap map[ast.Node]ast.Node
 }
 
 // NewContext creates a new formatting context.
@@ -68,6 +72,38 @@ func (ctx *Context) IsAtomic(n ast.Node) bool {
 		return false
 	}
 	return ctx.atomicNodes[n]
+}
+
+// SetParentMap sets the parent map for the context.
+func (ctx *Context) SetParentMap(m map[ast.Node]ast.Node) {
+	ctx.parentMap = m
+}
+
+// Parent returns the parent node of n, or nil if not found.
+func (ctx *Context) Parent(n ast.Node) ast.Node {
+	if ctx.parentMap == nil {
+		return nil
+	}
+	return ctx.parentMap[n]
+}
+
+// IsChildOfCallExpr checks if node n is a direct child (argument) of a CallExpr.
+func (ctx *Context) IsChildOfCallExpr(n ast.Node) bool {
+	parent := ctx.Parent(n)
+	if parent == nil {
+		return false
+	}
+	call, ok := parent.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	// Check if n is one of the arguments
+	for _, arg := range call.Args {
+		if arg == n {
+			return true
+		}
+	}
+	return false
 }
 
 // LineWidth returns the visual width of the line containing node n.
@@ -142,6 +178,11 @@ func (ctx *Context) NodeSource(n ast.Node) []byte {
 
 // visualLen calculates the visual width of a string with tab expansion.
 func visualLen(s string, tabStop int) int {
+	return VisualLen(s, tabStop)
+}
+
+// VisualLen calculates the visual width of a string with tab expansion.
+func VisualLen(s string, tabStop int) int {
 	width := 0
 	for _, c := range s {
 		if c == '\t' {
@@ -151,4 +192,47 @@ func visualLen(s string, tabStop int) int {
 		}
 	}
 	return width
+}
+
+// hasLineComment checks if a string contains a line comment (//) outside of
+// string literals. This is used to detect inline comments that would be lost
+// during reformatting.
+func hasLineComment(s string) bool {
+	inStr := byte(0)
+	esc := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inStr != 0 {
+			if inStr == '"' && c == '\\' && !esc {
+				esc = true
+				continue
+			}
+			if esc {
+				esc = false
+			} else if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+		switch c {
+		case '"', '`':
+			inStr = c
+		case '/':
+			if i+1 < len(s) && s[i+1] == '/' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// anyLineExceedsLimit checks if any line in the given string exceeds the column limit.
+func anyLineExceedsLimit(s string, colLimit, tabStop int) bool {
+	lines := strings.Split(s, "\n")
+	for _, line := range lines {
+		if visualLen(line, tabStop) > colLimit {
+			return true
+		}
+	}
+	return false
 }

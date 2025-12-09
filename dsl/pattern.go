@@ -143,6 +143,18 @@ func (p *NodePattern) matchType(n ast.Node) bool {
 	case "Ellipsis":
 		_, ok := n.(*ast.Ellipsis)
 		return ok
+	case "FuncType":
+		_, ok := n.(*ast.FuncType)
+		return ok
+	case "FieldList":
+		_, ok := n.(*ast.FieldList)
+		return ok
+	case "Field":
+		_, ok := n.(*ast.Field)
+		return ok
+	case "InterfaceType":
+		_, ok := n.(*ast.InterfaceType)
+		return ok
 	default:
 		return false
 	}
@@ -242,6 +254,31 @@ func getField(n ast.Node, name string) ast.Node {
 		switch name {
 		case "Type", "type":
 			return node.Type
+		}
+	case *ast.FuncDecl:
+		switch name {
+		case "Type", "type":
+			return node.Type
+		case "Name", "name":
+			return node.Name
+		case "Recv", "recv":
+			return node.Recv
+		case "Body", "body":
+			return node.Body
+		}
+	case *ast.FuncType:
+		switch name {
+		case "Params", "params":
+			return node.Params
+		case "Results", "results":
+			return node.Results
+		}
+	case *ast.FieldList:
+		switch name {
+		case "List", "list":
+			if len(node.List) > 0 {
+				return node.List[0]
+			}
 		}
 	}
 	return nil

@@ -58,7 +58,7 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 type StageOptions struct {
 	CommentMoveInline bool
 	Excludes          []string
-	UseDSLExpr        bool // Use DSL-based expression formatter
+	UseDSLExpr        bool // Use DSL-based formatter (now the default)
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -73,20 +73,30 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
-	// Choose expression formatter based on options
-	var exprFormatter Formatter
 	if opts.UseDSLExpr {
-		exprFormatter = NewDSLExprFormatter(DSLExprConfig{
-			ColumnLimit: cfg.ColumnLimit,
-			TabStop:     cfg.TabStop,
-		})
-	} else {
-		exprFormatter = NewLongExprFormatter(LongExprConfig{
-			ColumnLimit: cfg.ColumnLimit,
-			TabStop:     cfg.TabStop,
-		})
+		// Simplified pipeline using DSL for all code formatting
+		return []Stage{
+			{
+				Name: "comments",
+				Formatter: NewCommentFormatter(CommentConfig{
+					ColumnLimit:     cfg.ColumnLimit,
+					TabStop:         cfg.TabStop,
+					MoveInlineAbove: opts.CommentMoveInline,
+				}),
+				Requires: nil,
+			},
+			{
+				Name: "dsl",
+				Formatter: NewDSLExprFormatter(DSLExprConfig{
+					ColumnLimit: cfg.ColumnLimit,
+					TabStop:     cfg.TabStop,
+				}),
+				Requires: []string{"comments"},
+			},
+		}
 	}
 
+	// Legacy pipeline - kept for backwards compatibility
 	return []Stage{
 		{
 			Name: "comments",
@@ -107,9 +117,12 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			Requires: []string{"comments"}, // After comment formatting
 		},
 		{
-			Name:      "expressions",
-			Formatter: exprFormatter,
-			Requires:  []string{"compact-calls"}, // After call formatting
+			Name: "expressions",
+			Formatter: NewLongExprFormatter(LongExprConfig{
+				ColumnLimit: cfg.ColumnLimit,
+				TabStop:     cfg.TabStop,
+			}),
+			Requires: []string{"compact-calls"}, // After call formatting
 		},
 		{
 			Name: "multiline-calls",

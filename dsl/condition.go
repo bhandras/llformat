@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"go/ast"
+	"strings"
 )
 
 // TrueCond always returns true (no condition / always applies).
@@ -104,6 +105,49 @@ func (c *NodeWidthCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	return compareInt(width, c.Op, threshold)
+}
+
+// CollapsedWidthCond checks if a node, when collapsed to a single line (whitespace
+// normalized), would exceed a threshold. This is useful for multiline nodes where
+// the first line might be short but the total content is long.
+type CollapsedWidthCond struct {
+	Target string
+	Op     string
+	Value  int
+}
+
+// Eval implements Condition for CollapsedWidthCond.
+func (c *CollapsedWidthCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	// Get the node's source text
+	start := ctx.Fset.Position(node.Pos()).Offset
+	end := ctx.Fset.Position(node.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return false
+	}
+	nodeText := string(ctx.Source[start:end])
+
+	// Find the indent prefix (content before the node on the same line)
+	lineStart := start
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+	indentPrefix := string(ctx.Source[lineStart:start])
+
+	// Collapse whitespace to estimate single-line width
+	flat := strings.Join(strings.Fields(nodeText), " ")
+	collapsedLen := visualLen(indentPrefix, ctx.TabStop) + visualLen(flat, ctx.TabStop)
+
+	threshold := c.Value
+	if threshold == 0 {
+		threshold = ctx.ColumnLimit
+	}
+
+	return compareInt(collapsedLen, c.Op, threshold)
 }
 
 // IsSimpleLiteralCond checks if a node is a simple literal (number, bool, nil).
@@ -287,3 +331,660 @@ func compareInt(value int, op string, threshold int) bool {
 		return false
 	}
 }
+
+// IsOutermostBinaryExprCond checks if this binary expression is not a child of
+// another binary expression with the same operator type. This prevents matching
+// inner nodes in chains like "a && b && c".
+type IsOutermostBinaryExprCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsOutermostBinaryExprCond.
+func (c *IsOutermostBinaryExprCond) Eval(caps Captures, ctx *Context) bool {
+	// This condition relies on tracking parent nodes during traversal
+	// For now, always return true - the BreakAtOpAction handles finding
+	// the best break point within the whole expression
+	return true
+}
+
+// IsStringConcatCond checks if a binary expression involves string concatenation.
+// String concatenation uses + but should be handled differently than arithmetic.
+type IsStringConcatCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsStringConcatCond.
+func (c *IsStringConcatCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	return isStringConcat(node)
+}
+
+// isStringConcat checks if a node is or contains string concatenation.
+func isStringConcat(n ast.Node) bool {
+	if n == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(n, func(node ast.Node) bool {
+		if bin, ok := node.(*ast.BinaryExpr); ok {
+			// Check if either operand is a string literal
+			if bin.Op.String() == "+" {
+				if isStringLit(bin.X) || isStringLit(bin.Y) {
+					found = true
+					return false
+				}
+			}
+		}
+		return !found
+	})
+	return found
+}
+
+// isStringLit checks if a node is a string literal (directly or in concat chain).
+func isStringLit(n ast.Node) bool {
+	if lit, ok := n.(*ast.BasicLit); ok {
+		// STRING is token type 9 in go/token
+		return lit.Kind.String() == "STRING"
+	}
+	// Check nested binary + with strings
+	if bin, ok := n.(*ast.BinaryExpr); ok && bin.Op.String() == "+" {
+		return isStringLit(bin.X) || isStringLit(bin.Y)
+	}
+	return false
+}
+
+// IsCallArgCond checks if the target node is a direct argument of a CallExpr.
+// This uses proper parent tracking from the AST traversal.
+type IsCallArgCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsCallArgCond.
+func (c *IsCallArgCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+	return ctx.IsChildOfCallExpr(node)
+}
+
+// IsAfterBlockOpenCond checks if a node is immediately after a block opening brace.
+// This is used to avoid adding blank lines right after { or case:.
+type IsAfterBlockOpenCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsAfterBlockOpenCond.
+func (c *IsAfterBlockOpenCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	pos := ctx.Fset.Position(node.Pos())
+	nodeStart := pos.Offset
+
+	// Find the start of this line
+	lineStart := nodeStart
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+
+	// Look at the previous line
+	if lineStart == 0 {
+		return true // At start of file
+	}
+
+	// Find start of previous line
+	prevLineEnd := lineStart - 1
+	prevLineStart := prevLineEnd
+	for prevLineStart > 0 && ctx.Source[prevLineStart-1] != '\n' {
+		prevLineStart--
+	}
+
+	// Get the previous line content, trimming whitespace
+	prevLine := string(ctx.Source[prevLineStart:prevLineEnd])
+	trimmed := trimWhitespace(prevLine)
+
+	// Check if previous line ends with { or :
+	if len(trimmed) > 0 {
+		lastChar := trimmed[len(trimmed)-1]
+		if lastChar == '{' || lastChar == ':' {
+			return true
+		}
+	}
+
+	return false
+}
+
+// trimWhitespace removes leading and trailing whitespace from a string.
+func trimWhitespace(s string) string {
+	start := 0
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	end := len(s)
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
+}
+
+// IsFinalReturnCond checks if a return statement is the final statement in its
+// function body (not in a nested block like if/for). Returns true if:
+// 1. It's the last statement in the function body
+// 2. There's more than one statement before it
+type IsFinalReturnCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsFinalReturnCond.
+func (c *IsFinalReturnCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	// Get the parent block statement
+	parent := ctx.Parent(node)
+	if parent == nil {
+		return false
+	}
+
+	// Check if we're in a block statement
+	blockStmt, ok := parent.(*ast.BlockStmt)
+	if !ok {
+		return false
+	}
+
+	// Check if this is the last statement in the block
+	if len(blockStmt.List) == 0 {
+		return false
+	}
+
+	if blockStmt.List[len(blockStmt.List)-1] != node {
+		return false
+	}
+
+	// Check if the parent of the block is a FuncDecl or FuncLit (function body)
+	blockParent := ctx.Parent(blockStmt)
+	if blockParent == nil {
+		return false
+	}
+
+	switch blockParent.(type) {
+	case *ast.FuncDecl, *ast.FuncLit:
+		// This is a function body, check if there are multiple statements
+		return len(blockStmt.List) > 1
+	default:
+		// Inside an if/for/switch block - don't add blank line
+		return false
+	}
+}
+
+// HasPrecedingSiblingCond checks if a case clause has a preceding sibling case.
+// Used to determine if blank line is needed before a case.
+type HasPrecedingSiblingCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasPrecedingSiblingCond.
+func (c *HasPrecedingSiblingCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	caseClause, ok := node.(*ast.CaseClause)
+	if !ok {
+		return false
+	}
+
+	// Get the parent switch statement
+	parent := ctx.Parent(node)
+	if parent == nil {
+		return false
+	}
+
+	// Check if parent is a BlockStmt (switch body)
+	blockStmt, ok := parent.(*ast.BlockStmt)
+	if !ok {
+		return false
+	}
+
+	// Find this case in the block's statements
+	for i, stmt := range blockStmt.List {
+		if stmt == caseClause {
+			return i > 0 // Has preceding sibling if not first
+		}
+	}
+
+	return false
+}
+
+// IsInInterfaceCond checks if a node is inside an interface type declaration.
+type IsInInterfaceCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsInInterfaceCond.
+func (c *IsInInterfaceCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	// Walk up the parent chain looking for InterfaceType
+	current := node
+	for current != nil {
+		if _, ok := current.(*ast.InterfaceType); ok {
+			return true
+		}
+		current = ctx.Parent(current)
+	}
+
+	return false
+}
+
+// HasMultipleMethodsCond checks if an interface has multiple methods.
+type HasMultipleMethodsCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasMultipleMethodsCond.
+func (c *HasMultipleMethodsCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+
+	var interfaceType *ast.InterfaceType
+	switch n := node.(type) {
+	case *ast.InterfaceType:
+		interfaceType = n
+	case *ast.TypeSpec:
+		if it, ok := n.Type.(*ast.InterfaceType); ok {
+			interfaceType = it
+		}
+	}
+
+	if interfaceType == nil || interfaceType.Methods == nil {
+		return false
+	}
+
+	return len(interfaceType.Methods.List) > 1
+}
+
+// CaseHasBodyCond checks if a case clause has a non-empty body.
+type CaseHasBodyCond struct {
+	Target string
+}
+
+// Eval implements Condition for CaseHasBodyCond.
+func (c *CaseHasBodyCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	caseClause, ok := node.(*ast.CaseClause)
+	if !ok {
+		return false
+	}
+
+	return len(caseClause.Body) > 0
+}
+
+// IsMethodChainCond checks if a call expression is part of a method chain
+// with at least minCalls chained method calls.
+type IsMethodChainCond struct {
+	Target   string
+	MinCalls int // Minimum number of calls to consider it a chain (default 2)
+}
+
+// Eval implements Condition for IsMethodChainCond.
+func (c *IsMethodChainCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		// Check if it's an assignment with a call on RHS
+		if assign, ok := node.(*ast.AssignStmt); ok && len(assign.Rhs) > 0 {
+			call, ok = assign.Rhs[0].(*ast.CallExpr)
+			if !ok {
+				return false
+			}
+		} else {
+			return false
+		}
+	}
+
+	minCalls := c.MinCalls
+	if minCalls == 0 {
+		minCalls = 2
+	}
+
+	count := countMethodChainCalls(call)
+	return count >= minCalls
+}
+
+// countMethodChainCalls counts the number of method calls in a chain.
+func countMethodChainCalls(call *ast.CallExpr) int {
+	count := 0
+	current := call
+
+	for current != nil {
+		count++
+
+		// Check if this call's Fun is a selector on another call
+		sel, ok := current.Fun.(*ast.SelectorExpr)
+		if !ok {
+			break
+		}
+
+		// Check if the selector's X is another call
+		nextCall, ok := sel.X.(*ast.CallExpr)
+		if !ok {
+			break
+		}
+
+		current = nextCall
+	}
+
+	return count
+}
+
+// IsLogOrPrintfCallCond checks if a call expression is a log or printf-style call.
+type IsLogOrPrintfCallCond struct {
+	Target string
+}
+
+// logPrintfPatterns are the function call patterns to match.
+var logPrintfPatterns = []string{
+	"log.Infof", "log.Debugf", "log.Tracef", "log.Errorf", "log.Warnf",
+	"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
+}
+
+// Eval implements Condition for IsLogOrPrintfCallCond.
+func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+
+	// Get the function name
+	funcName := getFuncName(call)
+	if funcName == "" {
+		return false
+	}
+
+	for _, pattern := range logPrintfPatterns {
+		if funcName == pattern {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getFuncName extracts the function name from a call expression.
+// Returns "pkg.Func" for selector expressions or "Func" for identifiers.
+func getFuncName(call *ast.CallExpr) string {
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		return fun.Name
+	case *ast.SelectorExpr:
+		if x, ok := fun.X.(*ast.Ident); ok {
+			return x.Name + "." + fun.Sel.Name
+		}
+	}
+	return ""
+}
+
+// IsInterfaceMethodCond checks if a field is a method in an interface.
+type IsInterfaceMethodCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsInterfaceMethodCond.
+func (c *IsInterfaceMethodCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	field, ok := node.(*ast.Field)
+	if !ok {
+		return false
+	}
+
+	// Check if the field type is a function (method signature)
+	_, isFunc := field.Type.(*ast.FuncType)
+	if !isFunc {
+		return false
+	}
+
+	// Check if we're inside an interface
+	parent := ctx.Parent(node)
+	if parent == nil {
+		return false
+	}
+
+	fieldList, ok := parent.(*ast.FieldList)
+	if !ok {
+		return false
+	}
+
+	grandparent := ctx.Parent(fieldList)
+	if grandparent == nil {
+		return false
+	}
+
+	_, isInterface := grandparent.(*ast.InterfaceType)
+	return isInterface
+}
+
+// HasPrecedingInterfaceFieldCond checks if a field in an interface has a
+// preceding sibling field.
+type HasPrecedingInterfaceFieldCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasPrecedingInterfaceFieldCond.
+func (c *HasPrecedingInterfaceFieldCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	field, ok := node.(*ast.Field)
+	if !ok {
+		return false
+	}
+
+	// Get parent field list
+	parent := ctx.Parent(node)
+	if parent == nil {
+		return false
+	}
+
+	fieldList, ok := parent.(*ast.FieldList)
+	if !ok || fieldList.List == nil {
+		return false
+	}
+
+	// Check if this field has a preceding sibling
+	for i, f := range fieldList.List {
+		if f == field {
+			return i > 0
+		}
+	}
+
+	return false
+}
+
+// AnyLineWidthCond checks if ANY line of a node exceeds a threshold.
+// This is useful for multiline nodes like function signatures where one line
+// might be short but another line exceeds the limit.
+type AnyLineWidthCond struct {
+	Target string
+	Op     string
+	Value  int // If 0, uses ctx.ColumnLimit
+}
+
+// Eval implements Condition for AnyLineWidthCond.
+func (c *AnyLineWidthCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	// Get the node's source text
+	start := ctx.Fset.Position(node.Pos()).Offset
+	end := ctx.Fset.Position(node.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return false
+	}
+	nodeText := string(ctx.Source[start:end])
+
+	threshold := c.Value
+	if threshold == 0 {
+		threshold = ctx.ColumnLimit
+	}
+
+	// Check each line
+	lines := strings.Split(nodeText, "\n")
+	for i, line := range lines {
+		// For the first line, include the indent prefix
+		if i == 0 {
+			lineStart := start
+			for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+				lineStart--
+			}
+			prefix := string(ctx.Source[lineStart:start])
+			line = prefix + line
+		}
+
+		width := visualLen(line, ctx.TabStop)
+		if compareInt(width, c.Op, threshold) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// HasNestedMultilineTypeCond checks if a FuncDecl has parameters containing
+// func types with multiline nested content (like multiline structs).
+// This is useful to trigger formatting for readability even when no line
+// exceeds the column limit.
+type HasNestedMultilineTypeCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasNestedMultilineTypeCond.
+func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	funcDecl, ok := node.(*ast.FuncDecl)
+	if !ok || funcDecl == nil || funcDecl.Type == nil || funcDecl.Type.Params == nil {
+		return false
+	}
+
+	// Check each parameter
+	for _, param := range funcDecl.Type.Params.List {
+		// Get the parameter type source
+		typeStart := ctx.Fset.Position(param.Type.Pos()).Offset
+		typeEnd := ctx.Fset.Position(param.Type.End()).Offset
+		if typeStart < 0 || typeEnd > len(ctx.Source) || typeStart >= typeEnd {
+			continue
+		}
+		typeText := string(ctx.Source[typeStart:typeEnd])
+
+		// Check if it's a func type with multiline nested content
+		if strings.Contains(typeText, "func(") && strings.Contains(typeText, "struct") {
+			if strings.Contains(typeText, "\n") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// IsReturnNeedingBlankCond checks if a return statement needs a blank line
+// before it. This is true if:
+// 1. It's not immediately after a block open ({ or case:)
+// 2. It's not already preceded by a blank line
+type IsReturnNeedingBlankCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsReturnNeedingBlankCond.
+func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	_, ok := node.(*ast.ReturnStmt)
+	if !ok {
+		return false
+	}
+
+	pos := ctx.Fset.Position(node.Pos())
+	nodeStart := pos.Offset
+
+	// Find the start of this line
+	lineStart := nodeStart
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+
+	// Check if there's a { on the SAME line before the return
+	// This handles single-line functions: func foo() { return bar }
+	sameLineBefore := string(ctx.Source[lineStart:nodeStart])
+	if strings.Contains(sameLineBefore, "{") {
+		return false
+	}
+
+	// Look at the previous line
+	if lineStart == 0 {
+		return false // At start of file, no blank needed
+	}
+
+	// Find start of previous line
+	prevLineEnd := lineStart - 1
+	prevLineStart := prevLineEnd
+	for prevLineStart > 0 && ctx.Source[prevLineStart-1] != '\n' {
+		prevLineStart--
+	}
+
+	// Get the previous line content
+	prevLine := string(ctx.Source[prevLineStart:prevLineEnd])
+	trimmed := trimWhitespace(prevLine)
+
+	// Don't add blank if previous line is blank
+	if trimmed == "" {
+		return false
+	}
+
+	// Don't add blank if previous line ends with { or :
+	if len(trimmed) > 0 {
+		lastChar := trimmed[len(trimmed)-1]
+		if lastChar == '{' || lastChar == ':' {
+			return false
+		}
+	}
+
+	return true
+}
+

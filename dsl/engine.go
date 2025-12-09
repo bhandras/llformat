@@ -30,7 +30,7 @@ func NewEngine(rules []Rule) *Engine {
 		Rules:         sorted,
 		ColumnLimit:   80,
 		TabStop:       8,
-		MaxIterations: 20,
+		MaxIterations: 100,
 	}
 }
 
@@ -108,14 +108,27 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 	var result []byte
 	changed := false
 
-	// Collect nodes in post-order (children before parents)
+	// Build parent map and collect nodes
+	parentMap := make(map[ast.Node]ast.Node)
 	var nodes []ast.Node
+	var stack []ast.Node
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n != nil {
+			// Set parent for this node (parent is top of stack)
+			if len(stack) > 0 {
+				parentMap[n] = stack[len(stack)-1]
+			}
+			stack = append(stack, n)
 			nodes = append(nodes, n)
+		} else {
+			// Pop from stack when leaving a node
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
 		}
 		return true
 	})
+	ctx.SetParentMap(parentMap)
 
 	// Try each node
 	for _, n := range nodes {
