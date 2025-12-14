@@ -662,7 +662,7 @@ func ExpressionRules() []Rule {
 				},
 			},
 			Priority: 50,
-			Action:   &PackedMultiLineCallAction{Target: "node"},
+			Action:   &OnePerLineMultiLineCallAction{Target: "node"},
 		},
 
 		// Never break simple comparisons

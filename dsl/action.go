@@ -108,6 +108,12 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 
 	original := string(ctx.Source[start:end])
 
+	// Skip calls that contain inline comments - reformatting via AST rendering
+	// would drop them.
+	if hasLineComment(original) {
+		return nil, false
+	}
+
 	// Get indentation
 	indent := ctx.IndentAt(targetCall)
 
@@ -909,6 +915,65 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	return result.Bytes(), true
 }
 
+// OnePerLineMultiLineCallAction formats a call as a multiline call with one
+// argument per line. This matches the legacy MultiLineCallFormatter style more
+// closely than PackedMultiLineCallAction (which packs args when possible).
+type OnePerLineMultiLineCallAction struct {
+	Target string
+}
+
+// Execute implements Action for OnePerLineMultiLineCallAction.
+func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	if len(call.Args) == 0 {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(call.Pos()).Offset
+	end := ctx.Fset.Position(call.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+
+	original := ctx.Source[start:end]
+	wsIndent := ctx.IndentAt(call)
+
+	// Skip calls that contain inline comments - AST rendering would drop them.
+	if hasLineComment(string(original)) {
+		return nil, false
+	}
+
+	// Skip if the call fits when collapsed to a single line.
+	lineStart := start
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+	indentPrefix := string(ctx.Source[lineStart:start])
+
+	callText := string(original)
+	flat := strings.Join(strings.Fields(callText), " ")
+	singleLineLen := visualLen(flat, ctx.TabStop)
+	currentLineLen := visualLen(indentPrefix, ctx.TabStop) + singleLineLen
+	if currentLineLen <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	formatted := formatCallOnePerLine(call, wsIndent, ctx)
+	if formatted == string(original) {
+		return nil, false
+	}
+
+	var result bytes.Buffer
+	result.Write(ctx.Source[:start])
+	result.WriteString(formatted)
+	result.Write(ctx.Source[end:])
+	return result.Bytes(), true
+}
+
 // formatCallPackedSimple is a simplified packed multiline formatter used when
 // no legacy formatter is provided.
 func formatCallPackedSimple(call *ast.CallExpr, indent string, ctx *Context) string {
@@ -1640,12 +1705,6 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 		return nil, false
 	}
 
-	// Get the base indentation
-	indent := ctx.IndentAt(node)
-
-	// Format the chain with one call per line
-	formatted := formatMethodChain(chainCalls, indent, ctx)
-
 	// Get the original source positions
 	// We need to find the start of the chain (the receiver) and end of the last call
 	firstCall := chainCalls[len(chainCalls)-1] // innermost
@@ -1664,6 +1723,21 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	if chainStart < 0 || chainEnd > len(ctx.Source) || chainStart >= chainEnd {
 		return nil, false
 	}
+
+	// Compute the already-present prefix width on the line before the chain
+	// (e.g. "result := " before "client.Foo().Bar()"). This avoids decisions
+	// that would fit if the chain started at column 0, but overflow once the
+	// actual prefix is accounted for.
+	lineStart := chainStart
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+	prefixWidth := visualLen(string(ctx.Source[lineStart:chainStart]), ctx.TabStop)
+
+	// Get the base indentation (whitespace only; used for continuation lines).
+	indent := ctx.IndentAt(node)
+
+	formatted := formatMethodChain(chainCalls, indent, prefixWidth, ctx)
 
 	original := string(ctx.Source[chainStart:chainEnd])
 
@@ -1711,17 +1785,16 @@ func collectMethodChain(call *ast.CallExpr) []*ast.CallExpr {
 // It packs as many calls as fit on each line and only breaks when needed.
 // When a call's arguments need wrapping, the arguments are placed on a new line
 // with the closing ) followed by the next method call.
-func formatMethodChain(calls []*ast.CallExpr, indent string, ctx *Context) string {
+func formatMethodChain(calls []*ast.CallExpr, indent string, initialLineWidth int, ctx *Context) string {
 	if len(calls) == 0 {
 		return ""
 	}
 
 	var b strings.Builder
 	contIndent := indent + "\t"
-	indentWidth := visualLen(indent, ctx.TabStop)
 
 	// Process calls from innermost to outermost
-	currentLineWidth := indentWidth
+	currentLineWidth := initialLineWidth
 
 	for i := len(calls) - 1; i >= 0; i-- {
 		call := calls[i]
@@ -1797,7 +1870,7 @@ func formatMethodChain(calls []*ast.CallExpr, indent string, ctx *Context) strin
 				b.WriteString(",\n")
 				b.WriteString(indent)
 				b.WriteString(")")
-				currentLineWidth = indentWidth + 1 // After the closing paren
+				currentLineWidth = visualLen(indent, ctx.TabStop) + 1 // After the closing paren
 			} else {
 				// The call itself is too long but args are short
 				// Just write it inline from current position
