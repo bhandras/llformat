@@ -50,6 +50,14 @@ func ApplyEdits(src []byte, edits []Edit) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// ApplySingleEdit is a convenience wrapper around ApplyEdits for the common
+// single-span replacement case.
+func ApplySingleEdit(src []byte, start, end int, replace []byte) ([]byte, error) {
+	return ApplyEdits(src, []Edit{
+		{Start: start, End: end, Replace: replace},
+	})
+}
+
 func estimatedSize(srcLen int, edits []Edit) int {
 	size := srcLen
 	for _, e := range edits {
@@ -80,4 +88,3 @@ func validateEdits(src []byte, edits []Edit) error {
 	}
 	return nil
 }
-

@@ -190,13 +190,13 @@ func findCallToReflow(call *ast.CallExpr, ctx *Context) *ast.CallExpr {
 		}
 
 		// Verify the reflow actually reduces line width
-		// Build temporary result and check
-		var result bytes.Buffer
-		result.Write(ctx.Source[:start])
-		result.WriteString(formatted)
-		result.Write(ctx.Source[end:])
-
-		newBytes := result.Bytes()
+		// Build temporary result and check.
+		newBytes, err := ApplyEdits(ctx.Source, []Edit{
+			{Start: start, End: end, Replace: []byte(formatted)},
+		})
+		if err != nil {
+			continue
+		}
 		newFset := token.NewFileSet()
 		newFile, err := parser.ParseFile(newFset, "", newBytes, 0)
 		if err != nil {
@@ -363,20 +363,20 @@ func (a *BreakAfterAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 
 	indent := ctx.IndentAt(node)
 
-	var result bytes.Buffer
-	result.Write(ctx.Source[:end])
-	result.WriteString("\n")
-	result.WriteString(indent)
-	result.WriteString("\t") // continuation indent
-
 	// Skip whitespace after the break point
 	i := end
 	for i < len(ctx.Source) && (ctx.Source[i] == ' ' || ctx.Source[i] == '\t') {
 		i++
 	}
-	result.Write(ctx.Source[i:])
 
-	return result.Bytes(), true
+	replacement := []byte("\n" + indent + "\t")
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: end, End: i, Replace: replacement},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakBeforeAction inserts a line break before a node.
@@ -404,14 +404,14 @@ func (a *BreakBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, bool) 
 		start--
 	}
 
-	var result bytes.Buffer
-	result.Write(ctx.Source[:start])
-	result.WriteString("\n")
-	result.WriteString(indent)
-	result.WriteString("\t") // continuation indent
-	result.Write(ctx.Source[pos:])
-
-	return result.Bytes(), true
+	replacement := []byte("\n" + indent + "\t")
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: start, End: pos, Replace: replacement},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakAtOpAction breaks a binary expression at the best operator position.
@@ -634,20 +634,20 @@ func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 	}
 
 	// Build result with break after comma
-	var result bytes.Buffer
-	result.Write(ctx.Source[:bestComma.afterExpr])
-	result.WriteString("\n")
-	result.WriteString(indent)
-	result.WriteString("\t")
-
 	// Skip whitespace after comma
 	i := bestComma.afterExpr
 	for i < len(ctx.Source) && (ctx.Source[i] == ' ' || ctx.Source[i] == '\t') {
 		i++
 	}
-	result.Write(ctx.Source[i:])
 
-	return result.Bytes(), true
+	replacement := []byte("\n" + indent + "\t")
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: bestComma.afterExpr, End: i, Replace: replacement},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // ReflowNestedCallsAction finds and reflows function calls within an expression.
@@ -773,12 +773,13 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool)
 	}
 
 	// Build result with formatted call
-	var result bytes.Buffer
-	result.Write(ctx.Source[:start])
-	result.WriteString(formatted)
-	result.Write(ctx.Source[end:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: start, End: end, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // normalizeCallWithGofmt wraps a call expression in a minimal Go file,
@@ -909,12 +910,13 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	}
 
 	// Build result with formatted call
-	var result bytes.Buffer
-	result.Write(ctx.Source[:start])
-	result.WriteString(formatted)
-	result.Write(ctx.Source[end:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: start, End: end, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // OnePerLineMultiLineCallAction formats a call as a multiline call with one
@@ -969,11 +971,13 @@ func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]
 		return nil, false
 	}
 
-	var result bytes.Buffer
-	result.Write(ctx.Source[:start])
-	result.WriteString(formatted)
-	result.Write(ctx.Source[end:])
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: start, End: end, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // formatCallPackedSimple is a simplified packed multiline formatter used when
@@ -1176,11 +1180,6 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 		lineStart--
 	}
 
-	// Build the result
-	var result bytes.Buffer
-	result.Write(ctx.Source[:lineStart])
-	result.WriteString(formatted)
-
 	// If multi-line and there's content after the brace, add blank line
 	// But skip blank line if the signature already has nested multiline content
 	// (e.g., func types with multiline struct params) - adding more space would be excessive
@@ -1200,21 +1199,27 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 				pos++
 			}
 			if pos < len(ctx.Source) && ctx.Source[pos] != '\n' && ctx.Source[pos] != '}' {
-				// Next line has content and is not just a closing brace
-				// Add a blank line
-				result.WriteByte('\n')
-				result.WriteByte('\n')
-				// Write the rest starting from the content line's indent
-				result.Write(ctx.Source[lineContentStart:])
-				return result.Bytes(), true
+				// Next line has content and is not just a closing brace. Replace up
+				// through the existing newline after the opening brace, then insert
+				// an extra blank line to separate the signature from the body.
+				out, err := ApplyEdits(ctx.Source, []Edit{
+					{Start: lineStart, End: lineContentStart, Replace: []byte(formatted + "\n\n")},
+				})
+				if err != nil {
+					return nil, false
+				}
+				return out, true
 			}
 		}
 	}
 
-	// Just append everything after the brace
-	result.Write(ctx.Source[afterBrace:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: lineStart, End: afterBrace, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // normalizeSignature normalizes a signature for comparison.
@@ -1501,21 +1506,18 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) ([]byt
 		lineStart--
 	}
 
-	// Build the result
-	var result bytes.Buffer
-	result.Write(ctx.Source[:lineStart])
-	result.WriteString(formatted)
-
 	// Find end of line after the method
 	lineEnd := fieldEnd
 	for lineEnd < len(ctx.Source) && ctx.Source[lineEnd] != '\n' {
 		lineEnd++
 	}
-
-	// Append rest of file
-	result.Write(ctx.Source[lineEnd:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: lineStart, End: lineEnd, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // formatMethodSimple is a fallback formatter for interface methods.
@@ -1598,12 +1600,13 @@ func (a *InsertBlankBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, 
 	}
 
 	// Insert blank line before the current line
-	var result bytes.Buffer
-	result.Write(ctx.Source[:lineStart])
-	result.WriteString("\n")
-	result.Write(ctx.Source[lineStart:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: lineStart, End: lineStart, Replace: []byte("\n")},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // InsertBlankAfterAction inserts a blank line after a node if not already present.
@@ -1648,12 +1651,13 @@ func (a *InsertBlankAfterAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	}
 
 	// Insert blank line after the current line
-	var result bytes.Buffer
-	result.Write(ctx.Source[:lineEnd])
-	result.WriteString("\n")
-	result.Write(ctx.Source[lineEnd:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: lineEnd, End: lineEnd, Replace: []byte("\n")},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakMethodChainAction breaks a method chain with one call per line.
@@ -1749,12 +1753,13 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	}
 
 	// Build result by replacing the chain in source
-	var result bytes.Buffer
-	result.Write(ctx.Source[:chainStart])
-	result.WriteString(formatted)
-	result.Write(ctx.Source[chainEnd:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: chainStart, End: chainEnd, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // collectMethodChain collects all calls in a method chain from outermost to innermost.
@@ -1940,12 +1945,12 @@ func (a *BreakReturnValuesAction) Execute(caps Captures, ctx *Context) ([]byte, 
 
 	indent := ctx.IndentAt(node)
 
-	var result bytes.Buffer
-	result.Write(ctx.Source[:resultsOpen+1])
-	result.WriteString("\n")
-	result.WriteString(indent)
-	result.WriteString("\t")
-	result.Write(ctx.Source[i:])
-
-	return result.Bytes(), true
+	replacement := []byte("\n" + indent + "\t")
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: resultsOpen + 1, End: i, Replace: replacement},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
