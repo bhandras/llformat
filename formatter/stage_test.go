@@ -45,8 +45,8 @@ func TestStageOrder(t *testing.T) {
 
 	stages := []Stage{
 		NewStage("stage1", formatter),
-		NewStage("stage2", formatter).WithRequires("stage1"),
 		NewStage("stage3", formatter).WithRequires("stage2"),
+		NewStage("stage2", formatter).WithRequires("stage1"),
 	}
 
 	ordered, err := StageOrder(stages)
@@ -55,6 +55,32 @@ func TestStageOrder(t *testing.T) {
 	}
 	if len(ordered) != 3 {
 		t.Errorf("len(ordered) = %d, want 3", len(ordered))
+	}
+	if ordered[0].Name != "stage1" || ordered[1].Name != "stage2" || ordered[2].Name != "stage3" {
+		t.Fatalf("unexpected order: %q, %q, %q", ordered[0].Name, ordered[1].Name, ordered[2].Name)
+	}
+}
+
+func TestStageOrderMissingDep(t *testing.T) {
+	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	stages := []Stage{
+		NewStage("stage1", formatter).WithRequires("missing"),
+	}
+	_, err := StageOrder(stages)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestStageOrderCycle(t *testing.T) {
+	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	stages := []Stage{
+		NewStage("a", formatter).WithRequires("b"),
+		NewStage("b", formatter).WithRequires("a"),
+	}
+	_, err := StageOrder(stages)
+	if err == nil {
+		t.Fatalf("expected error")
 	}
 }
 

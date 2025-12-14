@@ -1,5 +1,7 @@
 package formatter
 
+import "fmt"
+
 // Stage represents a named formatting stage in the pipeline.
 type Stage struct {
 	// Name uniquely identifies this stage.
@@ -31,27 +33,64 @@ func (s Stage) WithRequires(requires ...string) Stage {
 // StageOrder validates and returns the execution order for stages.
 // Returns an error if there are cycles or missing dependencies.
 func StageOrder(stages []Stage) ([]Stage, error) {
-	// Build a map of stage names for validation
-	stageMap := make(map[string]Stage)
+	// Kahn's algorithm with stable ordering.
+	stageMap := make(map[string]Stage, len(stages))
+	order := make([]string, 0, len(stages))
 	for _, s := range stages {
+		if s.Name == "" {
+			return nil, fmt.Errorf("stage with empty name")
+		}
+		if _, exists := stageMap[s.Name]; exists {
+			return nil, fmt.Errorf("duplicate stage name: %q", s.Name)
+		}
 		stageMap[s.Name] = s
+		order = append(order, s.Name)
 	}
 
-	// Simple topological sort using Kahn's algorithm
-	// For now, we trust the order provided and just validate dependencies exist
+	inDegree := make(map[string]int, len(stages))
+	dependents := make(map[string][]string, len(stages))
+
+	for _, s := range stages {
+		inDegree[s.Name] = 0
+	}
+
 	for _, s := range stages {
 		for _, req := range s.Requires {
 			if _, ok := stageMap[req]; !ok {
-				// Return stages as-is if validation is lax
-				// In a stricter implementation, we'd return an error
-				break
+				return nil, fmt.Errorf("stage %q requires missing stage %q", s.Name, req)
+			}
+			inDegree[s.Name]++
+			dependents[req] = append(dependents[req], s.Name)
+		}
+	}
+
+	ready := make([]string, 0, len(stages))
+	for _, name := range order {
+		if inDegree[name] == 0 {
+			ready = append(ready, name)
+		}
+	}
+
+	out := make([]Stage, 0, len(stages))
+	for len(ready) > 0 {
+		// Pop front for stability.
+		name := ready[0]
+		ready = ready[1:]
+
+		out = append(out, stageMap[name])
+		for _, dep := range dependents[name] {
+			inDegree[dep]--
+			if inDegree[dep] == 0 {
+				ready = append(ready, dep)
 			}
 		}
 	}
 
-	// For now, return in the order provided
-	// A full implementation would do proper topological sorting
-	return stages, nil
+	if len(out) != len(stages) {
+		return nil, fmt.Errorf("cycle detected in stage dependencies")
+	}
+
+	return out, nil
 }
 
 // StageOptions contains options for configuring the stage pipeline.
