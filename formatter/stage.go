@@ -1,6 +1,10 @@
 package formatter
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/lightninglabs/llformat/dsl"
+)
 
 // Stage represents a named formatting stage in the pipeline.
 type Stage struct {
@@ -114,6 +118,13 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	if opts.UseDSLExpr {
+		rules := dsl.DefaultRulesWithOptions(dsl.DefaultRuleOptions{
+			LeftFlowFormat:        FormatCallGreedy,
+			PackedMultiLineFormat: FormatCallPackedMultiLine,
+			FuncSignatureFormat:   FormatFuncSignature,
+			InterfaceMethodFormat: FormatInterfaceMethod,
+		})
+
 		// Simplified pipeline using DSL for all code formatting
 		return []Stage{
 			{
@@ -130,6 +141,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 				Formatter: NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit: cfg.ColumnLimit,
 					TabStop:     cfg.TabStop,
+					Rules:       rules,
 					Trace:       opts.TraceDSL,
 				}),
 				Requires: []string{"comments"},

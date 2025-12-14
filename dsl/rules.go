@@ -1,5 +1,15 @@
 package dsl
 
+// DefaultRuleOptions controls which legacy formatter functions are used by the
+// default DSL rule set. Callers in other packages (e.g. formatter) can inject
+// existing implementations without creating import cycles.
+type DefaultRuleOptions struct {
+	LeftFlowFormat        LeftFlowFormatFunc
+	PackedMultiLineFormat PackedMultiLineFormatFunc
+	FuncSignatureFormat   SignatureFormatFunc
+	InterfaceMethodFormat InterfaceMethodFormatFunc
+}
+
 // DefaultRules returns the standard formatting rules, including blank line rules.
 // The optional formatFunc parameter allows injecting the legacy formatter for
 // left-flow call formatting.
@@ -8,9 +18,196 @@ func DefaultRules(formatFunc ...LeftFlowFormatFunc) []Rule {
 	if len(formatFunc) > 0 {
 		fn = formatFunc[0]
 	}
-	rules := expressionRules(fn)
-	rules = append(rules, BlankLineRules()...)
+	return DefaultRulesWithOptions(DefaultRuleOptions{
+		LeftFlowFormat: fn,
+	})
+}
+
+// DefaultRulesWithOptions returns the default rule set used by the DSL engine.
+// It is intended to reproduce the legacy pipeline behavior via injected
+// formatter functions where available.
+func DefaultRulesWithOptions(opts DefaultRuleOptions) []Rule {
+	sigRules := SignatureRules(SignatureConfig{
+		FuncFormatter:   opts.FuncSignatureFormat,
+		MethodFormatter: opts.InterfaceMethodFormat,
+	})
+	logRules := LogPrintfRules(opts.LeftFlowFormat)
+	multiLineRules := MultiLineCallRules(opts.PackedMultiLineFormat)
+	exprRules := expressionOnlyRules()
+	blankRules := BlankLineRules()
+
+	rules := make([]Rule, 0, len(sigRules)+len(logRules)+len(multiLineRules)+len(exprRules)+len(blankRules))
+	rules = append(rules, sigRules...)
+	rules = append(rules, logRules...)
+	rules = append(rules, multiLineRules...)
+	rules = append(rules, exprRules...)
+	rules = append(rules, blankRules...)
 	return rules
+}
+
+// expressionOnlyRules returns expression-breaking rules that are intended to run
+// alongside the call/signature rule sets (MultiLineCallRules, SignatureRules,
+// LogPrintfRules) without overlapping responsibilities.
+func expressionOnlyRules() []Rule {
+	return []Rule{
+		// Never break simple comparisons (x > 0, flag == true, etc.)
+		{
+			Name: "keep_simple_comparison",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op":    {OneOf: []string{"==", "!=", "<", ">", "<=", ">="}},
+					"right": {Capture: "r"},
+				},
+			},
+			When:     &IsSimpleLiteralCond{Target: "r"},
+			Priority: 100,
+			Action:   &KeepTogetherAction{Target: "node"},
+		},
+
+		// Long logical chain with function calls - try reflow first.
+		{
+			Name: "logical_chain_with_call",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op": {OneOf: []string{"&&", "||"}},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&HasCallExprCond{Target: "node"},
+				},
+			},
+			Priority: 40,
+			Action: &TryElseAction{
+				Try: &ReflowNestedCallsAction{
+					Target:   "node",
+					Strategy: StrategyOnePerLine,
+				},
+				Else: &BreakAtOpAction{
+					Target:     "node",
+					BreakAfter: true,
+				},
+			},
+		},
+
+		// Long logical chain without calls.
+		{
+			Name: "long_logical_chain",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op": {OneOf: []string{"&&", "||"}},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &HasCallExprCond{Target: "node"}},
+				},
+			},
+			Priority: 30,
+			Action: &BreakAtOpAction{
+				Target:     "node",
+				BreakAfter: true,
+			},
+		},
+
+		// Long arithmetic expression (excluding string concat and call args).
+		{
+			Name: "long_arithmetic_expr",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op": {OneOf: []string{"+", "-", "*", "/", "%"}},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsStringConcatCond{Target: "node"}},
+					&NotCond{Cond: &IsCallArgCond{Target: "node"}},
+				},
+			},
+			Priority: 20,
+			Action: &BreakAtOpAction{
+				Target:     "node",
+				BreakAfter: true,
+			},
+		},
+
+		// For loop with long condition - break at operators.
+		{
+			Name: "for_with_long_cond",
+			Pattern: &NodePattern{
+				Type: "ForStmt",
+				Fields: map[string]FieldMatch{
+					"cond": {
+						Capture:    "cond",
+						SubPattern: &NodePattern{Type: "BinaryExpr"},
+					},
+				},
+			},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Priority: 45,
+			Action:   &BreakAtOpAction{Target: "cond", BreakAfter: true},
+		},
+
+		// Return statement with long binary expression (excluding string concat).
+		{
+			Name: "return_with_long_binary",
+			Pattern: &NodePattern{
+				Type: "ReturnStmt",
+				Fields: map[string]FieldMatch{
+					"results": {
+						Capture:    "expr",
+						SubPattern: &NodePattern{Type: "BinaryExpr"},
+					},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsStringConcatCond{Target: "expr"}},
+				},
+			},
+			Priority: 35,
+			Action:   &BreakAtOpAction{Target: "expr", BreakAfter: true},
+		},
+
+		// Long case clause - break at comma.
+		{
+			Name:     "long_case_clause",
+			Pattern:  &NodePattern{Type: "CaseClause"},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Priority: 35,
+			Action:   &BreakCaseClauseAction{Target: "node"},
+		},
+
+		// Assignment with long binary expression (not call).
+		{
+			Name: "assignment_with_long_binary",
+			Pattern: &NodePattern{
+				Type: "AssignStmt",
+				Fields: map[string]FieldMatch{
+					"rhs": {
+						Capture:    "expr",
+						SubPattern: &NodePattern{Type: "BinaryExpr"},
+					},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &HasCallExprCond{Target: "expr"}},
+				},
+			},
+			Priority: 32,
+			Action:   &BreakAtOpAction{Target: "expr", BreakAfter: true},
+		},
+	}
 }
 
 // expressionRules returns the expression formatting rules.
