@@ -365,12 +365,12 @@ func (a *BreakAfterAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 		i++
 	}
 
-	replacement := []byte("\n" + indent + "\t")
-		out, err := ApplySingleEdit(ctx.Source, end, i, replacement)
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	replacement := continuationIndentBytes(indent)
+	out, err := ApplySingleEdit(ctx.Source, end, i, replacement)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakBeforeAction inserts a line break before a node.
@@ -398,12 +398,12 @@ func (a *BreakBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, bool) 
 		start--
 	}
 
-	replacement := []byte("\n" + indent + "\t")
-		out, err := ApplySingleEdit(ctx.Source, start, pos, replacement)
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	replacement := continuationIndentBytes(indent)
+	out, err := ApplySingleEdit(ctx.Source, start, pos, replacement)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakAtOpAction breaks a binary expression at the best operator position.
@@ -539,16 +539,16 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	}
 
 	// Build result with break after the operator
-	replacement := []byte("\n" + indent + "\t")
+	replacement := continuationIndentBytes(indent)
 	if bytes.Equal(ctx.Source[opEnd:i], replacement) {
 		return nil, false
 	}
 
-		out, err := ApplySingleEdit(ctx.Source, opEnd, i, replacement)
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	out, err := ApplySingleEdit(ctx.Source, opEnd, i, replacement)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakCaseClauseAction breaks a long case clause at comma boundaries.
@@ -630,12 +630,12 @@ func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 		i++
 	}
 
-	replacement := []byte("\n" + indent + "\t")
-		out, err := ApplySingleEdit(ctx.Source, bestComma.afterExpr, i, replacement)
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	replacement := continuationIndentBytes(indent)
+	out, err := ApplySingleEdit(ctx.Source, bestComma.afterExpr, i, replacement)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // ReflowNestedCallsAction finds and reflows function calls within an expression.
@@ -1919,7 +1919,7 @@ func (a *BreakReturnValuesAction) Execute(caps Captures, ctx *Context) ([]byte, 
 
 	indent := ctx.IndentAt(node)
 
-	replacement := []byte("\n" + indent + "\t")
+	replacement := continuationIndentBytes(indent)
 	out, err := ApplySingleEdit(ctx.Source, resultsOpen+1, i, replacement)
 	if err != nil {
 		return nil, false
