@@ -14,6 +14,24 @@ func TestSkipHorizontalWhitespace(t *testing.T) {
 	}
 }
 
+func TestBacktrackHorizontalWhitespace(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("abc\t  def")
+	// Position points at 'd', should backtrack over "\t  ".
+	if got := backtrackHorizontalWhitespace(src, 6); got != 3 {
+		t.Fatalf("got %d", got)
+	}
+	// If we're already at the start of whitespace run, it should be stable.
+	if got := backtrackHorizontalWhitespace(src, 3); got != 3 {
+		t.Fatalf("got %d", got)
+	}
+	// If there is no whitespace before, should stay.
+	if got := backtrackHorizontalWhitespace(src, 2); got != 2 {
+		t.Fatalf("got %d", got)
+	}
+}
+
 func TestApplyContinuationIndent(t *testing.T) {
 	t.Parallel()
 
@@ -41,4 +59,3 @@ func TestApplyContinuationIndent(t *testing.T) {
 		t.Fatalf("got %q", string(out2))
 	}
 }
-

@@ -15,6 +15,13 @@ func skipHorizontalWhitespace(src []byte, i int) int {
 	return i
 }
 
+func backtrackHorizontalWhitespace(src []byte, i int) int {
+	for i > 0 && (src[i-1] == ' ' || src[i-1] == '\t') {
+		i--
+	}
+	return i
+}
+
 func applyContinuationIndent(src []byte, start, end int, indent string) ([]byte, bool, error) {
 	replacement := continuationIndentBytes(indent)
 	if start >= 0 && end >= start && end <= len(src) {

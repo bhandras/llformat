@@ -388,10 +388,7 @@ func (a *BreakBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, bool) 
 	indent := ctx.IndentAt(node)
 
 	// Find start of whitespace before node
-	start := pos
-	for start > 0 && (ctx.Source[start-1] == ' ' || ctx.Source[start-1] == '\t') {
-		start--
-	}
+	start := backtrackHorizontalWhitespace(ctx.Source, pos)
 
 	out, changed, err := applyContinuationIndent(ctx.Source, start, pos, indent)
 	if err != nil {
