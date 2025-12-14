@@ -530,6 +530,57 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	return out, changed
 }
 
+// ReflowStringConcatAction rewrites a long string concatenation expression into
+// a multi-line concatenation with stable indentation.
+type ReflowStringConcatAction struct {
+	Target string
+}
+
+// Execute implements Action for ReflowStringConcatAction.
+func (a *ReflowStringConcatAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	if node == nil {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(node.Pos()).Offset
+	end := ctx.Fset.Position(node.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+
+	original := string(ctx.Source[start:end])
+	if hasLineComment(original) {
+		return nil, false
+	}
+
+	expr, err := parser.ParseExpr(original)
+	if err != nil {
+		return nil, false
+	}
+	strText, ok := llast.FlattenStringExprAST(expr)
+	if !ok {
+		return nil, false
+	}
+
+	indent := ctx.IndentAt(node)
+	contIndent := indent + "\t"
+
+	// Account for non-whitespace prefix before the expression (e.g. "return ").
+	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+
+	formatted := text.SplitQuotedString(strText, prefixWidth, contIndent, ctx.ColumnLimit, ctx.TabStop)
+	if formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
 // BreakCaseClauseAction breaks a long case clause at comma boundaries.
 type BreakCaseClauseAction struct {
 	Target string

@@ -118,14 +118,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	if opts.UseDSLExpr {
-		rules := dsl.DefaultRulesWithOptions(dsl.DefaultRuleOptions{
-			LeftFlowFormat:        FormatCallGreedy,
-			PackedMultiLineFormat: FormatCallPackedMultiLine,
-			FuncSignatureFormat:   FormatFuncSignature,
-			InterfaceMethodFormat: FormatInterfaceMethod,
-		})
-
-		// Simplified pipeline using DSL for all code formatting
+		// Legacy stage pipeline with DSL expression formatting.
 		return []Stage{
 			{
 				Name: "comments",
@@ -137,14 +130,51 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 				Requires: nil,
 			},
 			{
-				Name: "dsl",
+				Name: "compact-calls",
+				Formatter: NewCompactCallFormatter(Config{
+					ColumnLimit: cfg.ColumnLimit,
+					TabStop:     cfg.TabStop,
+					SkipGofmt:   true,
+				}),
+				Requires: []string{"comments"},
+			},
+			{
+				Name: "expressions",
 				Formatter: NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit: cfg.ColumnLimit,
 					TabStop:     cfg.TabStop,
-					Rules:       rules,
+					Rules:       dsl.LongExprRules(),
 					Trace:       opts.TraceDSL,
+					SkipGofmt:   true,
 				}),
-				Requires: []string{"comments"},
+				Requires: []string{"compact-calls"},
+			},
+			{
+				Name: "multiline-calls",
+				Formatter: NewMultiLineCallFormatter(MultiLineConfig{
+					ColumnLimit: cfg.ColumnLimit,
+					TabStop:     cfg.TabStop,
+					Excludes:    opts.Excludes,
+					SkipGofmt:   true,
+				}),
+				Requires: []string{"expressions"},
+			},
+			{
+				Name: "signatures",
+				Formatter: NewFuncSigFormatter(FuncSigConfig{
+					ColumnLimit: cfg.ColumnLimit,
+					TabStop:     cfg.TabStop,
+				}),
+				Requires: []string{"multiline-calls"},
+			},
+			{
+				Name: "blank-lines",
+				Formatter: NewBlankLineFormatter(BlankLineConfig{
+					BeforeReturn:            true,
+					BetweenCases:            true,
+					BetweenInterfaceMethods: true,
+				}),
+				Requires: []string{"signatures"},
 			},
 		}
 	}

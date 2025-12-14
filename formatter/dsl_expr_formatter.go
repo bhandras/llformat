@@ -1,13 +1,16 @@
 package formatter
 
 import (
+	formatstd "go/format"
+
 	"github.com/lightninglabs/llformat/dsl"
 )
 
 // DSLExprFormatter uses the DSL engine to format expressions.
 type DSLExprFormatter struct {
-	engine               *dsl.Engine
+	engine                *dsl.Engine
 	applyLegacyBlankLines bool
+	skipGofmt             bool
 }
 
 // DSLExprConfig holds configuration for the DSL expression formatter.
@@ -15,7 +18,8 @@ type DSLExprConfig struct {
 	ColumnLimit int
 	TabStop     int
 	Rules       []dsl.Rule // Custom rules (if nil, uses defaults)
-	Trace       bool      // Enable DSL rule tracing to stderr
+	Trace       bool       // Enable DSL rule tracing to stderr
+	SkipGofmt   bool       // Skip gofmt (pipelines may run gofmt once at end)
 }
 
 // NewDSLExprFormatter creates a new DSL-based expression formatter.
@@ -40,8 +44,9 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	engine.Trace = cfg.Trace
 
 	return &DSLExprFormatter{
-		engine:               engine,
+		engine:                engine,
 		applyLegacyBlankLines: applyLegacyBlankLines,
+		skipGofmt:             cfg.SkipGofmt,
 	}
 }
 
@@ -50,16 +55,30 @@ func (f *DSLExprFormatter) FormatFile(src []byte) []byte {
 	out := f.engine.FormatFile(src)
 
 	if !f.applyLegacyBlankLines {
+		if f.skipGofmt {
+			return out
+		}
+		if formatted, err := formatstd.Source(out); err == nil {
+			return formatted
+		}
 		return out
 	}
 
 	// Preserve existing llformat behavior for blank line insertion by running
 	// the legacy blank-line formatter after DSL transformations.
-	return NewBlankLineFormatter(BlankLineConfig{
+	out = NewBlankLineFormatter(BlankLineConfig{
 		BeforeReturn:            true,
 		BetweenCases:            true,
 		BetweenInterfaceMethods: true,
 	}).FormatFile(out)
+
+	if f.skipGofmt {
+		return out
+	}
+	if formatted, err := formatstd.Source(out); err == nil {
+		return formatted
+	}
+	return out
 }
 
 func hasDSLBlankLineRules(rules []dsl.Rule) bool {

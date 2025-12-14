@@ -676,6 +676,159 @@ func MultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
 	}
 }
 
+// LongExprRules returns a rule set intended to match the legacy long expression
+// formatter behavior: break long boolean/arithmetic chains and case clauses,
+// without reformatting calls or strings.
+func LongExprRules() []Rule {
+	return []Rule{
+		// Never break simple comparisons (x > 0, flag == true, etc.)
+		{
+			Name: "keep_simple_comparison",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op":    {OneOf: []string{"==", "!=", "<", ">", "<=", ">="}},
+					"right": {Capture: "r"},
+				},
+			},
+			When:     &IsSimpleLiteralCond{Target: "r"},
+			Priority: 100,
+			Action:   &KeepTogetherAction{Target: "node"},
+		},
+
+		// Long string concatenation - flatten and re-split into stable wrapped
+		// concatenation joins.
+		{
+			Name: "long_string_concat",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op": {Literal: "+"},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&IsStringConcatCond{Target: "node"},
+				},
+			},
+			Priority: 25,
+			Action:   &ReflowStringConcatAction{Target: "node"},
+		},
+
+		// Long logical chain (with or without calls) - break after && / ||.
+		{
+			Name: "long_logical_chain",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op": {OneOf: []string{"&&", "||"}},
+				},
+			},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Priority: 40,
+			Action: &BreakAtOpAction{
+				Target:     "node",
+				BreakAfter: true,
+			},
+		},
+
+		// Long arithmetic expression (excluding string concat and call args).
+		{
+			Name: "long_arithmetic_expr",
+			Pattern: &NodePattern{
+				Type: "BinaryExpr",
+				Fields: map[string]FieldMatch{
+					"op": {OneOf: []string{"+", "-", "*", "/", "%"}},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsStringConcatCond{Target: "node"}},
+					&NotCond{Cond: &IsCallArgCond{Target: "node"}},
+					&NotCond{Cond: &IsAncestorTypeCond{Target: "node", Type: "CompositeLit"}},
+				},
+			},
+			Priority: 20,
+			Action: &BreakAtOpAction{
+				Target:     "node",
+				BreakAfter: true,
+			},
+		},
+
+		// For loop with long condition - break at operators.
+		{
+			Name: "for_with_long_cond",
+			Pattern: &NodePattern{
+				Type: "ForStmt",
+				Fields: map[string]FieldMatch{
+					"cond": {
+						Capture:    "cond",
+						SubPattern: &NodePattern{Type: "BinaryExpr"},
+					},
+				},
+			},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Priority: 45,
+			Action:   &BreakAtOpAction{Target: "cond", BreakAfter: true},
+		},
+
+		// Return statement with long binary expression (excluding string concat).
+		{
+			Name: "return_with_long_binary",
+			Pattern: &NodePattern{
+				Type: "ReturnStmt",
+				Fields: map[string]FieldMatch{
+					"results": {
+						Capture:    "expr",
+						SubPattern: &NodePattern{Type: "BinaryExpr"},
+					},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsStringConcatCond{Target: "expr"}},
+				},
+			},
+			Priority: 35,
+			Action:   &BreakAtOpAction{Target: "expr", BreakAfter: true},
+		},
+
+		// Long case clause - break at comma.
+		{
+			Name:     "long_case_clause",
+			Pattern:  &NodePattern{Type: "CaseClause"},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Priority: 35,
+			Action:   &BreakCaseClauseAction{Target: "node"},
+		},
+
+		// Assignment with long binary expression (not call).
+		{
+			Name: "assignment_with_long_binary",
+			Pattern: &NodePattern{
+				Type: "AssignStmt",
+				Fields: map[string]FieldMatch{
+					"rhs": {
+						Capture:    "expr",
+						SubPattern: &NodePattern{Type: "BinaryExpr"},
+					},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &HasCallExprCond{Target: "expr"}},
+				},
+			},
+			Priority: 32,
+			Action:   &BreakAtOpAction{Target: "expr", BreakAfter: true},
+		},
+	}
+}
+
 // SignatureConfig holds optional formatters for signature rules.
 type SignatureConfig struct {
 	FuncFormatter   SignatureFormatFunc

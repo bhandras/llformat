@@ -3,7 +3,6 @@ package dsl
 import (
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -82,13 +81,10 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 			)
 		}
 
-		// Run gofmt to normalize
-		formatted, err := format.Source(modified)
-		if err != nil {
-			result = modified
-		} else {
-			result = formatted
-		}
+		// Keep the edited source as-is and rely on the outer pipeline to run
+		// gofmt once at the end. Running gofmt here would reformat unrelated
+		// code and violate llformat's "only touch targeted regions" goal.
+		result = modified
 	}
 
 	return result, nil
