@@ -33,6 +33,13 @@ type Action interface {
 	Execute(caps Captures, ctx *Context) ([]byte, bool)
 }
 
+// EditAction is an optional interface for actions that can express changes as a
+// list of validated byte-range edits rather than returning a whole rewritten
+// file. The engine will apply these edits to ctx.Source.
+type EditAction interface {
+	ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error)
+}
+
 // Context provides formatting context to conditions and actions.
 type Context struct {
 	Fset        *token.FileSet
@@ -49,6 +56,17 @@ type Context struct {
 	// LastAppliedRule records the most recent transforming rule that applied.
 	// This is used for optional tracing.
 	LastAppliedRule string
+
+	// LastAppliedRulePriority is the priority of the last applied rule.
+	LastAppliedRulePriority int
+
+	// LastAppliedNodeType is a short node type label (e.g. "*ast.CallExpr").
+	LastAppliedNodeType string
+
+	// LastAppliedNodeStart/End are byte offsets into Source for the node that
+	// triggered the last applied rule.
+	LastAppliedNodeStart int
+	LastAppliedNodeEnd   int
 }
 
 // NewContext creates a new formatting context.

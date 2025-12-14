@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"os"
 	"sort"
+	"strings"
 )
 
 // Engine executes formatting rules.
@@ -64,8 +65,21 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		if e.Trace {
 			start, endBefore, endAfter := changedSpan(ctx.Source, modified)
 			line, col := offsetToLineCol(ctx.Source, start)
-			fmt.Fprintf(os.Stderr, "dsl: iter=%d applied %s span=[%d:%d]->[%d:%d] @%d:%d\n",
-				iter+1, ctx.LastAppliedRule, start, endBefore, start, endAfter, line, col)
+			fmt.Fprintf(os.Stderr, "dsl: iter=%d rule=%s prio=%d node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d snippet=%q\n",
+				iter+1,
+				ctx.LastAppliedRule,
+				ctx.LastAppliedRulePriority,
+				ctx.LastAppliedNodeType,
+				ctx.LastAppliedNodeStart,
+				ctx.LastAppliedNodeEnd,
+				start,
+				endBefore,
+				start,
+				endAfter,
+				line,
+				col,
+				snippetForRange(ctx.Source, start, endBefore),
+			)
 		}
 
 		// Run gofmt to normalize
@@ -122,6 +136,43 @@ func offsetToLineCol(src []byte, off int) (line, col int) {
 	}
 	col = off - lastNL
 	return line, col
+}
+
+func snippetForRange(src []byte, start, end int) string {
+	if start < 0 {
+		start = 0
+	}
+	if end < 0 {
+		end = 0
+	}
+	if start > len(src) {
+		start = len(src)
+	}
+	if end > len(src) {
+		end = len(src)
+	}
+
+	// Handle insertion-only changes (end == start) by providing a little context.
+	if end <= start {
+		left := start - 30
+		if left < 0 {
+			left = 0
+		}
+		right := start + 30
+		if right > len(src) {
+			right = len(src)
+		}
+		start = left
+		end = right
+	}
+
+	fields := strings.Fields(string(src[start:end]))
+	s := strings.Join(fields, " ")
+	const maxLen = 120
+	if len(s) > maxLen {
+		return s[:maxLen-3] + "..."
+	}
+	return s
 }
 
 // applyAtomicMarkers runs through rules that just mark nodes as atomic.
@@ -215,12 +266,11 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 				continue
 			}
 
-			// Execute action
-			modified, actionChanged := rule.Action.Execute(caps, ctx)
+			modified, actionChanged, ok := e.executeAction(rule, caps, ctx)
+			if !ok {
+				continue
+			}
 			if actionChanged {
-				if ctx != nil {
-					ctx.LastAppliedRule = rule.Name
-				}
 				result = modified
 				changed = true
 				break
@@ -229,6 +279,51 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 	}
 
 	return result, changed
+}
+
+func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified []byte, changed bool, ok bool) {
+	n, _ := caps["node"]
+	if ctx != nil && n != nil {
+		pos := ctx.Fset.Position(n.Pos()).Offset
+		end := ctx.Fset.Position(n.End()).Offset
+		if pos < 0 {
+			pos = 0
+		}
+		if end < pos {
+			end = pos
+		}
+		if pos > len(ctx.Source) {
+			pos = len(ctx.Source)
+		}
+		if end > len(ctx.Source) {
+			end = len(ctx.Source)
+		}
+
+		ctx.LastAppliedRule = rule.Name
+		ctx.LastAppliedRulePriority = rule.Priority
+		ctx.LastAppliedNodeType = fmt.Sprintf("%T", n)
+		ctx.LastAppliedNodeStart = pos
+		ctx.LastAppliedNodeEnd = end
+	}
+
+	// Prefer edit-based actions when available.
+	if editAction, okCast := rule.Action.(EditAction); okCast {
+		edits, changedEdits, err := editAction.ExecuteEdits(caps, ctx)
+		if err != nil || !changedEdits {
+			return nil, false, false
+		}
+		applied, err := ApplyEdits(ctx.Source, edits)
+		if err != nil {
+			return nil, false, false
+		}
+		return applied, true, true
+	}
+
+	modified, actionChanged := rule.Action.Execute(caps, ctx)
+	if !actionChanged {
+		return nil, false, false
+	}
+	return modified, true, true
 }
 
 // FormatFile is a convenience method that reads, formats, and returns source.
