@@ -15,6 +15,7 @@ type DSLExprConfig struct {
 	ColumnLimit int
 	TabStop     int
 	Rules       []dsl.Rule // Custom rules (if nil, uses defaults)
+	Trace       bool      // Enable DSL rule tracing to stderr
 }
 
 // NewDSLExprFormatter creates a new DSL-based expression formatter.
@@ -36,6 +37,7 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	if cfg.TabStop > 0 {
 		engine.TabStop = cfg.TabStop
 	}
+	engine.Trace = cfg.Trace
 
 	return &DSLExprFormatter{
 		engine:               engine,

@@ -18,6 +18,7 @@ func main() {
 		moveInline       bool
 		multilineExclude string
 		useLegacy        bool
+		traceDSL         bool
 	)
 
 	flag.BoolVar(&write, "w", false, "write result to (source) file instead of stdout")
@@ -27,6 +28,7 @@ func main() {
 	flag.BoolVar(&moveInline, "wrap-inline-comments", false, "when formatting comments, hoist trailing inline comments above for wrapping")
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
 	flag.BoolVar(&useLegacy, "legacy", false, "use legacy multi-stage formatter instead of DSL")
+	flag.BoolVar(&traceDSL, "trace-dsl", false, "print DSL rule application trace to stderr (DSL mode only)")
 	flag.Parse()
 
 	if flag.NArg() != 1 {
@@ -57,6 +59,7 @@ func main() {
 		MoveInlineAbove: moveInline,
 		Excludes:        excludes,
 		UseDSLExpr:      !useLegacy,
+		TraceDSL:        traceDSL && !useLegacy,
 	})
 	out := pipeline.Format(data)
 

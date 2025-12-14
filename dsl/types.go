@@ -45,6 +45,10 @@ type Context struct {
 
 	// parentMap maps each node to its parent in the AST.
 	parentMap map[ast.Node]ast.Node
+
+	// LastAppliedRule records the most recent transforming rule that applied.
+	// This is used for optional tracing.
+	LastAppliedRule string
 }
 
 // NewContext creates a new formatting context.

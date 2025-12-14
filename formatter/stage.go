@@ -59,6 +59,7 @@ type StageOptions struct {
 	CommentMoveInline bool
 	Excludes          []string
 	UseDSLExpr        bool // Use DSL-based formatter (now the default)
+	TraceDSL          bool // Enable DSL rule tracing (only when UseDSLExpr)
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -90,6 +91,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 				Formatter: NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit: cfg.ColumnLimit,
 					TabStop:     cfg.TabStop,
+					Trace:       opts.TraceDSL,
 				}),
 				Requires: []string{"comments"},
 			},

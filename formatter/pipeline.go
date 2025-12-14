@@ -11,6 +11,7 @@ type PipelineConfig struct {
 	MoveInlineAbove bool     // For comment formatter
 	Excludes        []string // Functions to exclude from multiline formatting
 	UseDSLExpr      bool     // Use DSL-based expression formatter
+	TraceDSL        bool     // Enable DSL rule tracing (only when UseDSLExpr)
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -33,6 +34,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		CommentMoveInline: cfg.MoveInlineAbove,
 		Excludes:          cfg.Excludes,
 		UseDSLExpr:        cfg.UseDSLExpr,
+		TraceDSL:          cfg.TraceDSL,
 	})
 
 	return &Pipeline{

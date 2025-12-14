@@ -1,10 +1,12 @@
 package dsl
 
 import (
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
+	"os"
 	"sort"
 )
 
@@ -19,10 +21,11 @@ type Engine struct {
 
 // NewEngine creates a rule engine with default settings.
 func NewEngine(rules []Rule) *Engine {
-	// Sort rules by priority (descending - higher priority first)
+	// Sort rules by priority (descending - higher priority first).
+	// Keep relative order stable for equal priority to avoid nondeterminism.
 	sorted := make([]Rule, len(rules))
 	copy(sorted, rules)
-	sort.Slice(sorted, func(i, j int) bool {
+	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].Priority > sorted[j].Priority
 	})
 
@@ -56,6 +59,10 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		modified, changed := e.applyOneRule(file, ctx)
 		if !changed {
 			break
+		}
+
+		if e.Trace {
+			fmt.Fprintf(os.Stderr, "dsl: iter=%d applied %s\n", iter+1, ctx.LastAppliedRule)
 		}
 
 		// Run gofmt to normalize
@@ -164,6 +171,9 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 			// Execute action
 			modified, actionChanged := rule.Action.Execute(caps, ctx)
 			if actionChanged {
+				if ctx != nil {
+					ctx.LastAppliedRule = rule.Name
+				}
 				result = modified
 				changed = true
 				break
