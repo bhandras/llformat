@@ -61,6 +61,76 @@ func (c *NotCond) Eval(caps Captures, ctx *Context) bool {
 	return !c.Cond.Eval(caps, ctx)
 }
 
+// IsInCallArgsCond checks whether the target node is contained within an
+// argument expression of any enclosing CallExpr. This rejects not only direct
+// call arguments, but also nested subexpressions inside an argument.
+type IsInCallArgsCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsInCallArgsCond.
+func (c *IsInCallArgsCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+
+	cur := node
+	for cur != nil {
+		parent := ctx.Parent(cur)
+		call, ok := parent.(*ast.CallExpr)
+		if ok {
+			for _, arg := range call.Args {
+				if arg == cur {
+					return true
+				}
+			}
+		}
+		cur = parent
+	}
+
+	return false
+}
+
+// ExprEditSafeCond is a conservative guard intended for the expression stage:
+// it allows edits only when we are unlikely to interfere with other formatters
+// (calls, composite literals, func literals) and when inline comments would not
+// be lost.
+type ExprEditSafeCond struct {
+	Target string
+}
+
+// Eval implements Condition for ExprEditSafeCond.
+func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+
+	// Avoid editing inside call arguments; call formatting is owned by the call
+	// stages and AST-based rewrites can easily change call layout.
+	if (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
+		return false
+	}
+
+	// Avoid composite literals and func literals; these tend to be formatting
+	// sensitive and are not owned by the expression stage.
+	if (&IsAncestorTypeCond{Target: c.Target, Type: "CompositeLit"}).Eval(caps, ctx) {
+		return false
+	}
+	if (&IsAncestorTypeCond{Target: c.Target, Type: "FuncLit"}).Eval(caps, ctx) {
+		return false
+	}
+
+	// Avoid spans containing inline comments (AST printing does not preserve
+	// them inside expressions/argument lists).
+	if hasLineComment(string(ctx.NodeSource(node))) {
+		return false
+	}
+
+	return true
+}
+
 // IsParentTypeCond checks if the target node's direct parent matches a given
 // AST node type name (e.g. "CallExpr", "AssignStmt").
 type IsParentTypeCond struct {

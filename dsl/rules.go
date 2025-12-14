@@ -678,7 +678,7 @@ func MultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
 
 // LongExprRules returns a rule set intended to match the legacy long expression
 // formatter behavior: break long boolean/arithmetic chains and case clauses,
-// without reformatting calls or strings.
+// without reformatting calls or signatures.
 func LongExprRules() []Rule {
 	return []Rule{
 		// Never break simple comparisons (x > 0, flag == true, etc.)
@@ -710,6 +710,7 @@ func LongExprRules() []Rule {
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&IsStringConcatCond{Target: "node"},
+					&ExprEditSafeCond{Target: "node"},
 				},
 			},
 			Priority: 25,
@@ -725,7 +726,12 @@ func LongExprRules() []Rule {
 					"op": {OneOf: []string{"&&", "||"}},
 				},
 			},
-			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&ExprEditSafeCond{Target: "node"},
+				},
+			},
 			Priority: 40,
 			Action: &BreakAtOpAction{
 				Target:     "node",
@@ -746,8 +752,7 @@ func LongExprRules() []Rule {
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&NotCond{Cond: &IsStringConcatCond{Target: "node"}},
-					&NotCond{Cond: &IsCallArgCond{Target: "node"}},
-					&NotCond{Cond: &IsAncestorTypeCond{Target: "node", Type: "CompositeLit"}},
+					&ExprEditSafeCond{Target: "node"},
 				},
 			},
 			Priority: 20,
@@ -769,7 +774,12 @@ func LongExprRules() []Rule {
 					},
 				},
 			},
-			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&ExprEditSafeCond{Target: "cond"},
+				},
+			},
 			Priority: 45,
 			Action:   &BreakAtOpAction{Target: "cond", BreakAfter: true},
 		},
@@ -790,6 +800,7 @@ func LongExprRules() []Rule {
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&NotCond{Cond: &IsStringConcatCond{Target: "expr"}},
+					&ExprEditSafeCond{Target: "expr"},
 				},
 			},
 			Priority: 35,
@@ -798,9 +809,14 @@ func LongExprRules() []Rule {
 
 		// Long case clause - break at comma.
 		{
-			Name:     "long_case_clause",
-			Pattern:  &NodePattern{Type: "CaseClause"},
-			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Name:    "long_case_clause",
+			Pattern: &NodePattern{Type: "CaseClause"},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&ExprEditSafeCond{Target: "node"},
+				},
+			},
 			Priority: 35,
 			Action:   &BreakCaseClauseAction{Target: "node"},
 		},
@@ -821,6 +837,7 @@ func LongExprRules() []Rule {
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&NotCond{Cond: &HasCallExprCond{Target: "expr"}},
+					&ExprEditSafeCond{Target: "expr"},
 				},
 			},
 			Priority: 32,

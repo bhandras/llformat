@@ -424,15 +424,29 @@ func opPriority(op string) int {
 
 // Execute implements Action for BreakAtOpAction.
 func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	edits, changed, err := a.ExecuteEdits(caps, ctx)
+	if err != nil || !changed {
+		return nil, false
+	}
+
+	out, err := ApplyEdits(ctx.Source, edits)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ExecuteEdits implements EditAction for BreakAtOpAction.
+func (a *BreakAtOpAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error) {
 	node := resolveTarget(caps, a.Target)
 	binExpr, ok := node.(*ast.BinaryExpr)
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Check if line already fits
 	if ctx.LineWidth(binExpr) <= ctx.ColumnLimit {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Collect all operators in this expression chain
@@ -483,7 +497,7 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	collectOps(binExpr)
 
 	if len(ops) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Find the best operator: prefer lower priority (logical) operators,
@@ -511,7 +525,7 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	}
 
 	if bestOp == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	opEnd := bestOp.pos + bestOp.opLen
@@ -520,14 +534,20 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	i := skipHorizontalWhitespace(ctx.Source, opEnd)
 	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
 		// Already broken here, don't add another break
-		return nil, false
+		return nil, false, nil
 	}
 
-	out, changed, err := applyContinuationIndentAfter(ctx.Source, opEnd, indent)
-	if err != nil {
-		return nil, false
+	end := skipHorizontalWhitespace(ctx.Source, opEnd)
+	replacement := continuationIndentBytes(indent)
+	if opEnd >= 0 && end >= opEnd && end <= len(ctx.Source) {
+		if bytes.Equal(ctx.Source[opEnd:end], replacement) {
+			return nil, false, nil
+		}
 	}
-	return out, changed
+
+	return []Edit{
+		{Start: opEnd, End: end, Replace: replacement},
+	}, true, nil
 }
 
 // ReflowStringConcatAction rewrites a long string concatenation expression into
@@ -538,29 +558,68 @@ type ReflowStringConcatAction struct {
 
 // Execute implements Action for ReflowStringConcatAction.
 func (a *ReflowStringConcatAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	edits, changed, err := a.ExecuteEdits(caps, ctx)
+	if err != nil || !changed {
+		return nil, false
+	}
+	out, err := ApplyEdits(ctx.Source, edits)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+func hasRawStringLit(n ast.Node) bool {
+	found := false
+	ast.Inspect(n, func(node ast.Node) bool {
+		lit, ok := node.(*ast.BasicLit)
+		if !ok {
+			return !found
+		}
+		if lit.Kind.String() != "STRING" {
+			return !found
+		}
+		if strings.HasPrefix(lit.Value, "`") {
+			found = true
+			return false
+		}
+		return !found
+	})
+	return found
+}
+
+// ExecuteEdits implements EditAction for ReflowStringConcatAction.
+func (a *ReflowStringConcatAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error) {
 	node := resolveTarget(caps, a.Target)
 	if node == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	start := ctx.Fset.Position(node.Pos()).Offset
 	end := ctx.Fset.Position(node.End()).Offset
 	if start < 0 || end > len(ctx.Source) || start >= end {
-		return nil, false
+		return nil, false, nil
 	}
 
 	original := string(ctx.Source[start:end])
 	if hasLineComment(original) {
-		return nil, false
+		return nil, false, nil
 	}
 
 	expr, err := parser.ParseExpr(original)
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
+
+	// Be conservative: do not rewrite raw string literals (backticks). While the
+	// value is constant, changing literal style can be surprising.
+	if hasRawStringLit(expr) {
+		return nil, false, nil
+	}
+
 	strText, ok := llast.FlattenStringExprAST(expr)
 	if !ok {
-		return nil, false
+		return nil, false, nil
 	}
 
 	indent := ctx.IndentAt(node)
@@ -571,14 +630,12 @@ func (a *ReflowStringConcatAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	formatted := text.SplitQuotedString(strText, prefixWidth, contIndent, ctx.ColumnLimit, ctx.TabStop)
 	if formatted == original {
-		return nil, false
+		return nil, false, nil
 	}
 
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
-	if err != nil {
-		return nil, false
-	}
-	return out, true
+	return []Edit{
+		{Start: start, End: end, Replace: []byte(formatted)},
+	}, true, nil
 }
 
 // BreakCaseClauseAction breaks a long case clause at comma boundaries.
@@ -588,15 +645,28 @@ type BreakCaseClauseAction struct {
 
 // Execute implements Action for BreakCaseClauseAction.
 func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	edits, changed, err := a.ExecuteEdits(caps, ctx)
+	if err != nil || !changed {
+		return nil, false
+	}
+	out, err := ApplyEdits(ctx.Source, edits)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ExecuteEdits implements EditAction for BreakCaseClauseAction.
+func (a *BreakCaseClauseAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error) {
 	node := resolveTarget(caps, a.Target)
 	caseClause, ok := node.(*ast.CaseClause)
 	if !ok || len(caseClause.List) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Check if line already fits
 	if ctx.LineWidth(caseClause) <= ctx.ColumnLimit {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Find the rightmost comma that keeps prefix under column limit
@@ -635,7 +705,7 @@ func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 	}
 
 	if len(commas) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Find the rightmost comma that keeps prefix under column limit
@@ -653,12 +723,25 @@ func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 		bestComma = &commas[0]
 	}
 
-	// Build result with break after comma
-	out, changed, err := applyContinuationIndentAfter(ctx.Source, bestComma.afterExpr, indent)
-	if err != nil {
-		return nil, false
+	pos := bestComma.afterExpr
+
+	// If there is already a newline here, skip.
+	i := skipHorizontalWhitespace(ctx.Source, pos)
+	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
+		return nil, false, nil
 	}
-	return out, changed
+
+	end := skipHorizontalWhitespace(ctx.Source, pos)
+	replacement := continuationIndentBytes(indent)
+	if pos >= 0 && end >= pos && end <= len(ctx.Source) {
+		if bytes.Equal(ctx.Source[pos:end], replacement) {
+			return nil, false, nil
+		}
+	}
+
+	return []Edit{
+		{Start: pos, End: end, Replace: replacement},
+	}, true, nil
 }
 
 // ReflowNestedCallsAction finds and reflows function calls within an expression.
