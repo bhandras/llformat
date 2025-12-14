@@ -136,12 +136,13 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	}
 
 	// Build result by replacing the call in source
-	var result bytes.Buffer
-	result.Write(ctx.Source[:start])
-	result.WriteString(formatted)
-	result.Write(ctx.Source[end:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: start, End: end, Replace: []byte(formatted)},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // findCallToReflow finds a call in a method chain that benefits from reflowing.
@@ -546,17 +547,18 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	}
 
 	// Build result with break after the operator
-	var result bytes.Buffer
+	replacement := []byte("\n" + indent + "\t")
+	if bytes.Equal(ctx.Source[opEnd:i], replacement) {
+		return nil, false
+	}
 
-	result.Write(ctx.Source[:opEnd])
-	result.WriteString("\n")
-	result.WriteString(indent)
-	result.WriteString("\t")
-
-	// Skip whitespace after operator (already calculated above)
-	result.Write(ctx.Source[i:])
-
-	return result.Bytes(), true
+	out, err := ApplyEdits(ctx.Source, []Edit{
+		{Start: opEnd, End: i, Replace: replacement},
+	})
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // BreakCaseClauseAction breaks a long case clause at comma boundaries.
