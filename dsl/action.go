@@ -1617,6 +1617,12 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	}
 	originalCall := string(ctx.Source[callStart:callEnd])
 
+	// Skip method chains that contain inline comments. Reformatting via AST
+	// rendering would drop these comments.
+	if hasLineComment(originalCall) {
+		return nil, false
+	}
+
 	// Skip if chain is already multi-line (has been formatted)
 	if strings.Contains(originalCall, "\n") {
 		return nil, false

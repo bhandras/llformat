@@ -26,18 +26,18 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 
 		// Rule: Long function declaration - break parameters
 		{
-			Name:    "long_func_decl_params",
-			Pattern: &NodePattern{Type: "FuncDecl"},
-			When:    &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Name:     "long_func_decl_params",
+			Pattern:  &NodePattern{Type: "FuncDecl"},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
 			Priority: 90,
 			Action:   &BreakFuncSignatureAction{Target: "node"},
 		},
 
 		// Rule: Long function return values - break after opening paren
 		{
-			Name:    "long_func_return_values",
-			Pattern: &NodePattern{Type: "FuncDecl"},
-			When:    &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			Name:     "long_func_return_values",
+			Pattern:  &NodePattern{Type: "FuncDecl"},
+			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
 			Priority: 85,
 			Action:   &BreakReturnValuesAction{Target: "node"},
 		},
@@ -163,7 +163,13 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 					},
 				},
 			},
-			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "rhs"}},
+					&NotCond{Cond: &IsMethodChainCond{Target: "rhs", MinCalls: 2}},
+				},
+			},
 			Priority: 50,
 			Action: &ReflowCallAction{
 				Target:   "rhs",
@@ -256,7 +262,13 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 					},
 				},
 			},
-			When:     &LineWidthCond{Target: "node", Op: ">", Value: 0},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "call"}},
+					&NotCond{Cond: &IsMethodChainCond{Target: "call", MinCalls: 2}},
+				},
+			},
 			Priority: 45,
 			Action: &ReflowCallAction{
 				Target:   "call",
@@ -357,9 +369,9 @@ func BlankLineRules() []Rule {
 
 		// Rule: Blank line before return (if not after block open or case:)
 		{
-			Name:    "blank_before_return",
-			Pattern: &NodePattern{Type: "ReturnStmt"},
-			When:    &IsReturnNeedingBlankCond{Target: "node"},
+			Name:     "blank_before_return",
+			Pattern:  &NodePattern{Type: "ReturnStmt"},
+			When:     &IsReturnNeedingBlankCond{Target: "node"},
 			Priority: 10,
 			Action:   &InsertBlankBeforeAction{Target: "node"},
 		},
@@ -623,6 +635,7 @@ func ExpressionRules() []Rule {
 			When: &AndCond{
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "rhs"}},
 					&NotCond{Cond: &IsMethodChainCond{Target: "rhs", MinCalls: 2}},
 				},
 			},

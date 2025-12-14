@@ -61,6 +61,125 @@ func (c *NotCond) Eval(caps Captures, ctx *Context) bool {
 	return !c.Cond.Eval(caps, ctx)
 }
 
+// IsParentTypeCond checks if the target node's direct parent matches a given
+// AST node type name (e.g. "CallExpr", "AssignStmt").
+type IsParentTypeCond struct {
+	Target string
+	Type   string
+}
+
+// Eval implements Condition for IsParentTypeCond.
+func (c *IsParentTypeCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+	parent := ctx.Parent(node)
+	if parent == nil {
+		return false
+	}
+	return (&NodePattern{Type: c.Type}).matchType(parent)
+}
+
+// IsAncestorTypeCond checks if the target node has an ancestor that matches a
+// given AST node type name.
+type IsAncestorTypeCond struct {
+	Target string
+	Type   string
+}
+
+// Eval implements Condition for IsAncestorTypeCond.
+func (c *IsAncestorTypeCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+	for cur := node; cur != nil; cur = ctx.Parent(cur) {
+		if (&NodePattern{Type: c.Type}).matchType(cur) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsInAssignRHSCond checks whether the target node is a direct RHS expression
+// in an assignment statement (AssignStmt).
+type IsInAssignRHSCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsInAssignRHSCond.
+func (c *IsInAssignRHSCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+
+	cur := node
+	for cur != nil {
+		parent := ctx.Parent(cur)
+		assign, ok := parent.(*ast.AssignStmt)
+		if !ok {
+			cur = parent
+			continue
+		}
+
+		for _, rhs := range assign.Rhs {
+			if rhs == cur {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// IsInReturnResultsCond checks whether the target node is a direct result
+// expression in a return statement.
+type IsInReturnResultsCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsInReturnResultsCond.
+func (c *IsInReturnResultsCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+
+	cur := node
+	for cur != nil {
+		parent := ctx.Parent(cur)
+		ret, ok := parent.(*ast.ReturnStmt)
+		if !ok {
+			cur = parent
+			continue
+		}
+		for _, res := range ret.Results {
+			if res == cur {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// HasLineCommentCond checks whether the target node's source includes an inline
+// line comment ("//") outside of string literals.
+type HasLineCommentCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasLineCommentCond.
+func (c *HasLineCommentCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+	return hasLineComment(string(ctx.NodeSource(node)))
+}
+
 // LineWidthCond checks if a node's line width exceeds a threshold.
 type LineWidthCond struct {
 	Target string // Capture name (without $) or "node" for matched node
@@ -987,4 +1106,3 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 
 	return true
 }
-
