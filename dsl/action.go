@@ -360,17 +360,12 @@ func (a *BreakAfterAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	indent := ctx.IndentAt(node)
 
 	// Skip whitespace after the break point
-	i := end
-	for i < len(ctx.Source) && (ctx.Source[i] == ' ' || ctx.Source[i] == '\t') {
-		i++
-	}
-
-	replacement := continuationIndentBytes(indent)
-	out, err := ApplySingleEdit(ctx.Source, end, i, replacement)
+	i := skipHorizontalWhitespace(ctx.Source, end)
+	out, changed, err := applyContinuationIndent(ctx.Source, end, i, indent)
 	if err != nil {
 		return nil, false
 	}
-	return out, true
+	return out, changed
 }
 
 // BreakBeforeAction inserts a line break before a node.
@@ -398,12 +393,11 @@ func (a *BreakBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, bool) 
 		start--
 	}
 
-	replacement := continuationIndentBytes(indent)
-	out, err := ApplySingleEdit(ctx.Source, start, pos, replacement)
+	out, changed, err := applyContinuationIndent(ctx.Source, start, pos, indent)
 	if err != nil {
 		return nil, false
 	}
-	return out, true
+	return out, changed
 }
 
 // BreakAtOpAction breaks a binary expression at the best operator position.
@@ -530,25 +524,18 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 
 	// Check if there's already a newline after this operator
 	i := opEnd
-	for i < len(ctx.Source) && (ctx.Source[i] == ' ' || ctx.Source[i] == '\t') {
-		i++
-	}
+	i = skipHorizontalWhitespace(ctx.Source, i)
 	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
 		// Already broken here, don't add another break
 		return nil, false
 	}
 
 	// Build result with break after the operator
-	replacement := continuationIndentBytes(indent)
-	if bytes.Equal(ctx.Source[opEnd:i], replacement) {
-		return nil, false
-	}
-
-	out, err := ApplySingleEdit(ctx.Source, opEnd, i, replacement)
+	out, changed, err := applyContinuationIndent(ctx.Source, opEnd, i, indent)
 	if err != nil {
 		return nil, false
 	}
-	return out, true
+	return out, changed
 }
 
 // BreakCaseClauseAction breaks a long case clause at comma boundaries.
@@ -625,17 +612,12 @@ func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 
 	// Build result with break after comma
 	// Skip whitespace after comma
-	i := bestComma.afterExpr
-	for i < len(ctx.Source) && (ctx.Source[i] == ' ' || ctx.Source[i] == '\t') {
-		i++
-	}
-
-	replacement := continuationIndentBytes(indent)
-	out, err := ApplySingleEdit(ctx.Source, bestComma.afterExpr, i, replacement)
+	i := skipHorizontalWhitespace(ctx.Source, bestComma.afterExpr)
+	out, changed, err := applyContinuationIndent(ctx.Source, bestComma.afterExpr, i, indent)
 	if err != nil {
 		return nil, false
 	}
-	return out, true
+	return out, changed
 }
 
 // ReflowNestedCallsAction finds and reflows function calls within an expression.
@@ -1910,19 +1892,16 @@ func (a *BreakReturnValuesAction) Execute(caps Captures, ctx *Context) ([]byte, 
 
 	// Check if there's already a newline after opening paren
 	i := resultsOpen + 1
-	for i < len(ctx.Source) && (ctx.Source[i] == ' ' || ctx.Source[i] == '\t') {
-		i++
-	}
+	i = skipHorizontalWhitespace(ctx.Source, i)
 	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
 		return nil, false
 	}
 
 	indent := ctx.IndentAt(node)
 
-	replacement := continuationIndentBytes(indent)
-	out, err := ApplySingleEdit(ctx.Source, resultsOpen+1, i, replacement)
+	out, changed, err := applyContinuationIndent(ctx.Source, resultsOpen+1, i, indent)
 	if err != nil {
 		return nil, false
 	}
-	return out, true
+	return out, changed
 }
