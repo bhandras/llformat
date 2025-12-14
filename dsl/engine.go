@@ -62,7 +62,10 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		}
 
 		if e.Trace {
-			fmt.Fprintf(os.Stderr, "dsl: iter=%d applied %s\n", iter+1, ctx.LastAppliedRule)
+			start, endBefore, endAfter := changedSpan(ctx.Source, modified)
+			line, col := offsetToLineCol(ctx.Source, start)
+			fmt.Fprintf(os.Stderr, "dsl: iter=%d applied %s span=[%d:%d]->[%d:%d] @%d:%d\n",
+				iter+1, ctx.LastAppliedRule, start, endBefore, start, endAfter, line, col)
 		}
 
 		// Run gofmt to normalize
@@ -75,6 +78,50 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 	}
 
 	return result, nil
+}
+
+// changedSpan finds a minimal differing span between before and after.
+// It returns start offset, end offset in before, and end offset in after.
+func changedSpan(before, after []byte) (start, endBefore, endAfter int) {
+	minLen := len(before)
+	if len(after) < minLen {
+		minLen = len(after)
+	}
+
+	start = 0
+	for start < minLen && before[start] == after[start] {
+		start++
+	}
+	if start == len(before) && start == len(after) {
+		return start, start, start
+	}
+
+	i := len(before) - 1
+	j := len(after) - 1
+	for i >= start && j >= start && before[i] == after[j] {
+		i--
+		j--
+	}
+	return start, i + 1, j + 1
+}
+
+func offsetToLineCol(src []byte, off int) (line, col int) {
+	if off < 0 {
+		off = 0
+	}
+	if off > len(src) {
+		off = len(src)
+	}
+	line = 1
+	lastNL := -1
+	for i := 0; i < off; i++ {
+		if src[i] == '\n' {
+			line++
+			lastNL = i
+		}
+	}
+	col = off - lastNL
+	return line, col
 }
 
 // applyAtomicMarkers runs through rules that just mark nodes as atomic.

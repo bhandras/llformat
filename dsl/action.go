@@ -701,8 +701,7 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool)
 	wsIndent := ctx.IndentAt(call)
 
 	// Find the base length (visual width from line start to call start)
-	ls := lineStart(ctx.Source, start)
-	baseLen := visualLen(string(ctx.Source[ls:start]), ctx.TabStop)
+	baseLen := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
 	var formatted string
 	if a.FormatFunc != nil {
@@ -821,14 +820,9 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	}
 
 	// Check if call fits on one line - if so, skip formatting
-	ls := lineStart(ctx.Source, start)
-	indentPrefix := string(ctx.Source[ls:start])
-
 	// Collapse whitespace to estimate single-line width
 	callText := string(original)
-	flat := strings.Join(strings.Fields(callText), " ")
-	singleLineLen := visualLen(flat, ctx.TabStop)
-	currentLineLen := visualLen(indentPrefix, ctx.TabStop) + singleLineLen
+	currentLineLen := collapsedLineLenAt(ctx.Source, start, callText, ctx.TabStop)
 
 	if currentLineLen <= ctx.ColumnLimit {
 		// Call fits on one line, no need to wrap
@@ -902,13 +896,8 @@ func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]
 	}
 
 	// Skip if the call fits when collapsed to a single line.
-	ls := lineStart(ctx.Source, start)
-	indentPrefix := string(ctx.Source[ls:start])
-
 	callText := string(original)
-	flat := strings.Join(strings.Fields(callText), " ")
-	singleLineLen := visualLen(flat, ctx.TabStop)
-	currentLineLen := visualLen(indentPrefix, ctx.TabStop) + singleLineLen
+	currentLineLen := collapsedLineLenAt(ctx.Source, start, callText, ctx.TabStop)
 	if currentLineLen <= ctx.ColumnLimit {
 		return nil, false
 	}
