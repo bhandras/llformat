@@ -59,3 +59,36 @@ func TestApplyContinuationIndent(t *testing.T) {
 		t.Fatalf("got %q", string(out2))
 	}
 }
+
+func TestApplyContinuationIndentAfter(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("a   b")
+	out, changed, err := applyContinuationIndentAfter(src, 1, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected changed=true")
+	}
+	if string(out) != "a\n\tb" {
+		t.Fatalf("got %q", string(out))
+	}
+}
+
+func TestApplyContinuationIndentBefore(t *testing.T) {
+	t.Parallel()
+
+	src := []byte("a   b")
+	// Replace the horizontal whitespace run that ends at position 4.
+	out, changed, err := applyContinuationIndentBefore(src, 4, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected changed=true")
+	}
+	if string(out) != "a\n\tb" {
+		t.Fatalf("got %q", string(out))
+	}
+}

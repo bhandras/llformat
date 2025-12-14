@@ -136,11 +136,11 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	}
 
 	// Build result by replacing the call in source
-		out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // findCallToReflow finds a call in a method chain that benefits from reflowing.
@@ -360,8 +360,7 @@ func (a *BreakAfterAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	indent := ctx.IndentAt(node)
 
 	// Skip whitespace after the break point
-	i := skipHorizontalWhitespace(ctx.Source, end)
-	out, changed, err := applyContinuationIndent(ctx.Source, end, i, indent)
+	out, changed, err := applyContinuationIndentAfter(ctx.Source, end, indent)
 	if err != nil {
 		return nil, false
 	}
@@ -388,9 +387,7 @@ func (a *BreakBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, bool) 
 	indent := ctx.IndentAt(node)
 
 	// Find start of whitespace before node
-	start := backtrackHorizontalWhitespace(ctx.Source, pos)
-
-	out, changed, err := applyContinuationIndent(ctx.Source, start, pos, indent)
+	out, changed, err := applyContinuationIndentBefore(ctx.Source, pos, indent)
 	if err != nil {
 		return nil, false
 	}
@@ -519,16 +516,14 @@ func (a *BreakAtOpAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 
 	opEnd := bestOp.pos + bestOp.opLen
 
-	// Check if there's already a newline after this operator
-	i := opEnd
-	i = skipHorizontalWhitespace(ctx.Source, i)
+	// Check if there's already a newline after this operator.
+	i := skipHorizontalWhitespace(ctx.Source, opEnd)
 	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
 		// Already broken here, don't add another break
 		return nil, false
 	}
 
-	// Build result with break after the operator
-	out, changed, err := applyContinuationIndent(ctx.Source, opEnd, i, indent)
+	out, changed, err := applyContinuationIndentAfter(ctx.Source, opEnd, indent)
 	if err != nil {
 		return nil, false
 	}
@@ -608,9 +603,7 @@ func (a *BreakCaseClauseAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 	}
 
 	// Build result with break after comma
-	// Skip whitespace after comma
-	i := skipHorizontalWhitespace(ctx.Source, bestComma.afterExpr)
-	out, changed, err := applyContinuationIndent(ctx.Source, bestComma.afterExpr, i, indent)
+	out, changed, err := applyContinuationIndentAfter(ctx.Source, bestComma.afterExpr, indent)
 	if err != nil {
 		return nil, false
 	}
@@ -708,11 +701,8 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool)
 	wsIndent := ctx.IndentAt(call)
 
 	// Find the base length (visual width from line start to call start)
-	lineStart := start
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
-	baseLen := visualLen(string(ctx.Source[lineStart:start]), ctx.TabStop)
+	ls := lineStart(ctx.Source, start)
+	baseLen := visualLen(string(ctx.Source[ls:start]), ctx.TabStop)
 
 	var formatted string
 	if a.FormatFunc != nil {
@@ -740,11 +730,11 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool)
 	}
 
 	// Build result with formatted call
-		out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // normalizeCallWithGofmt wraps a call expression in a minimal Go file,
@@ -831,11 +821,8 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	}
 
 	// Check if call fits on one line - if so, skip formatting
-	lineStart := start
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
-	indentPrefix := string(ctx.Source[lineStart:start])
+	ls := lineStart(ctx.Source, start)
+	indentPrefix := string(ctx.Source[ls:start])
 
 	// Collapse whitespace to estimate single-line width
 	callText := string(original)
@@ -875,11 +862,11 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	}
 
 	// Build result with formatted call
-		out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // OnePerLineMultiLineCallAction formats a call as a multiline call with one
@@ -915,11 +902,8 @@ func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]
 	}
 
 	// Skip if the call fits when collapsed to a single line.
-	lineStart := start
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
-	indentPrefix := string(ctx.Source[lineStart:start])
+	ls := lineStart(ctx.Source, start)
+	indentPrefix := string(ctx.Source[ls:start])
 
 	callText := string(original)
 	flat := strings.Join(strings.Fields(callText), " ")
@@ -934,11 +918,11 @@ func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]
 		return nil, false
 	}
 
-		out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // formatCallPackedSimple is a simplified packed multiline formatter used when
@@ -1462,17 +1446,11 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) ([]byt
 	}
 
 	// Find the start of the line
-	lineStart := fieldStart
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
+	ls := lineStart(ctx.Source, fieldStart)
 
 	// Find end of line after the method
-	lineEnd := fieldEnd
-	for lineEnd < len(ctx.Source) && ctx.Source[lineEnd] != '\n' {
-		lineEnd++
-	}
-	out, err := ApplySingleEdit(ctx.Source, lineStart, lineEnd, []byte(formatted))
+	le := lineEnd(ctx.Source, fieldEnd)
+	out, err := ApplySingleEdit(ctx.Source, ls, le, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}
@@ -1535,15 +1513,12 @@ func (a *InsertBlankBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, 
 	nodeStart := pos.Offset
 
 	// Find the start of the line
-	lineStart := nodeStart
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
+	ls := lineStart(ctx.Source, nodeStart)
 
 	// Check if there's already a blank line before this line
-	if lineStart >= 2 {
+	if ls >= 2 {
 		// Look for two consecutive newlines before lineStart
-		checkPos := lineStart - 1
+		checkPos := ls - 1
 		// Skip the newline at lineStart-1
 		if checkPos > 0 && ctx.Source[checkPos] == '\n' {
 			checkPos--
@@ -1559,7 +1534,7 @@ func (a *InsertBlankBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, 
 	}
 
 	// Insert blank line before the current line
-	out, err := ApplySingleEdit(ctx.Source, lineStart, lineStart, []byte("\n"))
+	out, err := ApplySingleEdit(ctx.Source, ls, ls, []byte("\n"))
 	if err != nil {
 		return nil, false
 	}
@@ -1584,20 +1559,17 @@ func (a *InsertBlankAfterAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	}
 
 	// Find the end of the line
-	lineEnd := endPos
-	for lineEnd < len(ctx.Source) && ctx.Source[lineEnd] != '\n' {
-		lineEnd++
-	}
+	le := lineEnd(ctx.Source, endPos)
 
 	// Skip the newline if present
-	if lineEnd < len(ctx.Source) && ctx.Source[lineEnd] == '\n' {
-		lineEnd++
+	if le < len(ctx.Source) && ctx.Source[le] == '\n' {
+		le++
 	}
 
 	// Check if there's already a blank line after
-	if lineEnd < len(ctx.Source) {
+	if le < len(ctx.Source) {
 		// Skip whitespace-only lines
-		checkPos := lineEnd
+		checkPos := le
 		for checkPos < len(ctx.Source) && (ctx.Source[checkPos] == ' ' || ctx.Source[checkPos] == '\t') {
 			checkPos++
 		}
@@ -1608,7 +1580,7 @@ func (a *InsertBlankAfterAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	}
 
 	// Insert blank line after the current line
-	out, err := ApplySingleEdit(ctx.Source, lineEnd, lineEnd, []byte("\n"))
+	out, err := ApplySingleEdit(ctx.Source, le, le, []byte("\n"))
 	if err != nil {
 		return nil, false
 	}
@@ -1689,11 +1661,8 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	// (e.g. "result := " before "client.Foo().Bar()"). This avoids decisions
 	// that would fit if the chain started at column 0, but overflow once the
 	// actual prefix is accounted for.
-	lineStart := chainStart
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
-	prefixWidth := visualLen(string(ctx.Source[lineStart:chainStart]), ctx.TabStop)
+	ls := lineStart(ctx.Source, chainStart)
+	prefixWidth := visualLen(string(ctx.Source[ls:chainStart]), ctx.TabStop)
 
 	// Get the base indentation (whitespace only; used for continuation lines).
 	indent := ctx.IndentAt(node)
@@ -1896,7 +1865,7 @@ func (a *BreakReturnValuesAction) Execute(caps Captures, ctx *Context) ([]byte, 
 
 	indent := ctx.IndentAt(node)
 
-	out, changed, err := applyContinuationIndent(ctx.Source, resultsOpen+1, i, indent)
+	out, changed, err := applyContinuationIndentAfter(ctx.Source, resultsOpen+1, indent)
 	if err != nil {
 		return nil, false
 	}
