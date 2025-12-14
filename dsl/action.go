@@ -1181,14 +1181,18 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 				pos++
 			}
 			if pos < len(ctx.Source) && ctx.Source[pos] != '\n' && ctx.Source[pos] != '}' {
-				// Next line has content and is not just a closing brace. Replace up
-				// through the existing newline after the opening brace, then insert
-				// an extra blank line to separate the signature from the body.
-		out, err := ApplySingleEdit(ctx.Source, lineStart, lineContentStart, []byte(formatted+"\n\n"))
-		if err != nil {
-			return nil, false
-		}
-		return out, true
+				// Next line has content and is not just a closing brace.
+				// Apply two non-overlapping edits:
+				// 1) Replace the signature (including the opening brace).
+				// 2) Insert one extra newline after the existing newline following the brace.
+				var b EditBuilder
+				b.Replace(lineStart, afterBrace, []byte(formatted))
+				b.Insert(lineContentStart, []byte("\n"))
+				out, changed, err := b.Apply(ctx.Source)
+				if err != nil {
+					return nil, false
+				}
+				return out, changed
 			}
 		}
 	}
