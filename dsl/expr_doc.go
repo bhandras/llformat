@@ -107,7 +107,27 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		}
 		// CompositeLit includes its own braces and indentation decisions.
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
-	case *ast.Ident, *ast.BasicLit, *ast.UnaryExpr, *ast.IndexExpr, *ast.SliceExpr:
+	case *ast.IndexExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		doc, ok := indexExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		// IndexExpr controls its own bracket indentation decisions.
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+	case *ast.SliceExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		doc, ok := sliceExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		// SliceExpr controls its own bracket indentation decisions.
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+	case *ast.Ident, *ast.BasicLit, *ast.UnaryExpr:
 		// Render atomic expressions as-is. These are safe to embed as docs but do
 		// not participate in internal breaking yet.
 		return exprDocInfo{Doc: layout.T(renderNode(expr, ctx.Fset)), NeedsContinuationIndent: false}, true
@@ -407,9 +427,6 @@ func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context, kind exprDocKind) (layo
 	valueDoc := layout.T(valueText)
 	if info, ok := exprDocWithKind(kv.Value, ctx, kind); ok {
 		valueDoc = info.Doc
-		if info.NeedsContinuationIndent {
-			valueDoc = layout.N("\t", valueDoc)
-		}
 	}
 
 	// Keep `Key: ` on the same line, but allow value to break with an extra
@@ -434,18 +451,12 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (
 	left := layout.T(renderNode(bin.X, ctx.Fset))
 	if leftOK {
 		left = leftInfo.Doc
-		if leftInfo.NeedsContinuationIndent {
-			left = layout.N("\t", left)
-		}
 	}
 
 	rightInfo, rightOK := exprDocWithKind(bin.Y, ctx, kind)
 	right := layout.T(renderNode(bin.Y, ctx.Fset))
 	if rightOK {
 		right = rightInfo.Doc
-		if rightInfo.NeedsContinuationIndent {
-			right = layout.N("\t", right)
-		}
 	}
 
 	return layout.G(layout.C(
@@ -482,4 +493,108 @@ func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) 
 		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
 	}
 	return layout.G(layout.C(docs...)), true
+}
+
+func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if idx == nil || ctx == nil || idx.X == nil || idx.Index == nil {
+		return nil, false
+	}
+
+	baseText := renderNode(idx.X, ctx.Fset)
+	if strings.Contains(baseText, "\n") || hasAnyComment(baseText) {
+		return nil, false
+	}
+
+	indexText := renderNode(idx.Index, ctx.Fset)
+	if strings.Contains(indexText, "\n") || hasAnyComment(indexText) {
+		return nil, false
+	}
+
+	indexDoc := layout.T(indexText)
+	if info, ok := exprDocWithKind(idx.Index, ctx, kind); ok {
+		indexDoc = info.Doc
+	}
+
+	// flat:  a[b]
+	// break:
+	//   a[
+	//       b
+	//   ]
+	return layout.G(layout.C(
+		layout.T(baseText),
+		layout.T("["),
+		layout.N("\t", layout.G(layout.C(layout.SL(), indexDoc))),
+		layout.T("]"),
+	)), true
+}
+
+func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if s == nil || ctx == nil || s.X == nil {
+		return nil, false
+	}
+
+	baseText := renderNode(s.X, ctx.Fset)
+	if strings.Contains(baseText, "\n") || hasAnyComment(baseText) {
+		return nil, false
+	}
+
+	partDoc := func(e ast.Expr) (layout.Doc, bool) {
+		text := renderNode(e, ctx.Fset)
+		if strings.Contains(text, "\n") || hasAnyComment(text) {
+			return nil, false
+		}
+		if info, ok := exprDocWithKind(e, ctx, kind); ok {
+			return info.Doc, true
+		}
+		return layout.T(text), true
+	}
+
+	var docs []layout.Doc
+
+	// low:
+	if s.Low != nil {
+		d, ok := partDoc(s.Low)
+		if !ok {
+			return nil, false
+		}
+		docs = append(docs, d)
+	}
+
+	// Always emit the first colon for slice expressions.
+	docs = append(docs, layout.T(":"))
+
+	// high:
+	if s.High != nil {
+		d, ok := partDoc(s.High)
+		if !ok {
+			return nil, false
+		}
+		docs = append(docs, d)
+	}
+
+	// max:
+	if s.Slice3 {
+		docs = append(docs, layout.T(":"))
+		if s.Max != nil {
+			d, ok := partDoc(s.Max)
+			if !ok {
+				return nil, false
+			}
+			docs = append(docs, d)
+		}
+	}
+
+	inner := layout.C(docs...)
+
+	// flat:  a[low:high]
+	// break:
+	//   a[
+	//       low:high
+	//   ]
+	return layout.G(layout.C(
+		layout.T(baseText),
+		layout.T("["),
+		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
+		layout.T("]"),
+	)), true
 }
