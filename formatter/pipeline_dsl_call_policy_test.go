@@ -92,3 +92,40 @@ var a, b, c, d int
 	require.Contains(t, out, "// keep")
 	require.True(t, strings.Contains(out, "_ = call(a, // keep") || strings.Contains(out, "_ = call(\n\t\ta, // keep"))
 }
+
+func TestDSLCallPolicyModernEnablesAutoCallArgsForExcludedCalls(t *testing.T) {
+	const in = `package p
+
+import "fmt"
+
+func f(a, b, c, d, e, f2, g bool) string {
+	return fmt.Sprintf("ok=%v", a && b && c && d && e && f2 && g)
+}
+`
+
+	legacy := NewPipeline(PipelineConfig{
+		ColumnLimit:          40,
+		TabStop:              8,
+		DSLCallPolicy:        "legacy",
+		UseDSLLogCalls:       true,
+		UseDSLMultiLineCalls: true,
+		UseDSLExpr:           true,
+		AutoDSLCallArgs:      false,
+	})
+	legacyOut := string(legacy.Format([]byte(in)))
+
+	modern := NewPipeline(PipelineConfig{
+		ColumnLimit:   40,
+		TabStop:       8,
+		DSLCallPolicy: "modern",
+	})
+	modernOut := string(modern.Format([]byte(in)))
+
+	// Legacy policy should not break inside call args.
+	require.Contains(t, legacyOut, `a && b && c && d && e && f2 && g`)
+
+	// Modern policy enables AutoDSLCallArgs and includes fmt.Sprintf in the
+	// allowlist, so the logical chain should be broken across lines.
+	require.Contains(t, modernOut, "a && b && c &&")
+	require.Contains(t, modernOut, "\n")
+}

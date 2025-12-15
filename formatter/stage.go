@@ -164,9 +164,14 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			callArgsPolicy = dsl.CallArgsPolicyForce
 		}
 
+		allowlist := opts.Excludes
+		if opts.AutoDSLCallArgs {
+			allowlist = append(append([]string{}, DefaultMultilineExcludes()...), opts.Excludes...)
+		}
+
 		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
 			CallArgsPolicy:    callArgsPolicy,
-			CallArgsAllowlist: opts.Excludes,
+			CallArgsAllowlist: allowlist,
 		})
 	}
 

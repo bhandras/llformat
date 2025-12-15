@@ -59,6 +59,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			cfg.DSLMultiLineStyle = "packed-chain"
 		}
 		cfg.UseDSLExpr = true
+		cfg.AutoDSLCallArgs = true
 		cfg.UseDSLFuncSigs = true
 		cfg.UseDSLBlankLines = true
 	default:

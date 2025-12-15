@@ -22,6 +22,18 @@ type MultiLineConfig struct {
 // MultiLineCallFormatter implements multi-line function call formatting.
 type MultiLineCallFormatter struct{ cfg MultiLineConfig }
 
+// DefaultMultilineExcludes returns function name substrings that the legacy
+// multiline call formatter always excludes from formatting.
+//
+// These are calls handled by CompactCallFormatter, and keeping this list in one
+// place avoids mismatches between stages (e.g. auto call-arg expression edits).
+func DefaultMultilineExcludes() []string {
+	return []string{
+		"log.Infof", "log.Debugf", "log.Tracef", "log.Errorf", "log.Warnf",
+		"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
+	}
+}
+
 // NewMultiLineCallFormatter creates a new multi-line call formatter with defaults.
 func NewMultiLineCallFormatter(cfg MultiLineConfig) *MultiLineCallFormatter {
 	if cfg.ColumnLimit <= 0 {
@@ -265,12 +277,7 @@ func (f *MultiLineCallFormatter) isInsideInterface(src []byte, i int) bool {
 // shouldExclude checks if a function name should be excluded from formatting.
 func (f *MultiLineCallFormatter) shouldExclude(funcName string) bool {
 	// Always exclude functions handled by CompactCallFormatter
-	defaultExcludes := []string{
-		"log.Infof", "log.Debugf", "log.Tracef", "log.Errorf", "log.Warnf",
-		"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
-	}
-
-	for _, exclude := range defaultExcludes {
+	for _, exclude := range DefaultMultilineExcludes() {
 		if strings.Contains(funcName, exclude) {
 			return true
 		}

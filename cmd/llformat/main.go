@@ -60,6 +60,7 @@ func main() {
 		useDSLExpr = true
 		useDSLSigs = true
 		useDSLBlankLines = true
+		autoDSLCallArgs = true
 		if dslMultiLineStyle == "" || dslMultiLineStyle == "legacy" {
 			dslMultiLineStyle = "packed-chain"
 		}
