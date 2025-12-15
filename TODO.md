@@ -17,3 +17,56 @@
 - [ ] Validation
   - [ ] Run `go test ./...` and diff `testdata/multiline/output.go` vs. formatted output to verify slice/map placement and string splits.
   - [ ] Keep goldens untouched (`testdata/**/output.go`).
+
+---
+
+# TODO: DSL Formatter Roadmap (Grand List)
+
+## Principles / guardrails
+- [x] Never modify golden fixtures under `testdata/**/output.go`.
+- [x] Parity-first DSLization: DSL stages may delegate to legacy to preserve behavior; new behavior must be opt-in.
+- [ ] Reduce long-term reliance on scan/string heuristics by converging on a single layout engine.
+
+## Pipeline: DSLize all stages (without changing goldens)
+- [x] DSL stage for comments (delegates to legacy), with directive preservation.
+- [x] DSL stage for log/printf-style calls (delegates to legacy formatting).
+- [x] DSL stage for multiline calls with selectable styles (`legacy|packed|packed-chain`).
+- [x] DSL native blank-lines rules (with fallback for unparsable sources).
+- [x] DSL native signatures rules with a style switch (`legacy|dsl`) and fallback.
+- [ ] Expression stage ownership boundaries:
+  - [ ] Define a clear division of responsibility between “call formatting” and “expression formatting”.
+  - [ ] Ensure staged execution cannot fight/oscillate (strong idempotence guarantees).
+
+## Signature formatting (pure DSL style improvements)
+- [x] Keep parse-safe: never insert a newline between `)` and the first return token.
+- [x] Expand inline `struct{...}` / `interface{...}` in multiline signatures (opt-in).
+- [x] Format multiline result lists and pack where possible (opt-in).
+- [x] Format multiline param lists and pack where possible (opt-in).
+- [x] Support generic type parameter lists in function declarations (opt-in).
+- [ ] Add receiver-aware + generic-aware support for interface methods if needed (native DSL method stage).
+- [ ] Add more coverage for edge cases: function-typed params, nested generics, constraints with `interface{}` and unions.
+
+## Expression formatting (tight, stable, semantic)
+- [ ] Strengthen precedence/associativity handling for line breaks (avoid any semantic ambiguity).
+- [ ] Make call-argument formatting safe-by-design:
+  - [x] `AutoDSLCallArgs` (allow only for known excluded calls).
+  - [ ] Add a principled “never fight later call stages” mechanism (policy-driven, not allowlists).
+- [ ] Improve formatting for mixed chains (selectors, indexing, slicing, calls) under a unified model.
+
+## Rule set taxonomy (reduce incidental coupling)
+- [ ] Introduce explicit DSL rule set identifiers:
+  - [ ] `parity` rules for tests/goldens.
+  - [ ] `modern` rules for opt-in improvements.
+  - [ ] Avoid scattered “compat shims” by keeping them inside `parity` only.
+
+## Testing and hardening (without touching goldens)
+- [ ] Add AST-equivalence property tests (ignore positions/scopes/Objs) for valid sources:
+  - [ ] Verify formatted output parses and is structurally equivalent to the original AST.
+  - [x] Keep idempotence tests for modern/pure DSL modes.
+- [ ] Expand crash/parse-failure coverage:
+  - [x] DSL engine can still apply file rules even if `go/parser` fails.
+  - [ ] Add targeted tests for common “invalid go” fixtures patterns (multiple `package` blocks, etc.).
+
+## Developer UX / CLI
+- [ ] Collapse flags into 2–3 user-facing stable modes (`legacy`, `dsl-parity`, `dsl-modern`) and document compatibility promises.
+- [ ] Improve `--trace-dsl` output to include “why a rule fired/did not fire”.
