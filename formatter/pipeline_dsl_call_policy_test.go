@@ -126,6 +126,7 @@ func f(a, b, c, d, e, f2, g bool) string {
 
 	// Modern policy enables AutoDSLCallArgs and includes fmt.Sprintf in the
 	// allowlist, so the logical chain should be broken across lines.
-	require.Contains(t, modernOut, "a && b && c &&")
-	require.Contains(t, modernOut, "\n")
+	require.Contains(t, modernOut, "a &&\n")
+	require.GreaterOrEqual(t, strings.Count(modernOut, "&&\n"), 2)
+	require.NotContains(t, modernOut, "a && b && c &&")
 }

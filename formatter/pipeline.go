@@ -35,6 +35,14 @@ type PipelineConfig struct {
 	// DSLExprLogicalStyle controls long &&/|| chain formatting inside the DSL
 	// expression stage. Empty means legacy behavior.
 	DSLExprLogicalStyle string
+
+	// DSLExprArithmeticStyle controls long arithmetic chain formatting inside the
+	// DSL expression stage. Empty means legacy behavior.
+	DSLExprArithmeticStyle string
+
+	// DSLExprCaseClauseStyle controls long `case A, B, ...:` list formatting
+	// inside the DSL expression stage. Empty means legacy behavior.
+	DSLExprCaseClauseStyle string
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -69,6 +77,12 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		if cfg.DSLExprLogicalStyle == "" {
 			cfg.DSLExprLogicalStyle = "layout"
 		}
+		if cfg.DSLExprArithmeticStyle == "" {
+			cfg.DSLExprArithmeticStyle = "layout"
+		}
+		if cfg.DSLExprCaseClauseStyle == "" {
+			cfg.DSLExprCaseClauseStyle = "layout"
+		}
 		cfg.AutoDSLCallArgs = true
 		cfg.UseDSLFuncSigs = true
 		cfg.UseDSLFuncSigsNative = true
@@ -98,6 +112,8 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		AllowDSLCallArgs:       cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:        cfg.AutoDSLCallArgs,
 		DSLExprLogicalStyle:    cfg.DSLExprLogicalStyle,
+		DSLExprArithmeticStyle: cfg.DSLExprArithmeticStyle,
+		DSLExprCaseClauseStyle: cfg.DSLExprCaseClauseStyle,
 	})
 
 	return &Pipeline{

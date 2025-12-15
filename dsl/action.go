@@ -414,6 +414,23 @@ type BreakLogicalChainLayoutAction struct {
 	Target string
 }
 
+// BreakArithmeticChainLayoutAction breaks long arithmetic chains for a single
+// operator (e.g. `a + b + c + d`) using the layout engine.
+//
+// This is intentionally conservative: it will not rewrite mixed-op trees such
+// as `a + b - c`, because those often carry intent and are more error-prone to
+// restructure without a full layout/precedence engine.
+type BreakArithmeticChainLayoutAction struct {
+	Target string
+}
+
+// BreakCaseClauseLayoutAction formats a long case clause list (`case A, B, C:`)
+// using the layout engine. It breaks after commas using the standard
+// continuation indentation (`indent + "\t"`).
+type BreakCaseClauseLayoutAction struct {
+	Target string
+}
+
 // opPriority returns a priority for operators (lower = prefer to break here).
 // Prefer breaking at && over || to keep "|| operand" together on the next line.
 // Logical operators are preferred over comparison/arithmetic.
@@ -639,7 +656,122 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
 	}
 
-	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, contIndent)
+	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	if formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// Execute implements Action for BreakArithmeticChainLayoutAction.
+func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	binExpr, ok := node.(*ast.BinaryExpr)
+	if !ok || binExpr == nil {
+		return nil, false
+	}
+
+	if ctx.LineWidth(binExpr) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	switch binExpr.Op {
+	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+	default:
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(binExpr.Pos()).Offset
+	end := ctx.Fset.Position(binExpr.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	original := string(ctx.Source[start:end])
+	if hasLineComment(original) {
+		return nil, false
+	}
+
+	var terms []ast.Expr
+	if !flattenSameOpBinaryChain(binExpr, binExpr.Op, &terms) || len(terms) < 2 {
+		return nil, false
+	}
+
+	indent := ctx.IndentAt(binExpr)
+	contIndent := indent + "\t"
+
+	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	remaining := ctx.ColumnLimit - prefixWidth
+	if remaining < 10 {
+		remaining = 10
+	}
+
+	opStr := binExpr.Op.String()
+	var docs []layout.Doc
+	for i, term := range terms {
+		if i > 0 {
+			docs = append(docs, layout.T(" "), layout.T(opStr), layout.L())
+		}
+		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
+	}
+
+	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	if formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// Execute implements Action for BreakCaseClauseLayoutAction.
+func (a *BreakCaseClauseLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	caseClause, ok := node.(*ast.CaseClause)
+	if !ok || caseClause == nil || len(caseClause.List) == 0 {
+		return nil, false
+	}
+
+	if ctx.LineWidth(caseClause) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(caseClause.List[0].Pos()).Offset
+	end := ctx.Fset.Position(caseClause.List[len(caseClause.List)-1].End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+
+	original := string(ctx.Source[start:end])
+	if strings.Contains(original, "//") || strings.Contains(original, "/*") {
+		return nil, false
+	}
+
+	indent := ctx.IndentAt(caseClause)
+	contIndent := indent + "\t"
+
+	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	remaining := ctx.ColumnLimit - prefixWidth
+	if remaining < 10 {
+		remaining = 10
+	}
+
+	var docs []layout.Doc
+	for i, expr := range caseClause.List {
+		if i > 0 {
+			docs = append(docs, layout.T(","), layout.L())
+		}
+		docs = append(docs, layout.T(renderNode(expr, ctx.Fset)))
+	}
+
+	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}

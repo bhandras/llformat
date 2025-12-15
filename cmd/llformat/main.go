@@ -26,6 +26,8 @@ func main() {
 		dslCallPolicy          string
 		useDSLExpr             bool
 		dslExprLogicalStyle    string
+		dslExprArithmeticStyle string
+		dslExprCaseClauseStyle string
 		useDSLSigs             bool
 		useDSLSigsNative       bool
 		dslSigsStyle           string
@@ -50,6 +52,8 @@ func main() {
 	flag.StringVar(&dslCallPolicy, "dsl-call-policy", "legacy", "DSL call policy bundle: legacy|modern (DSL mode only)")
 	flag.BoolVar(&useDSLExpr, "dsl-expr", true, "use DSL expression formatter (DSL mode only)")
 	flag.StringVar(&dslExprLogicalStyle, "dsl-expr-logical-style", "", "DSL expression logical chain style: legacy|layout (DSL mode only, experimental)")
+	flag.StringVar(&dslExprArithmeticStyle, "dsl-expr-arithmetic-style", "", "DSL expression arithmetic chain style: legacy|layout (DSL mode only, experimental)")
+	flag.StringVar(&dslExprCaseClauseStyle, "dsl-expr-case-style", "", "DSL expression case clause style: legacy|layout (DSL mode only, experimental)")
 	flag.BoolVar(&useDSLSigs, "dsl-sigs", true, "use DSL signature formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLSigsNative, "dsl-sigs-native", false, "use native DSL signature rules (fallback to legacy; DSL mode only, experimental)")
 	flag.StringVar(&dslSigsStyle, "dsl-sigs-style", "legacy", "DSL signature style: legacy|dsl (DSL mode only, experimental)")
@@ -68,6 +72,12 @@ func main() {
 		useDSLExpr = true
 		if dslExprLogicalStyle == "" {
 			dslExprLogicalStyle = "layout"
+		}
+		if dslExprArithmeticStyle == "" {
+			dslExprArithmeticStyle = "layout"
+		}
+		if dslExprCaseClauseStyle == "" {
+			dslExprCaseClauseStyle = "layout"
 		}
 		useDSLSigs = true
 		useDSLSigsNative = true
@@ -120,6 +130,8 @@ func main() {
 		DSLCallPolicy:          policy,
 		UseDSLExpr:             !useLegacy && useDSLExpr,
 		DSLExprLogicalStyle:    dslExprLogicalStyle,
+		DSLExprArithmeticStyle: dslExprArithmeticStyle,
+		DSLExprCaseClauseStyle: dslExprCaseClauseStyle,
 		UseDSLFuncSigs:         !useLegacy && useDSLSigs,
 		UseDSLFuncSigsNative:   !useLegacy && useDSLSigsNative,
 		DSLSigsStyle:           dslSigsStyle,

@@ -125,6 +125,14 @@ type StageOptions struct {
 	// DSLExprLogicalStyle controls long &&/|| chain formatting inside the DSL
 	// expression stage. Empty means legacy behavior.
 	DSLExprLogicalStyle string
+
+	// DSLExprArithmeticStyle controls long arithmetic chain formatting inside
+	// the DSL expression stage. Empty means legacy behavior.
+	DSLExprArithmeticStyle string
+
+	// DSLExprCaseClauseStyle controls long `case A, B, ...:` list formatting
+	// inside the DSL expression stage. Empty means legacy behavior.
+	DSLExprCaseClauseStyle string
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -180,9 +188,11 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		}
 
 		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
-			CallArgsPolicy:    callArgsPolicy,
-			CallArgsAllowlist: allowlist,
-			LogicalChainStyle: opts.DSLExprLogicalStyle,
+			CallArgsPolicy:       callArgsPolicy,
+			CallArgsAllowlist:    allowlist,
+			LogicalChainStyle:    opts.DSLExprLogicalStyle,
+			ArithmeticChainStyle: opts.DSLExprArithmeticStyle,
+			CaseClauseStyle:      opts.DSLExprCaseClauseStyle,
 		})
 	}
 

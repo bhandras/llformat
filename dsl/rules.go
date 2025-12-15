@@ -887,6 +887,16 @@ type LongExprOptions struct {
 	// Supported: "legacy" (BreakAtOpAction) and "layout" (layout engine).
 	// Empty defaults to "legacy".
 	LogicalChainStyle string
+
+	// ArithmeticChainStyle controls how long arithmetic chains are broken.
+	// Supported: "legacy" (BreakAtOpAction) and "layout" (layout engine).
+	// Empty defaults to "legacy".
+	ArithmeticChainStyle string
+
+	// CaseClauseStyle controls how long `case A, B, C:` lists are broken.
+	// Supported: "legacy" (single-break BreakCaseClauseAction) and "layout"
+	// (layout engine, may break multiple times). Empty defaults to "legacy".
+	CaseClauseStyle string
 }
 
 // LongExprRulesWithOptions returns LongExprRules with explicit options.
@@ -898,6 +908,14 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 	style := opts.LogicalChainStyle
 	if style == "" {
 		style = "legacy"
+	}
+	arithStyle := opts.ArithmeticChainStyle
+	if arithStyle == "" {
+		arithStyle = "legacy"
+	}
+	caseStyle := opts.CaseClauseStyle
+	if caseStyle == "" {
+		caseStyle = "legacy"
 	}
 
 	return []Rule{
@@ -987,10 +1005,17 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 			Priority: 20,
-			Action: &BreakAtOpAction{
-				Target:     "node",
-				BreakAfter: true,
-			},
+			Action: func() Action {
+				switch arithStyle {
+				case "layout":
+					return &TryElseAction{
+						Try:  &BreakArithmeticChainLayoutAction{Target: "node"},
+						Else: &BreakAtOpAction{Target: "node", BreakAfter: true},
+					}
+				default:
+					return &BreakAtOpAction{Target: "node", BreakAfter: true}
+				}
+			}(),
 		},
 
 		// For loop with long condition - break at operators.
@@ -1049,7 +1074,17 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 			Priority: 35,
-			Action:   &BreakCaseClauseAction{Target: "node"},
+			Action: func() Action {
+				switch caseStyle {
+				case "layout":
+					return &TryElseAction{
+						Try:  &BreakCaseClauseLayoutAction{Target: "node"},
+						Else: &BreakCaseClauseAction{Target: "node"},
+					}
+				default:
+					return &BreakCaseClauseAction{Target: "node"}
+				}
+			}(),
 		},
 
 		// Assignment with long binary expression (not call).

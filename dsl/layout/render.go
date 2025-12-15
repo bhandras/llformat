@@ -19,7 +19,7 @@ type frame struct {
 
 // Render renders a document into a string with the given column limit.
 // indent is the initial indentation for any broken lines.
-func Render(doc Doc, colLimit int, indent string) string {
+func Render(doc Doc, colLimit int, tabStop int, indent string) string {
 	var out strings.Builder
 	col := 0
 
@@ -33,7 +33,7 @@ func Render(doc Doc, colLimit int, indent string) string {
 		case Text:
 			s := string(d)
 			out.WriteString(s)
-			col += len(s)
+			col += visualWidth(s, tabStop, col)
 		case Line:
 			if f.mode == modeFlat {
 				out.WriteByte(' ')
@@ -41,7 +41,7 @@ func Render(doc Doc, colLimit int, indent string) string {
 			} else {
 				out.WriteByte('\n')
 				out.WriteString(f.indent)
-				col = len(f.indent)
+				col = visualWidth(f.indent, tabStop, 0)
 			}
 		case Concat:
 			// Push in reverse so we render in order.
@@ -52,7 +52,7 @@ func Render(doc Doc, colLimit int, indent string) string {
 			stack = append(stack, frame{doc: d.Doc, indent: f.indent + d.Indent, mode: f.mode})
 		case Group:
 			// Try flat: if it doesn't fit, render broken.
-			if fits(d.Doc, colLimit-col, f.indent) {
+			if fits(d.Doc, colLimit-col, tabStop) {
 				stack = append(stack, frame{doc: d.Doc, indent: f.indent, mode: modeFlat})
 			} else {
 				stack = append(stack, frame{doc: d.Doc, indent: f.indent, mode: modeBreak})
@@ -65,36 +65,52 @@ func Render(doc Doc, colLimit int, indent string) string {
 	return out.String()
 }
 
-func fits(doc Doc, remaining int, indent string) bool {
+func fits(doc Doc, remaining int, tabStop int) bool {
 	// Conservative fit check: any broken line forces failure.
-	stack := []frame{{doc: doc, indent: indent, mode: modeFlat}}
+	stack := []frame{{doc: doc, indent: "", mode: modeFlat}}
+	col := 0
 	for len(stack) > 0 {
 		f := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
 		switch d := f.doc.(type) {
 		case Text:
-			remaining -= len(string(d))
+			remaining -= visualWidth(string(d), tabStop, col)
+			col += visualWidth(string(d), tabStop, col)
 			if remaining < 0 {
 				return false
 			}
 		case Line:
 			// Flat line becomes a single space.
 			remaining--
+			col++
 			if remaining < 0 {
 				return false
 			}
 		case Concat:
 			for i := len(d) - 1; i >= 0; i-- {
-				stack = append(stack, frame{doc: d[i], indent: f.indent, mode: modeFlat})
+				stack = append(stack, frame{doc: d[i], indent: "", mode: modeFlat})
 			}
 		case Nest:
-			stack = append(stack, frame{doc: d.Doc, indent: f.indent + d.Indent, mode: modeFlat})
+			stack = append(stack, frame{doc: d.Doc, indent: "", mode: modeFlat})
 		case Group:
-			stack = append(stack, frame{doc: d.Doc, indent: f.indent, mode: modeFlat})
+			stack = append(stack, frame{doc: d.Doc, indent: "", mode: modeFlat})
 		default:
 			// Unknown node: ignore.
 		}
 	}
 	return true
+}
+
+func visualWidth(s string, tabStop int, col int) int {
+	w := 0
+	for _, r := range s {
+		if r == '\t' {
+			advance := tabStop - ((col + w) % tabStop)
+			w += advance
+			continue
+		}
+		w++
+	}
+	return w
 }
