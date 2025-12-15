@@ -86,3 +86,24 @@ func foo(bool) {}
 	require.NotContains(t, string(out), "&&\n")
 	require.Equal(t, string(src), string(out))
 }
+
+func TestExprStage_AllowLogicalBreaksInsideCallArgs(t *testing.T) {
+	src := []byte(`package p
+
+func f(alpha, beta, gamma, delta bool) {
+	_ = foo(alpha && beta && gamma && delta)
+}
+
+func foo(bool) {}
+`)
+
+	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{AllowCallArgs: true}))
+	engine.ColumnLimit = 20
+	out, err := engine.Format(src)
+	require.NoError(t, err)
+
+	got := string(gofmtBytes(t, out))
+	require.Contains(t, got, "foo(alpha &&")
+	require.Contains(t, got, "&&\n")
+	require.NotEqual(t, string(src), string(out))
+}

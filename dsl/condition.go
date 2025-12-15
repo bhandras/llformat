@@ -98,6 +98,11 @@ func (c *IsInCallArgsCond) Eval(caps Captures, ctx *Context) bool {
 // be lost.
 type ExprEditSafeCond struct {
 	Target string
+
+	// AllowCallArgs allows the expression stage to edit expressions within call
+	// argument expressions. This should be enabled cautiously as it can interact
+	// with call-formatting stages.
+	AllowCallArgs bool
 }
 
 // Eval implements Condition for ExprEditSafeCond.
@@ -109,7 +114,7 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 
 	// Avoid editing inside call arguments; call formatting is owned by the call
 	// stages and AST-based rewrites can easily change call layout.
-	if (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
+	if !c.AllowCallArgs && (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
 		return false
 	}
 

@@ -680,6 +680,19 @@ func MultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
 // formatter behavior: break long boolean/arithmetic chains and case clauses,
 // without reformatting calls or signatures.
 func LongExprRules() []Rule {
+	return LongExprRulesWithOptions(LongExprOptions{})
+}
+
+// LongExprOptions configures LongExprRules behavior.
+type LongExprOptions struct {
+	// AllowCallArgs allows breaking long logical chains inside call arguments.
+	// This can interact with call-formatting stages, so it is disabled by
+	// default.
+	AllowCallArgs bool
+}
+
+// LongExprRulesWithOptions returns LongExprRules with explicit options.
+func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 	return []Rule{
 		// Never break simple comparisons (x > 0, flag == true, etc.)
 		{
@@ -729,7 +742,7 @@ func LongExprRules() []Rule {
 			When: &AndCond{
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
-					&ExprEditSafeCond{Target: "node"},
+					&ExprEditSafeCond{Target: "node", AllowCallArgs: opts.AllowCallArgs},
 				},
 			},
 			Priority: 40,
