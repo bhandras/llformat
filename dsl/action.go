@@ -459,6 +459,16 @@ type BreakMethodChainLayoutAction struct {
 	Target string
 }
 
+// BreakCallArgsLayoutAction formats a call expression by breaking its arguments
+// across lines using the layout engine (with a gofmt-like tab indent).
+//
+// This is intended as an opt-in style that can fall back to existing packed/
+// legacy formatters when it cannot safely operate (e.g. comments, multiline
+// args).
+type BreakCallArgsLayoutAction struct {
+	Target string
+}
+
 // BreakBinaryExprLayoutAction tries to break a binary expression using the
 // layout engine, based on configured style toggles.
 //
@@ -680,13 +690,9 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 	indent := ctx.IndentAt(binExpr)
 
 	// Account for any non-whitespace prefix before the expression (e.g. "if ").
-	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
-	remaining := ctx.ColumnLimit - prefixWidth
-	if remaining < 10 {
-		remaining = 10
-	}
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
+	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -733,13 +739,9 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 
 	indent := ctx.IndentAt(binExpr)
 
-	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
-	remaining := ctx.ColumnLimit - prefixWidth
-	if remaining < 10 {
-		remaining = 10
-	}
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
+	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -777,11 +779,7 @@ func (a *BreakCaseClauseLayoutAction) Execute(caps Captures, ctx *Context) ([]by
 	indent := ctx.IndentAt(caseClause)
 	contIndent := indent + "\t"
 
-	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
-	remaining := ctx.ColumnLimit - prefixWidth
-	if remaining < 10 {
-		remaining = 10
-	}
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
 	var docs []layout.Doc
 	for i, expr := range caseClause.List {
@@ -791,7 +789,7 @@ func (a *BreakCaseClauseLayoutAction) Execute(caps Captures, ctx *Context) ([]by
 		docs = append(docs, layout.T(renderNode(expr, ctx.Fset)))
 	}
 
-	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	formatted := layout.RenderAt(layout.G(layout.C(docs...)), ctx.ColumnLimit, ctx.TabStop, contIndent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -827,17 +825,13 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 
 	indent := ctx.IndentAt(sel)
 
-	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
-	remaining := ctx.ColumnLimit - prefixWidth
-	if remaining < 10 {
-		remaining = 10
-	}
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
 	doc, ok := exprDoc(sel, ctx)
 	if !ok {
 		return nil, false
 	}
-	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
+	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -872,24 +866,92 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]b
 	}
 
 	indent := ctx.IndentAt(call)
-
-	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
-	remaining := ctx.ColumnLimit - prefixWidth
-	if remaining < 10 {
-		remaining = 10
-	}
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
 	doc, ok := exprDoc(call, ctx)
 	if !ok {
 		return nil, false
 	}
 
-	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
+	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
 
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// Execute implements Action for BreakCallArgsLayoutAction.
+func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil {
+		return nil, false
+	}
+	if len(call.Args) == 0 {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(call.Pos()).Offset
+	end := ctx.Fset.Position(call.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	original := string(ctx.Source[start:end])
+	if !isSafeStandaloneExprSpan(original) {
+		return nil, false
+	}
+
+	// Only attempt this on "long" calls.
+	if (&CollapsedWidthCond{Target: a.Target, Op: ">", Value: 0}).Eval(caps, ctx) == false {
+		return nil, false
+	}
+
+	indent := ctx.IndentAt(call)
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+
+	funText := renderNode(call.Fun, ctx.Fset)
+
+	var argDocs []layout.Doc
+	for i, arg := range call.Args {
+		argText := renderNode(arg, ctx.Fset)
+		if strings.Contains(argText, "\n") {
+			return nil, false
+		}
+		if hasAnyComment(argText) {
+			return nil, false
+		}
+
+		if i > 0 {
+			argDocs = append(argDocs, layout.T(","), layout.L())
+		}
+		argDocs = append(argDocs, layout.T(argText))
+	}
+
+	argsGroup := layout.G(layout.C(
+		layout.SL(), // break after "(" in break mode
+		layout.C(argDocs...),
+		layout.IB(layout.T(","), layout.T("")), // trailing comma when broken
+	))
+
+	doc := layout.G(layout.C(
+		layout.T(funText),
+		layout.T("("),
+		layout.N("\t", argsGroup), // gofmt-like: indent args by one tab on breaks
+		layout.SL(),               // newline + base indent before ")"
+		layout.T(")"),
+	))
+
+	formatted := layout.RenderAt(doc, ctx.ColumnLimit, ctx.TabStop, indent, startCol)
+	if formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}

@@ -49,7 +49,7 @@ func main() {
 	flag.BoolVar(&useDSLComments, "dsl-comments", true, "use DSL comment formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLCalls, "dsl-calls", true, "use DSL log/printf call formatter (DSL mode only)")
 	flag.BoolVar(&useDSLMultiLine, "dsl-multiline-calls", true, "use DSL multiline call formatter (DSL mode only)")
-	flag.StringVar(&dslMultiLineStyle, "dsl-multiline-style", "legacy", "DSL multiline call style: legacy|packed|packed-chain|packed-chain-layout (DSL mode only)")
+	flag.StringVar(&dslMultiLineStyle, "dsl-multiline-style", "legacy", "DSL multiline call style: legacy|packed|packed-chain|packed-chain-layout|layout-args|layout-all (DSL mode only)")
 	flag.StringVar(&dslCallPolicy, "dsl-call-policy", "legacy", "DSL call policy bundle: legacy|modern (DSL mode only)")
 	flag.BoolVar(&useDSLExpr, "dsl-expr", true, "use DSL expression formatter (DSL mode only)")
 	flag.StringVar(&dslExprLogicalStyle, "dsl-expr-logical-style", "", "DSL expression logical chain style: legacy|layout (DSL mode only, experimental)")

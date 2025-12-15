@@ -651,6 +651,11 @@ type MultiLineCallOptions struct {
 	// Supported: ""/"legacy" (existing BreakMethodChainAction) and "layout"
 	// (layout engine).
 	MethodChainStyle string
+
+	// CallArgsStyle controls how long generic call expressions are broken.
+	// Supported: ""/"legacy" (existing packed/legacy formatters) and "layout"
+	// (layout engine).
+	CallArgsStyle string
 }
 
 // MultiLineCallRulesWithOptions returns MultiLineCallRules with explicit options.
@@ -697,7 +702,17 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 				},
 			},
 			Priority: 50,
-			Action:   action,
+			Action: func() Action {
+				switch opts.CallArgsStyle {
+				case "layout":
+					return &TryElseAction{
+						Try:  &BreakCallArgsLayoutAction{Target: "node"},
+						Else: action,
+					}
+				default:
+					return action
+				}
+			}(),
 		},
 	}
 }

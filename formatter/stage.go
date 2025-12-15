@@ -259,9 +259,25 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
 				FormatCallPackedMultiLine,
 			)
+		case "layout-args":
+			// Try layout-based argument breaking, fall back to packed multiline.
+			rules = dsl.MultiLineCallRulesWithOptions(
+				dsl.MultiLineCallOptions{Excludes: opts.Excludes, CallArgsStyle: "layout"},
+				FormatCallPackedMultiLine,
+			)
 		case "packed-chain-layout", "layout-chain":
 			rules = dsl.MultiLineCallRulesWithOptions(
 				dsl.MultiLineCallOptions{Excludes: opts.Excludes, MethodChainStyle: "layout"},
+				FormatCallPackedMultiLine,
+			)
+		case "layout-all":
+			// Layout-based method-chain breaking + layout-based call-arg breaking.
+			rules = dsl.MultiLineCallRulesWithOptions(
+				dsl.MultiLineCallOptions{
+					Excludes:         opts.Excludes,
+					MethodChainStyle: "layout",
+					CallArgsStyle:    "layout",
+				},
 				FormatCallPackedMultiLine,
 			)
 		default:
