@@ -88,6 +88,16 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		// ParenExpr controls its own indentation; callers should treat it like a
 		// self-contained block.
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+	case *ast.CompositeLit:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		doc, ok := compositeLitDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		// CompositeLit includes its own braces and indentation decisions.
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 	case *ast.Ident, *ast.BasicLit, *ast.UnaryExpr, *ast.IndexExpr, *ast.SliceExpr:
 		// Render atomic expressions as-is. These are safe to embed as docs but do
 		// not participate in internal breaking yet.
@@ -293,6 +303,79 @@ func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
 		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
 		layout.SL(),
 		layout.T(")"),
+	)), true
+}
+
+func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if lit == nil || ctx == nil {
+		return nil, false
+	}
+
+	// Be conservative: do not attempt to reindent existing multiline composite
+	// literals; leave those to other formatters (or gofmt) to avoid surprising
+	// changes.
+	litText := renderNode(lit, ctx.Fset)
+	if strings.Contains(litText, "\n") {
+		return nil, false
+	}
+	if hasAnyComment(litText) {
+		return nil, false
+	}
+
+	typeText := ""
+	if lit.Type != nil {
+		typeText = renderNode(lit.Type, ctx.Fset)
+	}
+
+	var eltDocs []layout.Doc
+	for i, elt := range lit.Elts {
+		eltText := renderNode(elt, ctx.Fset)
+		if strings.Contains(eltText, "\n") {
+			return nil, false
+		}
+		if hasAnyComment(eltText) {
+			return nil, false
+		}
+
+		// Prefer structured docs when possible (e.g. nested calls / logical chains).
+		if expr, okCast := elt.(ast.Expr); okCast {
+			if info, okDoc := exprDocWithKind(expr, ctx, kind); okDoc {
+				d := info.Doc
+				if info.NeedsContinuationIndent {
+					d = layout.N("\t", d)
+				}
+				if i > 0 {
+					eltDocs = append(eltDocs, layout.T(","), layout.L())
+				}
+				eltDocs = append(eltDocs, d)
+				continue
+			}
+		}
+
+		if i > 0 {
+			eltDocs = append(eltDocs, layout.T(","), layout.L())
+		}
+		eltDocs = append(eltDocs, layout.T(eltText))
+	}
+
+	body := layout.G(layout.C(
+		layout.SL(),
+		layout.C(eltDocs...),
+		layout.IB(layout.T(","), layout.T("")),
+	))
+
+	// flat:  T{a, b}
+	// break:
+	//   T{
+	//       a,
+	//       b,
+	//   }
+	return layout.G(layout.C(
+		layout.T(typeText),
+		layout.T("{"),
+		layout.N("\t", body),
+		layout.SL(),
+		layout.T("}"),
 	)), true
 }
 
