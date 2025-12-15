@@ -1703,6 +1703,120 @@ func expandInlineTypeLiterals(s string) string {
 	return s
 }
 
+func skipSpaces(s string, i int) int {
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
+		i++
+	}
+	return i
+}
+
+func scanBalanced(s string, open, close byte, i int) (int, bool) {
+	if i < 0 || i >= len(s) || s[i] != open {
+		return -1, false
+	}
+	depth := 0
+	inStr := byte(0)
+	escaped := false
+
+	for ; i < len(s); i++ {
+		c := s[i]
+
+		if inStr != 0 {
+			if inStr == '"' && c == '\\' && !escaped {
+				escaped = true
+				continue
+			}
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '`':
+			inStr = c
+			continue
+		}
+
+		if c == open {
+			depth++
+			continue
+		}
+		if c == close {
+			depth--
+			if depth == 0 {
+				return i, true
+			}
+		}
+	}
+
+	return -1, false
+}
+
+func scanIdent(s string, i int) int {
+	if i >= len(s) {
+		return i
+	}
+	if !(s[i] == '_' || (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')) {
+		return i
+	}
+	i++
+	for i < len(s) && (s[i] == '_' || (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9')) {
+		i++
+	}
+	return i
+}
+
+// findFuncParamList locates the opening and closing parenthesis of the function
+// parameter list in a full `func ... {` signature, including optional receiver
+// and optional generic type parameter list.
+func findFuncParamList(sig string) (openParen, closeParen int, ok bool) {
+	i := strings.Index(sig, "func")
+	if i == -1 {
+		return -1, -1, false
+	}
+	i += len("func")
+	i = skipSpaces(sig, i)
+
+	// Optional receiver: func (r *R) Name(...)
+	if i < len(sig) && sig[i] == '(' {
+		end, ok := scanBalanced(sig, '(', ')', i)
+		if !ok {
+			return -1, -1, false
+		}
+		i = end + 1
+		i = skipSpaces(sig, i)
+	}
+
+	// Function name (may be absent for func literals, but we only format decls).
+	i = scanIdent(sig, i)
+	i = skipSpaces(sig, i)
+
+	// Optional type parameters: func Name[T any, U ~int](...)
+	if i < len(sig) && sig[i] == '[' {
+		end, ok := scanBalanced(sig, '[', ']', i)
+		if !ok {
+			return -1, -1, false
+		}
+		i = end + 1
+		i = skipSpaces(sig, i)
+	}
+
+	if i >= len(sig) || sig[i] != '(' {
+		return -1, -1, false
+	}
+	openParen = i
+	end, ok := scanBalanced(sig, '(', ')', openParen)
+	if !ok {
+		return -1, -1, false
+	}
+	return openParen, end, true
+}
+
 func findTopLevelFuncBodyBrace(sig string, start int) int {
 	parenDepth := 0
 	bracketDepth := 0
@@ -1822,26 +1936,8 @@ func isParenthesizedTypeList(s string) bool {
 // Uses left-flow packing: break BEFORE elements that would exceed the limit.
 func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, bool) {
 	// Parse out params from signature: func name(params) returns {
-	openParen := strings.Index(sig, "(")
-	if openParen == -1 {
-		return indent + sig, false
-	}
-
-	// Find matching close paren
-	depth := 0
-	closeParen := -1
-	for i := openParen; i < len(sig); i++ {
-		if sig[i] == '(' {
-			depth++
-		} else if sig[i] == ')' {
-			depth--
-			if depth == 0 {
-				closeParen = i
-				break
-			}
-		}
-	}
-	if closeParen == -1 {
+	openParen, closeParen, ok := findFuncParamList(sig)
+	if !ok {
 		return indent + sig, false
 	}
 

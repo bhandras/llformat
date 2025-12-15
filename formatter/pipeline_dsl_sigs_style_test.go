@@ -97,3 +97,36 @@ func buildResult(a int) (out struct{ Timeout time.Duration; MaxRetries int; Enab
 	require.Contains(t, out, "meta struct {\n")
 	require.Contains(t, out, "err error")
 }
+
+func TestDSLSigsStyleDSLSupportsTypeParams(t *testing.T) {
+	const in = `package p
+
+func MapReduce[
+	T interface{ ~int | ~int64 | ~uint64 },
+	U interface{ ~string },
+	V any,
+](in []T, mapFn func(T) U, reduceFn func([]U) V) (out V, err error) {
+	return out, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          60,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "dsl",
+	})
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+
+	out := string(first)
+	require.Contains(t, out, "func MapReduce[")
+	require.Contains(t, out, "in []T")
+}
