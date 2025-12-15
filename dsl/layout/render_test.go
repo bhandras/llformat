@@ -29,3 +29,20 @@ func TestRenderSoftLineBreaksWhenNotFlat(t *testing.T) {
 	out := Render(doc, 1, 8, "\t")
 	require.Equal(t, "a.\n\t\tb", out)
 }
+
+func TestRenderIfBreakChoosesVariant(t *testing.T) {
+	doc := G(C(T("a"), IB(T("X"), T("Y")), T("b")))
+	out := Render(doc, 80, 8, "")
+	require.Equal(t, "aYb", out)
+
+	out2 := Render(doc, 1, 8, "")
+	require.Equal(t, "aXb", out2)
+}
+
+func TestRenderAlignIndentsToCurrentColumn(t *testing.T) {
+	// The aligned indent should be the current column in spaces, so after
+	// rendering "func(" (5 cols), the next line starts with 5 spaces.
+	doc := G(C(T("func("), A(C(T("a,"), L(), T("b,"), L(), T("c"))), T(")")))
+	out := Render(doc, 7, 8, "")
+	require.Equal(t, "func(a,\n     b,\n     c)", out)
+}

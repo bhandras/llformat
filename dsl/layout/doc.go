@@ -11,6 +11,8 @@ package layout
 // - Group tries to render flat, otherwise renders broken.
 // - Concat concatenates docs.
 // - Nest increases indentation for any broken lines within its child.
+// - IfBreak chooses between 2 docs based on mode.
+// - Align indents broken lines to the current column.
 type Doc interface {
 	isDoc()
 }
@@ -45,6 +47,27 @@ type Nest struct {
 
 func (Nest) isDoc() {}
 
+// IfBreak selects between two docs based on the rendering mode.
+// In flat mode, Flat is rendered; in break mode, Broken is rendered.
+type IfBreak struct {
+	Broken Doc
+	Flat   Doc
+}
+
+func (IfBreak) isDoc() {}
+
+// Align renders its child with the indentation set to the current column
+// (spaces) for any broken lines within its child.
+//
+// This is primarily used for alignment-based indentation (e.g. after an opening
+// paren). It intentionally uses spaces to precisely match the measured column
+// width, even when the surrounding code uses tabs.
+type Align struct {
+	Doc Doc
+}
+
+func (Align) isDoc() {}
+
 func T(s string) Doc { return Text(s) }
 func L() Doc         { return Line{} }
 func SL() Doc        { return SoftLine{} }
@@ -54,3 +77,6 @@ func N(indent string, d Doc) Doc {
 }
 
 func C(docs ...Doc) Doc { return Concat(docs) }
+
+func IB(broken, flat Doc) Doc { return IfBreak{Broken: broken, Flat: flat} }
+func A(d Doc) Doc             { return Align{Doc: d} }

@@ -56,6 +56,18 @@ func Render(doc Doc, colLimit int, tabStop int, indent string) string {
 			}
 		case Nest:
 			stack = append(stack, frame{doc: d.Doc, indent: f.indent + d.Indent, mode: f.mode})
+		case IfBreak:
+			if f.mode == modeFlat {
+				stack = append(stack, frame{doc: d.Flat, indent: f.indent, mode: f.mode})
+			} else {
+				stack = append(stack, frame{doc: d.Broken, indent: f.indent, mode: f.mode})
+			}
+		case Align:
+			indent := f.indent
+			if f.mode == modeBreak {
+				indent = strings.Repeat(" ", col)
+			}
+			stack = append(stack, frame{doc: d.Doc, indent: indent, mode: f.mode})
 		case Group:
 			// Try flat: if it doesn't fit, render broken.
 			if fits(d.Doc, colLimit-col, tabStop) {
@@ -100,6 +112,10 @@ func fits(doc Doc, remaining int, tabStop int) bool {
 				stack = append(stack, frame{doc: d[i], indent: "", mode: modeFlat})
 			}
 		case Nest:
+			stack = append(stack, frame{doc: d.Doc, indent: "", mode: modeFlat})
+		case IfBreak:
+			stack = append(stack, frame{doc: d.Flat, indent: "", mode: modeFlat})
+		case Align:
 			stack = append(stack, frame{doc: d.Doc, indent: "", mode: modeFlat})
 		case Group:
 			stack = append(stack, frame{doc: d.Doc, indent: "", mode: modeFlat})
