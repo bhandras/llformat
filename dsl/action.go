@@ -1556,6 +1556,152 @@ func normalizeSignature(sig, indent string) string {
 	return strings.TrimSpace(normalized.String())
 }
 
+func lastLineText(s string) string {
+	if i := strings.LastIndex(s, "\n"); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
+// indentContinuationLines prefixes every continuation line in s with indent.
+// The first line is left unchanged.
+func indentContinuationLines(s, indent string) string {
+	if !strings.Contains(s, "\n") {
+		return s
+	}
+	parts := strings.Split(s, "\n")
+	for i := 1; i < len(parts); i++ {
+		parts[i] = indent + strings.TrimLeft(parts[i], " \t")
+	}
+	return strings.Join(parts, "\n")
+}
+
+func isWordChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+func findMatchingBrace(s string, openBrace int) int {
+	if openBrace < 0 || openBrace >= len(s) || s[openBrace] != '{' {
+		return -1
+	}
+	depth := 0
+	inStr := byte(0)
+	escaped := false
+
+	for i := openBrace; i < len(s); i++ {
+		c := s[i]
+
+		if inStr != 0 {
+			if inStr == '"' && c == '\\' && !escaped {
+				escaped = true
+				continue
+			}
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '`':
+			inStr = c
+			continue
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+
+	return -1
+}
+
+func expandInlineBracedTypeLiteral(s, keyword string) string {
+	var out strings.Builder
+	i := 0
+
+	for i < len(s) {
+		idx := strings.Index(s[i:], keyword)
+		if idx == -1 {
+			out.WriteString(s[i:])
+			break
+		}
+		idx += i
+
+		// Require a word boundary for the keyword.
+		if idx > 0 && isWordChar(s[idx-1]) {
+			out.WriteString(s[i : idx+len(keyword)])
+			i = idx + len(keyword)
+			continue
+		}
+
+		j := idx + len(keyword)
+		if j < len(s) && isWordChar(s[j]) {
+			out.WriteString(s[i : idx+len(keyword)])
+			i = idx + len(keyword)
+			continue
+		}
+
+		// Skip optional whitespace between keyword and brace.
+		k := j
+		for k < len(s) && (s[k] == ' ' || s[k] == '\t') {
+			k++
+		}
+		if k >= len(s) || s[k] != '{' {
+			out.WriteString(s[i : idx+len(keyword)])
+			i = idx + len(keyword)
+			continue
+		}
+
+		end := findMatchingBrace(s, k)
+		if end == -1 {
+			out.WriteString(s[i:])
+			break
+		}
+
+		body := s[k+1 : end]
+		// If it already spans multiple lines or doesn't use semicolons, keep as-is.
+		if strings.Contains(body, "\n") || !strings.Contains(body, ";") {
+			out.WriteString(s[i : end+1])
+			i = end + 1
+			continue
+		}
+
+		// Expand `struct{ A; B }` -> `struct {\nA\nB\n}` for readability when
+		// signatures become multiline.
+		parts := strings.Split(body, ";")
+		out.WriteString(s[i:idx])
+		out.WriteString(keyword)
+		out.WriteString(" {\n")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			out.WriteString(part)
+			out.WriteByte('\n')
+		}
+		out.WriteByte('}')
+
+		i = end + 1
+	}
+
+	return out.String()
+}
+
+func expandInlineTypeLiterals(s string) string {
+	s = expandInlineBracedTypeLiteral(s, "struct")
+	s = expandInlineBracedTypeLiteral(s, "interface")
+	return s
+}
+
 // formatSignatureSimple is a fallback formatter that breaks at commas.
 // Uses left-flow packing: break BEFORE elements that would exceed the limit.
 func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, bool) {
@@ -1600,12 +1746,20 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 
 	contIndent := indent + "\t"
 	currentLine := indent + prefix
+	expandTypes := visualLen(indent+sig, tabStop) > colLimit
 
 	for i, param := range paramList {
 		param = strings.TrimSpace(param)
 		if param == "" {
 			continue
 		}
+
+		paramOut := param
+		if expandTypes {
+			paramOut = expandInlineTypeLiterals(paramOut)
+			paramOut = indentContinuationLines(paramOut, contIndent)
+		}
+		paramIsMultiline := strings.Contains(paramOut, "\n")
 
 		separator := ""
 		if i > 0 {
@@ -1622,20 +1776,24 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 			lineWithSuffix = testLine + suffix
 		}
 
-		if visualLen(lineWithSuffix, tabStop) > colLimit {
+		if paramIsMultiline || visualLen(lineWithSuffix, tabStop) > colLimit {
 			// Break to new line
 			if i > 0 {
 				result.WriteByte(',')
 			}
 			result.WriteByte('\n')
 			result.WriteString(contIndent)
-			result.WriteString(param)
-			currentLine = contIndent + param
+			result.WriteString(paramOut)
+			if strings.Contains(paramOut, "\n") {
+				currentLine = lastLineText(paramOut)
+			} else {
+				currentLine = contIndent + paramOut
+			}
 		} else {
 			if i > 0 {
 				result.WriteString(", ")
 			}
-			result.WriteString(param)
+			result.WriteString(paramOut)
 			currentLine = testLine
 		}
 	}
@@ -1828,40 +1986,97 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) ([]byt
 
 // formatMethodSimple is a fallback formatter for interface methods.
 func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
-	// Simple fallback - break at first comma that exceeds limit
-	prefixLen := visualLen(indent, tabStop)
+	// Parse out params from method: Method(params) returns
+	openParen := strings.Index(method, "(")
+	if openParen == -1 {
+		return indent + method
+	}
+
+	// Find matching close paren.
+	depth := 0
+	closeParen := -1
+	for i := openParen; i < len(method); i++ {
+		if method[i] == '(' {
+			depth++
+		} else if method[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParen = i
+				break
+			}
+		}
+	}
+	if closeParen == -1 {
+		return indent + method
+	}
+
+	prefix := method[:openParen+1]
+	params := method[openParen+1 : closeParen]
+	suffix := method[closeParen:] // ") returns"
+
+	paramList := splitTopLevelSimple(params)
+	if len(paramList) == 0 {
+		return indent + method
+	}
+
+	contIndent := indent + "\t"
+
 	var result strings.Builder
 	result.WriteString(indent)
+	result.WriteString(prefix)
 
-	currentLen := prefixLen
-	lastBreak := 0
-	inParen := 0
+	currentLine := indent + prefix
+	expandTypes := visualLen(indent+method, tabStop) > colLimit
 
-	for i, c := range method {
-		if c == '(' {
-			inParen++
-		} else if c == ')' {
-			inParen--
+	for i, param := range paramList {
+		param = strings.TrimSpace(param)
+		if param == "" {
+			continue
 		}
 
-		currentLen++
+		paramOut := param
+		if expandTypes {
+			paramOut = expandInlineTypeLiterals(paramOut)
+			paramOut = indentContinuationLines(paramOut, contIndent)
+		}
+		paramIsMultiline := strings.Contains(paramOut, "\n")
 
-		if c == ',' && inParen >= 1 && currentLen > colLimit {
-			result.WriteString(method[lastBreak : i+1])
-			result.WriteByte('\n')
-			result.WriteString(indent)
-			result.WriteByte('\t')
-			lastBreak = i + 1
-			for lastBreak < len(method) && method[lastBreak] == ' ' {
-				lastBreak++
+		separator := ""
+		if i > 0 {
+			separator = ", "
+		}
+
+		testAdd := separator + param
+		testLine := currentLine + testAdd
+
+		isLast := i == len(paramList)-1
+		lineWithSuffix := testLine
+		if isLast {
+			lineWithSuffix = testLine + suffix
+		}
+
+		if paramIsMultiline || visualLen(lineWithSuffix, tabStop) > colLimit {
+			if i > 0 {
+				result.WriteByte(',')
 			}
-			currentLen = prefixLen + tabStop
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(paramOut)
+			if strings.Contains(paramOut, "\n") {
+				currentLine = lastLineText(paramOut)
+			} else {
+				currentLine = contIndent + paramOut
+			}
+		} else {
+			if i > 0 {
+				result.WriteString(", ")
+			}
+			result.WriteString(paramOut)
+			currentLine = testLine
 		}
 	}
 
-	if lastBreak < len(method) {
-		result.WriteString(method[lastBreak:])
-	}
+	result.WriteString(suffix)
 
 	return result.String()
 }

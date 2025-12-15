@@ -1,12 +1,14 @@
 package formatter
 
 import (
+	"go/parser"
+	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestDSLSigsStyleDSLMayDifferFromLegacy(t *testing.T) {
+func TestDSLSigsStyleDSLIsParseableAndIdempotent(t *testing.T) {
 	const in = `package p
 
 import "time"
@@ -18,12 +20,6 @@ func processInlineConfig(config struct{ Timeout time.Duration; MaxRetries int; E
 }
 `
 
-	legacy := NewPipeline(PipelineConfig{
-		ColumnLimit: 80,
-		TabStop:     8,
-	})
-	legacyOut := string(legacy.Format([]byte(in)))
-
 	dslStyle := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
@@ -31,10 +27,40 @@ func processInlineConfig(config struct{ Timeout time.Duration; MaxRetries int; E
 		UseDSLFuncSigsNative: true,
 		DSLSigsStyle:         "dsl",
 	})
-	dslOut := string(dslStyle.Format([]byte(in)))
+	first := dslStyle.Format([]byte(in))
+	second := dslStyle.Format(first)
+	require.Equal(t, string(first), string(second))
 
-	// This test documents that the pure DSL fallback formatter is allowed to
-	// diverge from legacy for now; it provides an opt-in path to evolve the
-	// signature formatter without touching goldens.
-	require.NotEqual(t, legacyOut, dslOut)
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestDSLSigsStyleDSLFallbackExpandsInlineStructs(t *testing.T) {
+	const in = `package p
+
+import "time"
+
+func processInlineConfig(config struct{ Timeout time.Duration; MaxRetries int; EnableCache bool }, handler func(cfg struct{ Timeout time.Duration; MaxRetries int; EnableCache bool }) error) error {
+	return nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "dsl",
+	})
+	out := string(p.Format([]byte(in)))
+
+	// When the pure DSL signature formatter chooses a multiline signature, it
+	// should expand inline struct type literals into a multiline form. This is a
+	// deliberate, opt-in readability improvement.
+	require.Contains(t, out, "config struct {\n")
+	require.Contains(t, out, "\n\t\tTimeout")
+	require.Contains(t, out, "\n\t\tMaxRetries")
+	require.Contains(t, out, "\n\t\tEnableCache bool")
+	require.NotContains(t, out, "struct{ Timeout")
 }
