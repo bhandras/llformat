@@ -127,6 +127,31 @@ func FormatFuncSigsInSource(src []byte, colLimit, tabStop int) ([]byte, bool) {
 	return out, true
 }
 
+// FormatFuncSignatureLegacy formats a function declaration signature using the
+// legacy FuncSigFormatter implementation. This is used by native DSL signature
+// rules to preserve parity while applying edits at AST-selected spans.
+func FormatFuncSignatureLegacy(signature, indent string, colLimit, tabStop int) (string, bool) {
+	f := NewFuncSigFormatter(FuncSigConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+	})
+	formatted := f.breakSignature(signature, indent)
+	// needsBlank in the DSL action is used only to decide whether to insert an
+	// extra blank line after the opening brace.
+	needsBlank := strings.Count(formatted, "\n") > 0
+	return formatted, needsBlank
+}
+
+// FormatInterfaceMethodLegacy formats an interface method signature using the
+// legacy FuncSigFormatter implementation.
+func FormatInterfaceMethodLegacy(method, indent string, colLimit, tabStop int) string {
+	f := NewFuncSigFormatter(FuncSigConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+	})
+	return f.breakInterfaceMethod(method, indent)
+}
+
 // isFuncSignature checks if a line starts a function signature.
 func (f *FuncSigFormatter) isFuncSignature(trimmed string) bool {
 	// Match: func name(, func (receiver) name(, or method in interface

@@ -109,6 +109,7 @@ type StageOptions struct {
 	UseDSLFuncSigs         bool // Use DSL-based signature stage (delegates to legacy)
 	UseDSLBlankLines       bool // Use DSL-based blank line stage (pure DSL)
 	UseDSLBlankLinesNative bool // Use native DSL blank-line rules (fallback to legacy)
+	UseDSLFuncSigsNative   bool // Use native DSL signature rules (fallback to legacy)
 	TraceDSL               bool // Enable DSL rule tracing (DSL stages only)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
@@ -135,6 +136,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 		UseDSLFuncSigs:         false,
 		UseDSLBlankLines:       false,
 		UseDSLBlankLinesNative: false,
+		UseDSLFuncSigsNative:   false,
 	})
 }
 
@@ -281,6 +283,21 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 					return NewFuncSigFormatter(FuncSigConfig{
 						ColumnLimit: cfg.ColumnLimit,
 						TabStop:     cfg.TabStop,
+					})
+				}
+				if opts.UseDSLFuncSigsNative {
+					rules := append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
+						FuncFormatter:   FormatFuncSignatureLegacy,
+						MethodFormatter: FormatInterfaceMethodLegacy,
+					})...)
+					rules = append(rules, dsl.LegacyFuncSigFallbackRules(FormatFuncSigsInSource)...)
+					return NewDSLExprFormatter(DSLExprConfig{
+						ColumnLimit:   cfg.ColumnLimit,
+						TabStop:       cfg.TabStop,
+						Rules:         rules,
+						Trace:         opts.TraceDSL,
+						MaxIterations: 100,
+						SkipGofmt:     true,
 					})
 				}
 				return NewDSLExprFormatter(DSLExprConfig{

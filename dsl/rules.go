@@ -811,6 +811,23 @@ func LegacyFuncSigRules(formatFunc LegacyFuncSigFormatFunc) []Rule {
 	}
 }
 
+// LegacyFuncSigFallbackRules delegates function signature formatting to a legacy
+// formatter, but at a low priority intended only as a fallback (e.g. when the
+// source cannot be parsed).
+func LegacyFuncSigFallbackRules(formatFunc LegacyFuncSigFormatFunc) []Rule {
+	return []Rule{
+		{
+			Name:     "legacy_func_sig_fallback",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &TrueCond{},
+			Priority: -100,
+			Action: &LegacyFuncSigFormatAction{
+				FormatFunc: formatFunc,
+			},
+		},
+	}
+}
+
 // LegacyBlankLinesRules delegates blank line formatting to a legacy formatter.
 func LegacyBlankLinesRules(formatFunc LegacyBlankLinesFormatFunc) []Rule {
 	return []Rule{
