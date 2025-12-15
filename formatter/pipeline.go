@@ -12,6 +12,10 @@ type PipelineConfig struct {
 	Excludes        []string // Functions to exclude from multiline formatting
 	UseDSLExpr      bool     // Use DSL-based expression formatter
 	TraceDSL        bool     // Enable DSL rule tracing (only when UseDSLExpr)
+
+	// AllowDSLCallArgs enables limited expression formatting within call
+	// arguments when using the DSL expression stage.
+	AllowDSLCallArgs bool
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -35,6 +39,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		Excludes:          cfg.Excludes,
 		UseDSLExpr:        cfg.UseDSLExpr,
 		TraceDSL:          cfg.TraceDSL,
+		AllowDSLCallArgs:  cfg.AllowDSLCallArgs,
 	})
 
 	return &Pipeline{

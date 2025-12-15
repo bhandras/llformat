@@ -103,6 +103,11 @@ type StageOptions struct {
 	Excludes          []string
 	UseDSLExpr        bool // Use DSL-based formatter (now the default)
 	TraceDSL          bool // Enable DSL rule tracing (only when UseDSLExpr)
+
+	// AllowDSLCallArgs enables limited expression formatting within call
+	// arguments when using the DSL expression stage.
+	// This is intentionally opt-in because it can interact with call formatting.
+	AllowDSLCallArgs bool
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -118,6 +123,13 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	if opts.UseDSLExpr {
+		exprRules := dsl.LongExprRules()
+		if opts.AllowDSLCallArgs {
+			exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
+				AllowCallArgs: true,
+			})
+		}
+
 		// Legacy stage pipeline with DSL expression formatting.
 		return []Stage{
 			{
@@ -143,7 +155,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 				Formatter: NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit: cfg.ColumnLimit,
 					TabStop:     cfg.TabStop,
-					Rules:       dsl.LongExprRules(),
+					Rules:       exprRules,
 					Trace:       opts.TraceDSL,
 					SkipGofmt:   true,
 				}),
