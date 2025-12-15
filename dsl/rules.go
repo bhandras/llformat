@@ -882,6 +882,11 @@ type LongExprOptions struct {
 	// Typically, this should be a list of call names excluded from later
 	// call-formatting stages.
 	CallArgsAllowlist []string
+
+	// LogicalChainStyle controls how long &&/|| chains are broken.
+	// Supported: "legacy" (BreakAtOpAction) and "layout" (layout engine).
+	// Empty defaults to "legacy".
+	LogicalChainStyle string
 }
 
 // LongExprRulesWithOptions returns LongExprRules with explicit options.
@@ -889,6 +894,10 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 	callArgsPolicy := opts.CallArgsPolicy
 	if opts.AllowCallArgs {
 		callArgsPolicy = CallArgsPolicyForce
+	}
+	style := opts.LogicalChainStyle
+	if style == "" {
+		style = "legacy"
 	}
 
 	return []Rule{
@@ -948,10 +957,17 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 			Priority: 40,
-			Action: &BreakAtOpAction{
-				Target:     "node",
-				BreakAfter: true,
-			},
+			Action: func() Action {
+				switch style {
+				case "layout":
+					return &TryElseAction{
+						Try:  &BreakLogicalChainLayoutAction{Target: "node"},
+						Else: &BreakAtOpAction{Target: "node", BreakAfter: true},
+					}
+				default:
+					return &BreakAtOpAction{Target: "node", BreakAfter: true}
+				}
+			}(),
 		},
 
 		// Long arithmetic expression (excluding string concat and call args).

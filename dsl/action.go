@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	llast "github.com/lightninglabs/llformat/ast"
+	"github.com/lightninglabs/llformat/dsl/layout"
 	"github.com/lightninglabs/llformat/scanner"
 	"github.com/lightninglabs/llformat/text"
 )
@@ -403,6 +404,16 @@ type BreakAtOpAction struct {
 	BreakAfter bool // true = break after op (Go style), false = break before
 }
 
+// BreakLogicalChainLayoutAction breaks long &&/|| chains using the layout engine.
+// It prefers breaking after each operator (Go style) and uses the standard
+// continuation indent (newline + indent + one tab).
+//
+// This action is intended for opt-in "modern" formatting; legacy/parity rules
+// should generally use BreakAtOpAction to match historical behavior.
+type BreakLogicalChainLayoutAction struct {
+	Target string
+}
+
 // opPriority returns a priority for operators (lower = prefer to break here).
 // Prefer breaking at && over || to keep "|| operand" together on the next line.
 // Logical operators are preferred over comparison/arithmetic.
@@ -549,6 +560,95 @@ func (a *BreakAtOpAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, boo
 	return []Edit{
 		{Start: opEnd, End: end, Replace: replacement},
 	}, true, nil
+}
+
+func flattenSameOpBinaryChain(expr ast.Expr, op token.Token, out *[]ast.Expr) bool {
+	if expr == nil {
+		return true
+	}
+
+	// Treat parenthesized expressions as atomic so we don't remove explicit
+	// parentheses in the source.
+	if _, ok := expr.(*ast.ParenExpr); ok {
+		*out = append(*out, expr)
+		return true
+	}
+
+	bin, ok := expr.(*ast.BinaryExpr)
+	if !ok || bin.Op != op {
+		*out = append(*out, expr)
+		return true
+	}
+
+	if !flattenSameOpBinaryChain(bin.X, op, out) {
+		return false
+	}
+	if !flattenSameOpBinaryChain(bin.Y, op, out) {
+		return false
+	}
+	return true
+}
+
+// Execute implements Action for BreakLogicalChainLayoutAction.
+func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	binExpr, ok := node.(*ast.BinaryExpr)
+	if !ok || binExpr == nil {
+		return nil, false
+	}
+
+	if ctx.LineWidth(binExpr) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	if binExpr.Op != token.LAND && binExpr.Op != token.LOR {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(binExpr.Pos()).Offset
+	end := ctx.Fset.Position(binExpr.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	original := string(ctx.Source[start:end])
+	if hasLineComment(original) {
+		return nil, false
+	}
+
+	var terms []ast.Expr
+	if !flattenSameOpBinaryChain(binExpr, binExpr.Op, &terms) || len(terms) < 2 {
+		return nil, false
+	}
+
+	indent := ctx.IndentAt(binExpr)
+	contIndent := indent + "\t"
+
+	// Account for any non-whitespace prefix before the expression (e.g. "if ").
+	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	remaining := ctx.ColumnLimit - prefixWidth
+	if remaining < 10 {
+		remaining = 10
+	}
+
+	opStr := binExpr.Op.String()
+	var docs []layout.Doc
+	for i, term := range terms {
+		if i > 0 {
+			docs = append(docs, layout.T(" "), layout.T(opStr), layout.L())
+		}
+		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
+	}
+
+	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, contIndent)
+	if formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }
 
 // ReflowStringConcatAction rewrites a long string concatenation expression into

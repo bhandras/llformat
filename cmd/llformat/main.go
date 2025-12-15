@@ -25,6 +25,7 @@ func main() {
 		dslMultiLineStyle      string
 		dslCallPolicy          string
 		useDSLExpr             bool
+		dslExprLogicalStyle    string
 		useDSLSigs             bool
 		useDSLSigsNative       bool
 		dslSigsStyle           string
@@ -48,6 +49,7 @@ func main() {
 	flag.StringVar(&dslMultiLineStyle, "dsl-multiline-style", "legacy", "DSL multiline call style: legacy|packed|packed-chain (DSL mode only)")
 	flag.StringVar(&dslCallPolicy, "dsl-call-policy", "legacy", "DSL call policy bundle: legacy|modern (DSL mode only)")
 	flag.BoolVar(&useDSLExpr, "dsl-expr", true, "use DSL expression formatter (DSL mode only)")
+	flag.StringVar(&dslExprLogicalStyle, "dsl-expr-logical-style", "", "DSL expression logical chain style: legacy|layout (DSL mode only, experimental)")
 	flag.BoolVar(&useDSLSigs, "dsl-sigs", true, "use DSL signature formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLSigsNative, "dsl-sigs-native", false, "use native DSL signature rules (fallback to legacy; DSL mode only, experimental)")
 	flag.StringVar(&dslSigsStyle, "dsl-sigs-style", "legacy", "DSL signature style: legacy|dsl (DSL mode only, experimental)")
@@ -64,6 +66,9 @@ func main() {
 		useDSLCalls = true
 		useDSLMultiLine = true
 		useDSLExpr = true
+		if dslExprLogicalStyle == "" {
+			dslExprLogicalStyle = "layout"
+		}
 		useDSLSigs = true
 		useDSLSigsNative = true
 		if dslSigsStyle == "" || dslSigsStyle == "legacy" {
@@ -114,6 +119,7 @@ func main() {
 		DSLMultiLineStyle:      dslMultiLineStyle,
 		DSLCallPolicy:          policy,
 		UseDSLExpr:             !useLegacy && useDSLExpr,
+		DSLExprLogicalStyle:    dslExprLogicalStyle,
 		UseDSLFuncSigs:         !useLegacy && useDSLSigs,
 		UseDSLFuncSigsNative:   !useLegacy && useDSLSigsNative,
 		DSLSigsStyle:           dslSigsStyle,

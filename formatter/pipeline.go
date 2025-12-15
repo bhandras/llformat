@@ -31,6 +31,10 @@ type PipelineConfig struct {
 	// only for calls that are known to be ignored by later call-formatting stages.
 	// This is less invasive than AllowDSLCallArgs but may miss some cases.
 	AutoDSLCallArgs bool
+
+	// DSLExprLogicalStyle controls long &&/|| chain formatting inside the DSL
+	// expression stage. Empty means legacy behavior.
+	DSLExprLogicalStyle string
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -62,6 +66,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			cfg.DSLMultiLineStyle = "packed-chain"
 		}
 		cfg.UseDSLExpr = true
+		if cfg.DSLExprLogicalStyle == "" {
+			cfg.DSLExprLogicalStyle = "layout"
+		}
 		cfg.AutoDSLCallArgs = true
 		cfg.UseDSLFuncSigs = true
 		cfg.UseDSLFuncSigsNative = true
@@ -90,6 +97,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		TraceDSL:               cfg.TraceDSL,
 		AllowDSLCallArgs:       cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:        cfg.AutoDSLCallArgs,
+		DSLExprLogicalStyle:    cfg.DSLExprLogicalStyle,
 	})
 
 	return &Pipeline{

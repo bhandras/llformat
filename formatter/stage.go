@@ -121,6 +121,10 @@ type StageOptions struct {
 	// AutoDSLCallArgs enables limited expression formatting within call arguments
 	// only for calls excluded from multiline formatting.
 	AutoDSLCallArgs bool
+
+	// DSLExprLogicalStyle controls long &&/|| chain formatting inside the DSL
+	// expression stage. Empty means legacy behavior.
+	DSLExprLogicalStyle string
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -178,6 +182,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
 			CallArgsPolicy:    callArgsPolicy,
 			CallArgsAllowlist: allowlist,
+			LogicalChainStyle: opts.DSLExprLogicalStyle,
 		})
 	}
 
