@@ -1176,7 +1176,13 @@ func ExpressionRules() []Rule {
 				},
 			},
 			Priority: 90,
-			Action:   &BreakFuncSignatureAction{Target: "node"},
+			// Keep ExpressionRules legacy-parity: signatures are formatted with a
+			// conservative fallback (no multiline `(\n...\n)` packing) to match
+			// existing fixtures.
+			Action: &BreakFuncSignatureAction{
+				Target:     "node",
+				FormatFunc: formatSignatureCompat,
+			},
 		},
 
 		// Method chain rules

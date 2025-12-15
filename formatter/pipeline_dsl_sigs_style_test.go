@@ -158,3 +158,31 @@ func multiResults() (alpha int, beta int, gamma int, delta int, err error) {
 	out := string(first)
 	require.Contains(t, out, "alpha int, beta int")
 }
+
+func TestDSLSigsStyleDSLFallbackPacksMultilineParams(t *testing.T) {
+	const in = `package p
+
+func multiParams(alpha int, beta int, gamma int, delta int, epsilon int) int {
+	return alpha + beta + gamma + delta + epsilon
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          45,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "dsl",
+	})
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+
+	out := string(first)
+	require.Contains(t, out, "alpha int, beta int")
+}

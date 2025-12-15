@@ -1842,6 +1842,76 @@ func formatPackedMultilineTypeList(elems []string, itemIndent, baseIndent string
 	return b.String()
 }
 
+func formatSignatureCompat(sig, indent string, colLimit, tabStop int) (string, bool) {
+	openParen, closeParen, ok := findFuncParamList(sig)
+	if !ok {
+		return indent + sig, false
+	}
+
+	// Ensure we can find the function body brace; if not, bail.
+	if findTopLevelFuncBodyBrace(sig, closeParen+1) == -1 {
+		return indent + sig, false
+	}
+
+	prefix := sig[:openParen+1] // "func name("
+	params := sig[openParen+1 : closeParen]
+	suffix := sig[closeParen:] // ") ... {"
+
+	paramList := splitTopLevelSimple(params)
+	if len(paramList) == 0 {
+		return indent + sig, false
+	}
+
+	contIndent := indent + "\t"
+
+	var result strings.Builder
+	result.WriteString(indent)
+	result.WriteString(prefix)
+	currentLine := indent + prefix
+
+	for i, param := range paramList {
+		param = strings.TrimSpace(param)
+		if param == "" {
+			continue
+		}
+
+		separator := ""
+		if i > 0 {
+			separator = ", "
+		}
+
+		testLine := currentLine + separator + param
+		isLast := i == len(paramList)-1
+		lineWithSuffix := testLine
+		if isLast {
+			lineWithSuffix = testLine + suffix
+		}
+
+		if visualLen(lineWithSuffix, tabStop) > colLimit {
+			// Break to new line (legacy-ish style: no trailing comma, keep parens
+			// attached to prefix/suffix).
+			if i > 0 {
+				result.WriteByte(',')
+			}
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(param)
+			currentLine = contIndent + param
+			continue
+		}
+
+		if i > 0 {
+			result.WriteString(", ")
+		}
+		result.WriteString(param)
+		currentLine = testLine
+	}
+
+	result.WriteString(suffix)
+	needsBlank := strings.Contains(result.String(), "\n")
+	return result.String(), needsBlank
+}
+
 // findFuncParamList locates the opening and closing parenthesis of the function
 // parameter list in a full `func ... {` signature, including optional receiver
 // and optional generic type parameter list.
@@ -2037,8 +2107,9 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 	contIndent := indent + "\t"
 	currentLine := indent + prefix
 	expandTypes := visualLen(indent+sig, tabStop) > colLimit
-
-	for i, param := range paramList {
+	needMultiParams := expandTypes
+	paramElems := make([]string, 0, len(paramList))
+	for _, param := range paramList {
 		param = strings.TrimSpace(param)
 		if param == "" {
 			continue
@@ -2049,41 +2120,45 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 			paramOut = expandInlineTypeLiterals(paramOut)
 			paramOut = indentContinuationLines(paramOut, contIndent)
 		}
-		paramIsMultiline := strings.Contains(paramOut, "\n")
-
-		separator := ""
-		if i > 0 {
-			separator = ", "
+		if strings.Contains(paramOut, "\n") {
+			needMultiParams = true
 		}
+		paramElems = append(paramElems, paramOut)
+	}
 
-		testAdd := separator + param
-		testLine := currentLine + testAdd
-
-		if paramIsMultiline || visualLen(testLine, tabStop) > colLimit {
-			// Break to new line
+	if needMultiParams {
+		result.WriteByte('\n')
+		result.WriteString(formatPackedMultilineTypeList(paramElems, contIndent, indent, colLimit, tabStop))
+		currentLine = indent + ")"
+	} else {
+		for i, paramOut := range paramElems {
+			separator := ""
 			if i > 0 {
-				result.WriteByte(',')
+				separator = ", "
 			}
-			result.WriteByte('\n')
-			result.WriteString(contIndent)
-			result.WriteString(paramOut)
-			if strings.Contains(paramOut, "\n") {
-				currentLine = lastLineText(paramOut)
-			} else {
-				currentLine = contIndent + paramOut
+
+			testLine := currentLine + separator + paramOut
+			if visualLen(testLine, tabStop) > colLimit {
+				if i > 0 {
+					result.WriteByte(',')
+				}
+				result.WriteByte('\n')
+				result.WriteString(contIndent)
+				result.WriteString(paramOut)
+				currentLine = contIndent + lastLineText(paramOut)
+				continue
 			}
-		} else {
+
 			if i > 0 {
 				result.WriteString(", ")
 			}
 			result.WriteString(paramOut)
 			currentLine = testLine
 		}
-	}
 
-	// Close parameter list.
-	result.WriteByte(')')
-	currentLine = lastLineText(result.String())
+		result.WriteByte(')')
+		currentLine = lastLineText(result.String())
+	}
 
 	// Format results (if present) before the opening brace.
 	if hasReturns {
@@ -2397,8 +2472,9 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 
 	currentLine := indent + prefix
 	expandTypes := visualLen(indent+method, tabStop) > colLimit
-
-	for i, param := range paramList {
+	needMultiParams := expandTypes
+	paramElems := make([]string, 0, len(paramList))
+	for _, param := range paramList {
 		param = strings.TrimSpace(param)
 		if param == "" {
 			continue
@@ -2409,40 +2485,45 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 			paramOut = expandInlineTypeLiterals(paramOut)
 			paramOut = indentContinuationLines(paramOut, contIndent)
 		}
-		paramIsMultiline := strings.Contains(paramOut, "\n")
-
-		separator := ""
-		if i > 0 {
-			separator = ", "
+		if strings.Contains(paramOut, "\n") {
+			needMultiParams = true
 		}
+		paramElems = append(paramElems, paramOut)
+	}
 
-		testAdd := separator + param
-		testLine := currentLine + testAdd
-
-		if paramIsMultiline || visualLen(testLine, tabStop) > colLimit {
+	if needMultiParams {
+		result.WriteByte('\n')
+		result.WriteString(formatPackedMultilineTypeList(paramElems, contIndent, indent, colLimit, tabStop))
+		currentLine = indent + ")"
+	} else {
+		for i, paramOut := range paramElems {
+			separator := ""
 			if i > 0 {
-				result.WriteByte(',')
+				separator = ", "
 			}
-			result.WriteByte('\n')
-			result.WriteString(contIndent)
-			result.WriteString(paramOut)
-			if strings.Contains(paramOut, "\n") {
-				currentLine = lastLineText(paramOut)
-			} else {
-				currentLine = contIndent + paramOut
+
+			testLine := currentLine + separator + paramOut
+			if visualLen(testLine, tabStop) > colLimit {
+				if i > 0 {
+					result.WriteByte(',')
+				}
+				result.WriteByte('\n')
+				result.WriteString(contIndent)
+				result.WriteString(paramOut)
+				currentLine = contIndent + lastLineText(paramOut)
+				continue
 			}
-		} else {
+
 			if i > 0 {
 				result.WriteString(", ")
 			}
 			result.WriteString(paramOut)
 			currentLine = testLine
 		}
-	}
 
-	// Close parameter list.
-	result.WriteByte(')')
-	currentLine = lastLineText(result.String())
+		result.WriteByte(')')
+		currentLine = lastLineText(result.String())
+	}
 
 	// Results (if present).
 	if hasReturns {
