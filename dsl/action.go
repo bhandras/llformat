@@ -1771,6 +1771,77 @@ func scanIdent(s string, i int) int {
 	return i
 }
 
+func formatPackedMultilineTypeList(elems []string, itemIndent, baseIndent string, colLimit, tabStop int) string {
+	indentWidth := visualLen(itemIndent, tabStop)
+
+	var b strings.Builder
+	lineWidth := 0
+	wroteAny := false
+	atLineStart := true
+
+	for _, elem := range elems {
+		elem = strings.TrimSpace(elem)
+		if elem == "" {
+			continue
+		}
+
+		isMultiline := strings.Contains(elem, "\n")
+
+		if atLineStart {
+			b.WriteString(itemIndent)
+			lineWidth = indentWidth
+			atLineStart = false
+		} else {
+			// Separator before the next element.
+			if isMultiline {
+				b.WriteString(",\n")
+				atLineStart = true
+				b.WriteString(itemIndent)
+				lineWidth = indentWidth
+				atLineStart = false
+			} else {
+				need := 2 + visualLen(elem, tabStop) // ", " + elem
+				if lineWidth+need > colLimit {
+					b.WriteString(",\n")
+					atLineStart = true
+					b.WriteString(itemIndent)
+					lineWidth = indentWidth
+					atLineStart = false
+				} else {
+					b.WriteString(", ")
+					lineWidth += 2
+				}
+			}
+		}
+
+		b.WriteString(elem)
+		wroteAny = true
+
+		if isMultiline {
+			b.WriteString(",\n")
+			lineWidth = 0
+			atLineStart = true
+			continue
+		}
+
+		lineWidth += visualLen(elem, tabStop)
+	}
+
+	// Ensure trailing comma for multiline lists (helps gofmt keep breaks).
+	if wroteAny && !atLineStart {
+		b.WriteString(",\n")
+		atLineStart = true
+	}
+
+	if !atLineStart {
+		b.WriteByte('\n')
+	}
+	b.WriteString(baseIndent)
+	b.WriteString(")")
+
+	return b.String()
+}
+
 // findFuncParamList locates the opening and closing parenthesis of the function
 // parameter list in a full `func ... {` signature, including optional receiver
 // and optional generic type parameter list.
@@ -2043,6 +2114,7 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 				needMulti := strings.Contains(result.String(), "\n") || visualLen(currentLine+" "+returnsOut, tabStop) > colLimit
 
 				formattedElems := make([]string, 0, len(innerList))
+				itemIndent := contIndent + "\t"
 				for _, elem := range innerList {
 					elem = strings.TrimSpace(elem)
 					if elem == "" {
@@ -2051,7 +2123,7 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 					elemOut := elem
 					if expandTypes {
 						elemOut = expandInlineTypeLiterals(elemOut)
-						elemOut = indentContinuationLines(elemOut, contIndent)
+						elemOut = indentContinuationLines(elemOut, itemIndent)
 					}
 					if strings.Contains(elemOut, "\n") {
 						needMulti = true
@@ -2073,17 +2145,7 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 					// Keep the opening "(" on the same line as ")" to avoid
 					// semicolon insertion after the parameter list.
 					result.WriteString(" (\n")
-					for i, elem := range formattedElems {
-						if i > 0 {
-							result.WriteString(",\n")
-						}
-						result.WriteString(contIndent)
-						result.WriteByte('\t')
-						result.WriteString(elem)
-					}
-					result.WriteString(",\n")
-					result.WriteString(contIndent)
-					result.WriteString(")")
+					result.WriteString(formatPackedMultilineTypeList(formattedElems, itemIndent, contIndent, colLimit, tabStop))
 					currentLine = contIndent + ")"
 				}
 			}
@@ -2401,6 +2463,7 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 				needMulti := strings.Contains(result.String(), "\n") || visualLen(currentLine+" "+returnsOut, tabStop) > colLimit
 
 				formattedElems := make([]string, 0, len(innerList))
+				itemIndent := contIndent + "\t"
 				for _, elem := range innerList {
 					elem = strings.TrimSpace(elem)
 					if elem == "" {
@@ -2409,7 +2472,7 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 					elemOut := elem
 					if expandTypes {
 						elemOut = expandInlineTypeLiterals(elemOut)
-						elemOut = indentContinuationLines(elemOut, contIndent)
+						elemOut = indentContinuationLines(elemOut, itemIndent)
 					}
 					if strings.Contains(elemOut, "\n") {
 						needMulti = true
@@ -2429,17 +2492,7 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 				} else {
 					// Keep "(" on the same line as ")" to avoid semicolon insertion.
 					result.WriteString(" (\n")
-					for i, elem := range formattedElems {
-						if i > 0 {
-							result.WriteString(",\n")
-						}
-						result.WriteString(contIndent)
-						result.WriteByte('\t')
-						result.WriteString(elem)
-					}
-					result.WriteString(",\n")
-					result.WriteString(contIndent)
-					result.WriteString(")")
+					result.WriteString(formatPackedMultilineTypeList(formattedElems, itemIndent, contIndent, colLimit, tabStop))
 				}
 			}
 		} else {
