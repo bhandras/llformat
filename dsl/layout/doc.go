@@ -68,6 +68,18 @@ type Align struct {
 
 func (Align) isDoc() {}
 
+// IndentByCols increases indentation by a fixed number of columns (spaces)
+// for any broken lines within its child.
+//
+// This is useful for aligning continuation blocks relative to indentation
+// without needing to know the exact whitespace prefix string.
+type IndentByCols struct {
+	Cols int
+	Doc  Doc
+}
+
+func (IndentByCols) isDoc() {}
+
 func T(s string) Doc { return Text(s) }
 func L() Doc         { return Line{} }
 func SL() Doc        { return SoftLine{} }
@@ -80,3 +92,4 @@ func C(docs ...Doc) Doc { return Concat(docs) }
 
 func IB(broken, flat Doc) Doc { return IfBreak{Broken: broken, Flat: flat} }
 func A(d Doc) Doc             { return Align{Doc: d} }
+func I(cols int, d Doc) Doc   { return IndentByCols{Cols: cols, Doc: d} }

@@ -46,3 +46,9 @@ func TestRenderAlignIndentsToCurrentColumn(t *testing.T) {
 	out := Render(doc, 7, 8, "")
 	require.Equal(t, "func(a,\n     b,\n     c)", out)
 }
+
+func TestRenderIndentByColsAddsSpacesOnBreaks(t *testing.T) {
+	doc := G(I(2, C(T("a,"), L(), T("b"))))
+	out := Render(doc, 1, 8, "\t")
+	require.Equal(t, "a,\n\t  b", out)
+}
