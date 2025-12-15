@@ -831,7 +831,7 @@ func LegacyFuncSigFallbackRules(formatFunc LegacyFuncSigFormatFunc) []Rule {
 		{
 			Name:     "legacy_func_sig_fallback",
 			Pattern:  &NodePattern{Type: "File"},
-			When:     &TrueCond{},
+			When:     &IsParseableCond{Want: false},
 			Priority: -100,
 			Action: &LegacyFuncSigFormatAction{
 				FormatFunc: formatFunc,
@@ -863,7 +863,7 @@ func LegacyBlankLinesFallbackRules(formatFunc LegacyBlankLinesFormatFunc) []Rule
 		{
 			Name:     "legacy_blank_lines_fallback",
 			Pattern:  &NodePattern{Type: "File"},
-			When:     &TrueCond{},
+			When:     &IsParseableCond{Want: false},
 			Priority: -100,
 			Action: &LegacyBlankLinesFormatAction{
 				FormatFunc: formatFunc,

@@ -2,6 +2,8 @@ package dsl
 
 import (
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 )
 
@@ -121,6 +123,29 @@ type NotCond struct {
 // Eval implements Condition for NotCond.
 func (c *NotCond) Eval(caps Captures, ctx *Context) bool {
 	return !c.Cond.Eval(caps, ctx)
+}
+
+// IsParseableCond checks whether the current ctx.Source parses as a Go file.
+// This is primarily intended to gate file-scoped legacy fallback rules so they
+// only run on parse failures.
+type IsParseableCond struct {
+	// Want indicates the desired parseability:
+	// - Want == true  => condition passes only if the source parses
+	// - Want == false => condition passes only if the source does not parse
+	Want bool
+}
+
+func (c *IsParseableCond) Eval(_ Captures, ctx *Context) bool {
+	if ctx == nil {
+		return false
+	}
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "", ctx.Source, parser.ParseComments)
+	parseable := err == nil
+	if c.Want {
+		return parseable
+	}
+	return !parseable
 }
 
 // IsInCallArgsCond checks whether the target node is contained within an

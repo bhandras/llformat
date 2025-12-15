@@ -112,7 +112,7 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 
 	// Skip calls that contain inline comments - reformatting via AST rendering
 	// would drop them.
-	if hasLineComment(original) {
+	if !isSafeStandaloneExprSpan(original) {
 		return nil, false
 	}
 
@@ -668,12 +668,12 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 		return nil, false
 	}
 	original := string(ctx.Source[start:end])
-	if hasLineComment(original) {
+	if !isSafeStandaloneExprSpan(original) {
 		return nil, false
 	}
 
-	var terms []ast.Expr
-	if !flattenSameOpBinaryChain(binExpr, binExpr.Op, &terms) || len(terms) < 2 {
+	doc, ok := exprDoc(binExpr, ctx)
+	if !ok {
 		return nil, false
 	}
 
@@ -687,16 +687,7 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 		remaining = 10
 	}
 
-	opStr := binExpr.Op.String()
-	var docs []layout.Doc
-	for i, term := range terms {
-		if i > 0 {
-			docs = append(docs, layout.T(" "), layout.T(opStr), layout.L())
-		}
-		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
-	}
-
-	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -732,12 +723,12 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 		return nil, false
 	}
 	original := string(ctx.Source[start:end])
-	if hasLineComment(original) {
+	if !isSafeStandaloneExprSpan(original) {
 		return nil, false
 	}
 
-	var terms []ast.Expr
-	if !flattenSameOpBinaryChain(binExpr, binExpr.Op, &terms) || len(terms) < 2 {
+	doc, ok := exprDoc(binExpr, ctx)
+	if !ok {
 		return nil, false
 	}
 
@@ -750,16 +741,7 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 		remaining = 10
 	}
 
-	opStr := binExpr.Op.String()
-	var docs []layout.Doc
-	for i, term := range terms {
-		if i > 0 {
-			docs = append(docs, layout.T(" "), layout.T(opStr), layout.L())
-		}
-		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
-	}
-
-	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -790,7 +772,7 @@ func (a *BreakCaseClauseLayoutAction) Execute(caps Captures, ctx *Context) ([]by
 	}
 
 	original := string(ctx.Source[start:end])
-	if strings.Contains(original, "//") || strings.Contains(original, "/*") {
+	if hasAnyComment(original) {
 		return nil, false
 	}
 
@@ -841,29 +823,8 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 		return nil, false
 	}
 	original := string(ctx.Source[start:end])
-	if hasLineComment(original) {
+	if !isSafeStandaloneExprSpan(original) {
 		return nil, false
-	}
-
-	// Collect selector chain components.
-	var sels []string
-	base := ast.Expr(sel)
-	for {
-		cur, ok := base.(*ast.SelectorExpr)
-		if !ok || cur == nil {
-			break
-		}
-		sels = append(sels, cur.Sel.Name)
-		base = cur.X
-	}
-	if len(sels) < 2 {
-		// Too short to benefit.
-		return nil, false
-	}
-
-	// Reverse sels to get left-to-right order.
-	for i, j := 0, len(sels)-1; i < j; i, j = i+1, j-1 {
-		sels[i], sels[j] = sels[j], sels[i]
 	}
 
 	indent := ctx.IndentAt(sel)
@@ -875,13 +836,11 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 		remaining = 10
 	}
 
-	var docs []layout.Doc
-	docs = append(docs, layout.T(renderNode(base, ctx.Fset)))
-	for _, name := range sels {
-		docs = append(docs, layout.T("."), layout.SL(), layout.T(name))
+	doc, ok := exprDoc(sel, ctx)
+	if !ok {
+		return nil, false
 	}
-
-	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -911,55 +870,8 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]b
 		return nil, false
 	}
 	original := string(ctx.Source[start:end])
-	if hasLineComment(original) {
+	if !isSafeStandaloneExprSpan(original) {
 		return nil, false
-	}
-
-	type segment struct {
-		name     string
-		typeArgs string
-		args     []string
-		ellipsis bool
-	}
-
-	var segs []segment
-	cur := call
-	var base ast.Expr
-
-	for {
-		sel, ok := cur.Fun.(*ast.SelectorExpr)
-		if !ok || sel == nil {
-			return nil, false
-		}
-
-		seg := segment{name: sel.Sel.Name, ellipsis: cur.Ellipsis.IsValid()}
-
-		// Collect args as rendered text; skip multiline args to avoid awkward
-		// interactions with the chain layout (leave to existing formatters).
-		for _, arg := range cur.Args {
-			argText := renderNode(arg, ctx.Fset)
-			if strings.Contains(argText, "\n") {
-				return nil, false
-			}
-			seg.args = append(seg.args, argText)
-		}
-		segs = append(segs, seg)
-
-		next, ok := sel.X.(*ast.CallExpr)
-		if !ok {
-			base = sel.X
-			break
-		}
-		cur = next
-	}
-
-	if base == nil || len(segs) < 2 {
-		return nil, false
-	}
-
-	// Reverse to left-to-right chain order.
-	for i, j := 0, len(segs)-1; i < j; i, j = i+1, j-1 {
-		segs[i], segs[j] = segs[j], segs[i]
 	}
 
 	indent := ctx.IndentAt(call)
@@ -971,27 +883,12 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]b
 		remaining = 10
 	}
 
-	var docs []layout.Doc
-	docs = append(docs, layout.T(renderNode(base, ctx.Fset)))
-	for _, seg := range segs {
-		// `.\n\t\tMethod(` is safe (dot avoids semicolon insertion).
-		docs = append(docs, layout.T("."), layout.SL(), layout.T(seg.name))
-		docs = append(docs, layout.T("("))
-		if len(seg.args) > 0 {
-			for i, arg := range seg.args {
-				if i > 0 {
-					docs = append(docs, layout.T(", "))
-				}
-				docs = append(docs, layout.T(arg))
-			}
-			if seg.ellipsis && len(seg.args) > 0 {
-				docs = append(docs, layout.T("..."))
-			}
-		}
-		docs = append(docs, layout.T(")"))
+	doc, ok := exprDoc(call, ctx)
+	if !ok {
+		return nil, false
 	}
 
-	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -3241,6 +3138,9 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 	formatted := formatMethodChain(chainCalls, indent, prefixWidth, ctx)
 
 	original := string(ctx.Source[chainStart:chainEnd])
+	if !isSafeStandaloneExprSpan(original) {
+		return nil, false
+	}
 
 	// Check if formatting actually changed anything
 	if formatted == original {
