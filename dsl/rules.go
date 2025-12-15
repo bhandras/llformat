@@ -638,6 +638,18 @@ type PackedMultiLineFormatFunc func(call []byte, wsIndent string, colLimit, tabS
 // Use this for isolated testing of generic call reflow.
 // The optional formatFunc parameter allows injecting the legacy formatter.
 func MultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
+	return MultiLineCallRulesWithOptions(MultiLineCallOptions{}, formatFunc...)
+}
+
+// MultiLineCallOptions configures MultiLineCallRules behavior.
+type MultiLineCallOptions struct {
+	// Excludes is a list of function names that should be excluded from multiline
+	// call formatting (matches "foo" or "pkg.Foo").
+	Excludes []string
+}
+
+// MultiLineCallRulesWithOptions returns MultiLineCallRules with explicit options.
+func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...PackedMultiLineFormatFunc) []Rule {
 	action := &PackedMultiLineCallAction{Target: "node"}
 	if len(formatFunc) > 0 && formatFunc[0] != nil {
 		action.FormatFunc = formatFunc[0]
@@ -651,6 +663,7 @@ func MultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&IsMethodChainCond{Target: "node", MinCalls: 2},
+					&NotCond{Cond: &IsCallFuncInListCond{Target: "node", Names: opts.Excludes}},
 				},
 			},
 			Priority: 60,
@@ -668,6 +681,7 @@ func MultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
 					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
 					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
 					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+					&NotCond{Cond: &IsCallFuncInListCond{Target: "node", Names: opts.Excludes}},
 				},
 			},
 			Priority: 50,

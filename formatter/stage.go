@@ -101,8 +101,9 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 type StageOptions struct {
 	CommentMoveInline bool
 	Excludes          []string
-	UseDSLExpr        bool // Use DSL-based formatter (now the default)
-	TraceDSL          bool // Enable DSL rule tracing (only when UseDSLExpr)
+	UseDSLLogCalls    bool // Use DSL-based log/printf call stage
+	UseDSLExpr        bool // Use DSL-based expression stage
+	TraceDSL          bool // Enable DSL rule tracing (DSL stages only)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -120,91 +121,68 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 	return DefaultStagesWithOptions(cfg, StageOptions{
 		CommentMoveInline: commentMoveInline,
 		Excludes:          excludes,
+		UseDSLLogCalls:    false,
 		UseDSLExpr:        false,
 	})
 }
 
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
-	if opts.UseDSLExpr {
-		exprRules := dsl.LongExprRules()
-		if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs {
-			callArgsPolicy := dsl.CallArgsPolicyOff
-			if opts.AutoDSLCallArgs {
-				callArgsPolicy = dsl.CallArgsPolicyAuto
-			}
-			if opts.AllowDSLCallArgs {
-				callArgsPolicy = dsl.CallArgsPolicyForce
-			}
-
-			exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
-				CallArgsPolicy:    callArgsPolicy,
-				CallArgsAllowlist: opts.Excludes,
-			})
+	exprRules := dsl.LongExprRules()
+	if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs {
+		callArgsPolicy := dsl.CallArgsPolicyOff
+		if opts.AutoDSLCallArgs {
+			callArgsPolicy = dsl.CallArgsPolicyAuto
+		}
+		if opts.AllowDSLCallArgs {
+			callArgsPolicy = dsl.CallArgsPolicyForce
 		}
 
-		// Legacy stage pipeline with DSL expression formatting.
-		return []Stage{
-			{
-				Name: "comments",
-				Formatter: NewCommentFormatter(CommentConfig{
-					ColumnLimit:     cfg.ColumnLimit,
-					TabStop:         cfg.TabStop,
-					MoveInlineAbove: opts.CommentMoveInline,
-				}),
-				Requires: nil,
-			},
-			{
-				Name: "compact-calls",
-				Formatter: NewCompactCallFormatter(Config{
-					ColumnLimit: cfg.ColumnLimit,
-					TabStop:     cfg.TabStop,
-					SkipGofmt:   true,
-				}),
-				Requires: []string{"comments"},
-			},
-			{
-				Name: "expressions",
-				Formatter: NewDSLExprFormatter(DSLExprConfig{
-					ColumnLimit: cfg.ColumnLimit,
-					TabStop:     cfg.TabStop,
-					Rules:       exprRules,
-					Trace:       opts.TraceDSL,
-					SkipGofmt:   true,
-				}),
-				Requires: []string{"compact-calls"},
-			},
-			{
-				Name: "multiline-calls",
-				Formatter: NewMultiLineCallFormatter(MultiLineConfig{
-					ColumnLimit: cfg.ColumnLimit,
-					TabStop:     cfg.TabStop,
-					Excludes:    opts.Excludes,
-					SkipGofmt:   true,
-				}),
-				Requires: []string{"expressions"},
-			},
-			{
-				Name: "signatures",
-				Formatter: NewFuncSigFormatter(FuncSigConfig{
-					ColumnLimit: cfg.ColumnLimit,
-					TabStop:     cfg.TabStop,
-				}),
-				Requires: []string{"multiline-calls"},
-			},
-			{
-				Name: "blank-lines",
-				Formatter: NewBlankLineFormatter(BlankLineConfig{
-					BeforeReturn:            true,
-					BetweenCases:            true,
-					BetweenInterfaceMethods: true,
-				}),
-				Requires: []string{"signatures"},
-			},
-		}
+		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
+			CallArgsPolicy:    callArgsPolicy,
+			CallArgsAllowlist: opts.Excludes,
+		})
 	}
 
-	// Legacy pipeline - kept for backwards compatibility
+	var callFormatter Formatter = NewCompactCallFormatter(Config{
+		ColumnLimit: cfg.ColumnLimit,
+		TabStop:     cfg.TabStop,
+		SkipGofmt:   true,
+	})
+	if opts.UseDSLLogCalls {
+		callFormatter = NewDSLExprFormatter(DSLExprConfig{
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+			Rules:       dsl.LogPrintfRules(FormatCallGreedy),
+			Trace:       opts.TraceDSL,
+			SkipGofmt:   true,
+		})
+	}
+
+	var exprFormatter Formatter = NewLongExprFormatter(LongExprConfig{
+		ColumnLimit: cfg.ColumnLimit,
+		TabStop:     cfg.TabStop,
+	})
+	if opts.UseDSLExpr {
+		exprFormatter = NewDSLExprFormatter(DSLExprConfig{
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+			Rules:       exprRules,
+			Trace:       opts.TraceDSL,
+			SkipGofmt:   true,
+		})
+	}
+
+	var multiLineFormatter Formatter = NewMultiLineCallFormatter(MultiLineConfig{
+		ColumnLimit: cfg.ColumnLimit,
+		TabStop:     cfg.TabStop,
+		Excludes:    opts.Excludes,
+		SkipGofmt:   true,
+	})
+	// Multi-line generic call formatting remains legacy for now; it is more
+	// sensitive and we want to preserve llformat's current behavior during the
+	// initial call-stage migration.
+
 	return []Stage{
 		{
 			Name: "comments",
@@ -216,31 +194,19 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			Requires: nil, // First stage, no dependencies
 		},
 		{
-			Name: "compact-calls",
-			Formatter: NewCompactCallFormatter(Config{
-				ColumnLimit: cfg.ColumnLimit,
-				TabStop:     cfg.TabStop,
-				SkipGofmt:   true,
-			}),
-			Requires: []string{"comments"}, // After comment formatting
+			Name:      "compact-calls",
+			Formatter: callFormatter,
+			Requires:  []string{"comments"}, // After comment formatting
 		},
 		{
-			Name: "expressions",
-			Formatter: NewLongExprFormatter(LongExprConfig{
-				ColumnLimit: cfg.ColumnLimit,
-				TabStop:     cfg.TabStop,
-			}),
-			Requires: []string{"compact-calls"}, // After call formatting
+			Name:      "expressions",
+			Formatter: exprFormatter,
+			Requires:  []string{"compact-calls"}, // After call formatting
 		},
 		{
-			Name: "multiline-calls",
-			Formatter: NewMultiLineCallFormatter(MultiLineConfig{
-				ColumnLimit: cfg.ColumnLimit,
-				TabStop:     cfg.TabStop,
-				Excludes:    opts.Excludes,
-				SkipGofmt:   true,
-			}),
-			Requires: []string{"expressions"}, // After expression formatting
+			Name:      "multiline-calls",
+			Formatter: multiLineFormatter,
+			Requires:  []string{"expressions"}, // After expression formatting
 		},
 		{
 			Name: "signatures",

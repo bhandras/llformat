@@ -26,16 +26,18 @@ func TestPipelineDSLMatchesLegacy(t *testing.T) {
 			require.NoError(t, err)
 
 			legacy := NewPipeline(PipelineConfig{
-				ColumnLimit: 80,
-				TabStop:     8,
-				UseDSLExpr:  false,
+				ColumnLimit:    80,
+				TabStop:        8,
+				UseDSLLogCalls: false,
+				UseDSLExpr:     false,
 			})
 			want := legacy.Format(inData)
 
 			dslPipeline := NewPipeline(PipelineConfig{
-				ColumnLimit: 80,
-				TabStop:     8,
-				UseDSLExpr:  true,
+				ColumnLimit:    80,
+				TabStop:        8,
+				UseDSLLogCalls: true,
+				UseDSLExpr:     true,
 			})
 			got := dslPipeline.Format(inData)
 

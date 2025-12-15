@@ -19,6 +19,8 @@ func main() {
 		multilineExclude string
 		useLegacy        bool
 		traceDSL         bool
+		useDSLCalls      bool
+		useDSLExpr       bool
 		allowDSLCallArgs bool
 		autoDSLCallArgs  bool
 	)
@@ -31,12 +33,14 @@ func main() {
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
 	flag.BoolVar(&useLegacy, "legacy", false, "use legacy multi-stage formatter instead of DSL")
 	flag.BoolVar(&traceDSL, "trace-dsl", false, "print DSL rule application trace to stderr (DSL mode only)")
+	flag.BoolVar(&useDSLCalls, "dsl-calls", true, "use DSL log/printf call formatter (DSL mode only)")
+	flag.BoolVar(&useDSLExpr, "dsl-expr", true, "use DSL expression formatter (DSL mode only)")
 	flag.BoolVar(&allowDSLCallArgs, "dsl-allow-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments (DSL mode only, experimental)")
 	flag.BoolVar(&autoDSLCallArgs, "dsl-auto-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments only for calls excluded from multiline formatting (DSL mode only, experimental)")
 	flag.Parse()
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-calls] [--dsl-expr] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
 		os.Exit(2)
 	}
 
@@ -62,7 +66,8 @@ func main() {
 		TabStop:          tabStop,
 		MoveInlineAbove:  moveInline,
 		Excludes:         excludes,
-		UseDSLExpr:       !useLegacy,
+		UseDSLLogCalls:   !useLegacy && useDSLCalls,
+		UseDSLExpr:       !useLegacy && useDSLExpr,
 		TraceDSL:         traceDSL && !useLegacy,
 		AllowDSLCallArgs: allowDSLCallArgs && !useLegacy,
 		AutoDSLCallArgs:  autoDSLCallArgs && !useLegacy,

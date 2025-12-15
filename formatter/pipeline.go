@@ -10,6 +10,7 @@ type PipelineConfig struct {
 	TabStop         int
 	MoveInlineAbove bool     // For comment formatter
 	Excludes        []string // Functions to exclude from multiline formatting
+	UseDSLLogCalls  bool     // Use DSL-based log/printf call formatting
 	UseDSLExpr      bool     // Use DSL-based expression formatter
 	TraceDSL        bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
@@ -42,6 +43,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline: cfg.MoveInlineAbove,
 		Excludes:          cfg.Excludes,
+		UseDSLLogCalls:    cfg.UseDSLLogCalls,
 		UseDSLExpr:        cfg.UseDSLExpr,
 		TraceDSL:          cfg.TraceDSL,
 		AllowDSLCallArgs:  cfg.AllowDSLCallArgs,

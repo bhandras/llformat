@@ -21,6 +21,23 @@ const (
 	CallArgsPolicyForce
 )
 
+// IsCallFuncInListCond checks whether the target node is a CallExpr whose
+// callee name matches one of the provided names (e.g. "foo", "pkg.Foo").
+// If the target is not a CallExpr, it returns false.
+type IsCallFuncInListCond struct {
+	Target string
+	Names  []string
+}
+
+func (c *IsCallFuncInListCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	return stringInSlice(callExprFuncName(call), c.Names)
+}
+
 // TrueCond always returns true (no condition / always applies).
 type TrueCond struct{}
 
