@@ -99,16 +99,17 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 
 // StageOptions contains options for configuring the stage pipeline.
 type StageOptions struct {
-	CommentMoveInline    bool
-	Excludes             []string
-	UseDSLComments       bool // Use DSL-based comment stage (delegates to legacy)
-	UseDSLLogCalls       bool // Use DSL-based log/printf call stage
-	UseDSLMultiLineCalls bool // Use DSL-based multiline call stage
-	DSLMultiLineStyle    string
-	UseDSLExpr           bool // Use DSL-based expression stage
-	UseDSLFuncSigs       bool // Use DSL-based signature stage (delegates to legacy)
-	UseDSLBlankLines     bool // Use DSL-based blank line stage (pure DSL)
-	TraceDSL             bool // Enable DSL rule tracing (DSL stages only)
+	CommentMoveInline      bool
+	Excludes               []string
+	UseDSLComments         bool // Use DSL-based comment stage (delegates to legacy)
+	UseDSLLogCalls         bool // Use DSL-based log/printf call stage
+	UseDSLMultiLineCalls   bool // Use DSL-based multiline call stage
+	DSLMultiLineStyle      string
+	UseDSLExpr             bool // Use DSL-based expression stage
+	UseDSLFuncSigs         bool // Use DSL-based signature stage (delegates to legacy)
+	UseDSLBlankLines       bool // Use DSL-based blank line stage (pure DSL)
+	UseDSLBlankLinesNative bool // Use native DSL blank-line rules (fallback to legacy)
+	TraceDSL               bool // Enable DSL rule tracing (DSL stages only)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -124,15 +125,16 @@ type StageOptions struct {
 // This creates stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
 	return DefaultStagesWithOptions(cfg, StageOptions{
-		CommentMoveInline:    commentMoveInline,
-		Excludes:             excludes,
-		UseDSLComments:       false,
-		UseDSLLogCalls:       false,
-		UseDSLMultiLineCalls: false,
-		DSLMultiLineStyle:    "",
-		UseDSLExpr:           false,
-		UseDSLFuncSigs:       false,
-		UseDSLBlankLines:     false,
+		CommentMoveInline:      commentMoveInline,
+		Excludes:               excludes,
+		UseDSLComments:         false,
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		DSLMultiLineStyle:      "",
+		UseDSLExpr:             false,
+		UseDSLFuncSigs:         false,
+		UseDSLBlankLines:       false,
+		UseDSLBlankLinesNative: false,
 	})
 }
 
@@ -300,6 +302,21 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 						BeforeReturn:            true,
 						BetweenCases:            true,
 						BetweenInterfaceMethods: true,
+					})
+				}
+				if opts.UseDSLBlankLinesNative {
+					// Native DSL blank line rules, with a legacy fallback for
+					// unparsable sources (and as a last resort).
+					rules := append([]dsl.Rule{}, dsl.BlankLineRules()...)
+					rules = append(rules, dsl.LegacyBlankLinesFallbackRules(FormatBlankLinesInSource)...)
+					return NewDSLExprFormatter(DSLExprConfig{
+						ColumnLimit:                 cfg.ColumnLimit,
+						TabStop:                     cfg.TabStop,
+						Rules:                       rules,
+						Trace:                       opts.TraceDSL,
+						MaxIterations:               200,
+						DisableLegacyBlankLinesShim: true,
+						SkipGofmt:                   true,
 					})
 				}
 				return NewDSLExprFormatter(DSLExprConfig{

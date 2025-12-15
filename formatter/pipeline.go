@@ -6,19 +6,20 @@ import (
 
 // PipelineConfig holds configuration for the formatting pipeline.
 type PipelineConfig struct {
-	ColumnLimit          int
-	TabStop              int
-	MoveInlineAbove      bool     // For comment formatter
-	Excludes             []string // Functions to exclude from multiline formatting
-	UseDSLComments       bool     // Use DSL-based comment formatting (delegates to legacy)
-	UseDSLLogCalls       bool     // Use DSL-based log/printf call formatting
-	UseDSLMultiLineCalls bool     // Use DSL-based multiline call formatting
-	DSLMultiLineStyle    string   // DSL multiline formatting style (empty => legacy)
-	DSLCallPolicy        string   // DSL call policy bundle (empty => no override)
-	UseDSLExpr           bool     // Use DSL-based expression formatter
-	UseDSLFuncSigs       bool     // Use DSL-based signature formatter (delegates to legacy)
-	UseDSLBlankLines     bool     // Use DSL-based blank line formatter
-	TraceDSL             bool     // Enable DSL rule tracing (only when UseDSLExpr)
+	ColumnLimit            int
+	TabStop                int
+	MoveInlineAbove        bool     // For comment formatter
+	Excludes               []string // Functions to exclude from multiline formatting
+	UseDSLComments         bool     // Use DSL-based comment formatting (delegates to legacy)
+	UseDSLLogCalls         bool     // Use DSL-based log/printf call formatting
+	UseDSLMultiLineCalls   bool     // Use DSL-based multiline call formatting
+	DSLMultiLineStyle      string   // DSL multiline formatting style (empty => legacy)
+	DSLCallPolicy          string   // DSL call policy bundle (empty => no override)
+	UseDSLExpr             bool     // Use DSL-based expression formatter
+	UseDSLFuncSigs         bool     // Use DSL-based signature formatter (delegates to legacy)
+	UseDSLBlankLines       bool     // Use DSL-based blank line formatter
+	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
+	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -68,18 +69,19 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
-		CommentMoveInline:    cfg.MoveInlineAbove,
-		Excludes:             cfg.Excludes,
-		UseDSLComments:       cfg.UseDSLComments,
-		UseDSLLogCalls:       cfg.UseDSLLogCalls,
-		UseDSLMultiLineCalls: cfg.UseDSLMultiLineCalls,
-		DSLMultiLineStyle:    cfg.DSLMultiLineStyle,
-		UseDSLExpr:           cfg.UseDSLExpr,
-		UseDSLFuncSigs:       cfg.UseDSLFuncSigs,
-		UseDSLBlankLines:     cfg.UseDSLBlankLines,
-		TraceDSL:             cfg.TraceDSL,
-		AllowDSLCallArgs:     cfg.AllowDSLCallArgs,
-		AutoDSLCallArgs:      cfg.AutoDSLCallArgs,
+		CommentMoveInline:      cfg.MoveInlineAbove,
+		Excludes:               cfg.Excludes,
+		UseDSLComments:         cfg.UseDSLComments,
+		UseDSLLogCalls:         cfg.UseDSLLogCalls,
+		UseDSLMultiLineCalls:   cfg.UseDSLMultiLineCalls,
+		DSLMultiLineStyle:      cfg.DSLMultiLineStyle,
+		UseDSLExpr:             cfg.UseDSLExpr,
+		UseDSLFuncSigs:         cfg.UseDSLFuncSigs,
+		UseDSLBlankLines:       cfg.UseDSLBlankLines,
+		UseDSLBlankLinesNative: cfg.UseDSLBlankLinesNative,
+		TraceDSL:               cfg.TraceDSL,
+		AllowDSLCallArgs:       cfg.AllowDSLCallArgs,
+		AutoDSLCallArgs:        cfg.AutoDSLCallArgs,
 	})
 
 	return &Pipeline{

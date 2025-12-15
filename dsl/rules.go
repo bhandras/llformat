@@ -826,6 +826,23 @@ func LegacyBlankLinesRules(formatFunc LegacyBlankLinesFormatFunc) []Rule {
 	}
 }
 
+// LegacyBlankLinesFallbackRules delegates blank line formatting to a legacy
+// formatter, but at a low priority intended only as a fallback (e.g. when the
+// source cannot be parsed, or as a last resort after native DSL rules).
+func LegacyBlankLinesFallbackRules(formatFunc LegacyBlankLinesFormatFunc) []Rule {
+	return []Rule{
+		{
+			Name:     "legacy_blank_lines_fallback",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &TrueCond{},
+			Priority: -100,
+			Action: &LegacyBlankLinesFormatAction{
+				FormatFunc: formatFunc,
+			},
+		},
+	}
+}
+
 // LongExprRules returns a rule set intended to match the legacy long expression
 // formatter behavior: break long boolean/arithmetic chains and case clauses,
 // without reformatting calls or signatures.
