@@ -107,3 +107,42 @@ func foo(bool) {}
 	require.Contains(t, got, "&&\n")
 	require.NotEqual(t, string(src), string(out))
 }
+
+func TestExprStage_AllowCallArgsNestedCalls(t *testing.T) {
+	src := []byte(`package p
+
+func f(alpha, beta, gamma, delta bool) {
+	_ = f2(g(alpha && beta && gamma && delta))
+}
+
+func f2(bool) {}
+func g(bool) bool { return true }
+`)
+
+	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{AllowCallArgs: true}))
+	engine.ColumnLimit = 20
+	out, err := engine.Format(src)
+	require.NoError(t, err)
+
+	got := string(gofmtBytes(t, out))
+	require.Contains(t, got, "alpha &&\n")
+}
+
+func TestExprStage_SkipsWhenBlockCommentInsideExpr(t *testing.T) {
+	src := []byte(`package p
+
+func f(alpha, beta, gamma, delta bool) {
+	_ = foo(alpha && /* keep */ beta && gamma && delta)
+}
+
+func foo(bool) {}
+`)
+
+	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{AllowCallArgs: true}))
+	engine.ColumnLimit = 20
+	out, err := engine.Format(src)
+	require.NoError(t, err)
+
+	// We must not rewrite expressions containing comments, even in allow-call-args mode.
+	require.Equal(t, string(src), string(out))
+}

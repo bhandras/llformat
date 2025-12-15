@@ -248,6 +248,38 @@ func hasLineComment(s string) bool {
 	return false
 }
 
+// hasBlockComment checks if a string contains a block comment (/* */) outside of
+// string literals. This is used to detect inline comments that would be lost
+// during reformatting.
+func hasBlockComment(s string) bool {
+	inStr := byte(0)
+	esc := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inStr != 0 {
+			if inStr == '"' && c == '\\' && !esc {
+				esc = true
+				continue
+			}
+			if esc {
+				esc = false
+			} else if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+		switch c {
+		case '"', '`':
+			inStr = c
+		case '/':
+			if i+1 < len(s) && s[i+1] == '*' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // anyLineExceedsLimit checks if any line in the given string exceeds the column limit.
 func anyLineExceedsLimit(s string, colLimit, tabStop int) bool {
 	lines := strings.Split(s, "\n")

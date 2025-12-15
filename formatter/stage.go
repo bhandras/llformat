@@ -108,6 +108,10 @@ type StageOptions struct {
 	// arguments when using the DSL expression stage.
 	// This is intentionally opt-in because it can interact with call formatting.
 	AllowDSLCallArgs bool
+
+	// AutoDSLCallArgs enables limited expression formatting within call arguments
+	// only for calls excluded from multiline formatting.
+	AutoDSLCallArgs bool
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -124,9 +128,18 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	if opts.UseDSLExpr {
 		exprRules := dsl.LongExprRules()
-		if opts.AllowDSLCallArgs {
+		if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs {
+			callArgsPolicy := dsl.CallArgsPolicyOff
+			if opts.AutoDSLCallArgs {
+				callArgsPolicy = dsl.CallArgsPolicyAuto
+			}
+			if opts.AllowDSLCallArgs {
+				callArgsPolicy = dsl.CallArgsPolicyForce
+			}
+
 			exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
-				AllowCallArgs: true,
+				CallArgsPolicy:    callArgsPolicy,
+				CallArgsAllowlist: opts.Excludes,
 			})
 		}
 

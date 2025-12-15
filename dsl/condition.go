@@ -5,6 +5,22 @@ import (
 	"strings"
 )
 
+// CallArgsPolicy controls whether the expression stage may edit expressions that
+// are contained within call argument expressions.
+type CallArgsPolicy int
+
+const (
+	// CallArgsPolicyOff forbids edits inside call argument expressions.
+	CallArgsPolicyOff CallArgsPolicy = iota
+
+	// CallArgsPolicyAuto allows edits inside call argument expressions only when
+	// the enclosing call is known to be ignored by later call-formatting stages.
+	CallArgsPolicyAuto
+
+	// CallArgsPolicyForce always allows edits inside call argument expressions.
+	CallArgsPolicyForce
+)
+
 // TrueCond always returns true (no condition / always applies).
 type TrueCond struct{}
 
@@ -99,10 +115,14 @@ func (c *IsInCallArgsCond) Eval(caps Captures, ctx *Context) bool {
 type ExprEditSafeCond struct {
 	Target string
 
-	// AllowCallArgs allows the expression stage to edit expressions within call
-	// argument expressions. This should be enabled cautiously as it can interact
-	// with call-formatting stages.
-	AllowCallArgs bool
+	// CallArgsPolicy controls whether edits inside call argument expressions are
+	// allowed.
+	CallArgsPolicy CallArgsPolicy
+
+	// CallArgsAllowlist is used when CallArgsPolicy == CallArgsPolicyAuto. When
+	// set, edits are allowed only when the enclosing call's function name matches
+	// an entry.
+	CallArgsAllowlist []string
 }
 
 // Eval implements Condition for ExprEditSafeCond.
@@ -114,8 +134,21 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 
 	// Avoid editing inside call arguments; call formatting is owned by the call
 	// stages and AST-based rewrites can easily change call layout.
-	if !c.AllowCallArgs && (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
-		return false
+	if (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
+		switch c.CallArgsPolicy {
+		case CallArgsPolicyForce:
+			// OK.
+		case CallArgsPolicyAuto:
+			call := enclosingCallForArg(node, ctx)
+			if call == nil {
+				return false
+			}
+			if !stringInSlice(callExprFuncName(call), c.CallArgsAllowlist) {
+				return false
+			}
+		default:
+			return false
+		}
 	}
 
 	// Avoid composite literals and func literals; these tend to be formatting
@@ -129,11 +162,74 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 
 	// Avoid spans containing inline comments (AST printing does not preserve
 	// them inside expressions/argument lists).
-	if hasLineComment(string(ctx.NodeSource(node))) {
+	if hasLineComment(string(ctx.NodeSource(node))) || hasBlockComment(string(ctx.NodeSource(node))) {
 		return false
 	}
 
 	return true
+}
+
+func stringInSlice(s string, list []string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func enclosingCallForArg(node ast.Node, ctx *Context) *ast.CallExpr {
+	cur := node
+	for cur != nil {
+		parent := ctx.Parent(cur)
+		call, ok := parent.(*ast.CallExpr)
+		if ok {
+			for _, arg := range call.Args {
+				if arg == cur {
+					return call
+				}
+			}
+		}
+		cur = parent
+	}
+	return nil
+}
+
+func callExprFuncName(call *ast.CallExpr) string {
+	if call == nil {
+		return ""
+	}
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		return fun.Name
+	case *ast.SelectorExpr:
+		// Try to build the same representation as the legacy call scanners
+		// (including selectors like "pkg.Func").
+		prefix := selectorPrefix(fun.X)
+		if prefix == "" {
+			return fun.Sel.Name
+		}
+		return prefix + "." + fun.Sel.Name
+	default:
+		// Unknown callee shape (e.g. type conversions / indexing). These are not
+		// addressable via multiline exclusion lists anyway.
+		return ""
+	}
+}
+
+func selectorPrefix(x ast.Expr) string {
+	switch v := x.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		p := selectorPrefix(v.X)
+		if p == "" {
+			return v.Sel.Name
+		}
+		return p + "." + v.Sel.Name
+	default:
+		return ""
+	}
 }
 
 // IsParentTypeCond checks if the target node's direct parent matches a given

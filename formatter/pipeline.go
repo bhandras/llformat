@@ -16,6 +16,11 @@ type PipelineConfig struct {
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
 	AllowDSLCallArgs bool
+
+	// AutoDSLCallArgs enables limited expression formatting within call arguments
+	// only for calls that are known to be ignored by later call-formatting stages.
+	// This is less invasive than AllowDSLCallArgs but may miss some cases.
+	AutoDSLCallArgs bool
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -40,6 +45,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		UseDSLExpr:        cfg.UseDSLExpr,
 		TraceDSL:          cfg.TraceDSL,
 		AllowDSLCallArgs:  cfg.AllowDSLCallArgs,
+		AutoDSLCallArgs:   cfg.AutoDSLCallArgs,
 	})
 
 	return &Pipeline{

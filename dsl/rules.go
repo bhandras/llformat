@@ -685,14 +685,28 @@ func LongExprRules() []Rule {
 
 // LongExprOptions configures LongExprRules behavior.
 type LongExprOptions struct {
-	// AllowCallArgs allows breaking long logical chains inside call arguments.
+	// AllowCallArgs forces breaking long logical chains inside call arguments.
 	// This can interact with call-formatting stages, so it is disabled by
 	// default.
 	AllowCallArgs bool
+
+	// CallArgsPolicy controls call-argument editing for the expression stage.
+	// When set to CallArgsPolicyAuto, CallArgsAllowlist is used.
+	CallArgsPolicy CallArgsPolicy
+
+	// CallArgsAllowlist is used when CallArgsPolicy == CallArgsPolicyAuto.
+	// Typically, this should be a list of call names excluded from later
+	// call-formatting stages.
+	CallArgsAllowlist []string
 }
 
 // LongExprRulesWithOptions returns LongExprRules with explicit options.
 func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
+	callArgsPolicy := opts.CallArgsPolicy
+	if opts.AllowCallArgs {
+		callArgsPolicy = CallArgsPolicyForce
+	}
+
 	return []Rule{
 		// Never break simple comparisons (x > 0, flag == true, etc.)
 		{
@@ -742,7 +756,11 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 			When: &AndCond{
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
-					&ExprEditSafeCond{Target: "node", AllowCallArgs: opts.AllowCallArgs},
+					&ExprEditSafeCond{
+						Target:            "node",
+						CallArgsPolicy:    callArgsPolicy,
+						CallArgsAllowlist: opts.CallArgsAllowlist,
+					},
 				},
 			},
 			Priority: 40,
