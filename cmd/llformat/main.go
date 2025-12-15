@@ -28,6 +28,7 @@ func main() {
 		dslExprLogicalStyle    string
 		dslExprArithmeticStyle string
 		dslExprCaseClauseStyle string
+		dslExprSelectorStyle   string
 		useDSLSigs             bool
 		useDSLSigsNative       bool
 		dslSigsStyle           string
@@ -54,6 +55,7 @@ func main() {
 	flag.StringVar(&dslExprLogicalStyle, "dsl-expr-logical-style", "", "DSL expression logical chain style: legacy|layout (DSL mode only, experimental)")
 	flag.StringVar(&dslExprArithmeticStyle, "dsl-expr-arithmetic-style", "", "DSL expression arithmetic chain style: legacy|layout (DSL mode only, experimental)")
 	flag.StringVar(&dslExprCaseClauseStyle, "dsl-expr-case-style", "", "DSL expression case clause style: legacy|layout (DSL mode only, experimental)")
+	flag.StringVar(&dslExprSelectorStyle, "dsl-expr-selector-style", "", "DSL expression selector chain style: legacy|layout (DSL mode only, experimental)")
 	flag.BoolVar(&useDSLSigs, "dsl-sigs", true, "use DSL signature formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLSigsNative, "dsl-sigs-native", false, "use native DSL signature rules (fallback to legacy; DSL mode only, experimental)")
 	flag.StringVar(&dslSigsStyle, "dsl-sigs-style", "legacy", "DSL signature style: legacy|dsl (DSL mode only, experimental)")
@@ -78,6 +80,9 @@ func main() {
 		}
 		if dslExprCaseClauseStyle == "" {
 			dslExprCaseClauseStyle = "layout"
+		}
+		if dslExprSelectorStyle == "" {
+			dslExprSelectorStyle = "layout"
 		}
 		useDSLSigs = true
 		useDSLSigsNative = true
@@ -119,27 +124,28 @@ func main() {
 
 	// Use the unified formatting pipeline
 	pipeline := formatter.NewPipeline(formatter.PipelineConfig{
-		ColumnLimit:            colLimit,
-		TabStop:                tabStop,
-		MoveInlineAbove:        moveInline,
-		Excludes:               excludes,
-		UseDSLComments:         !useLegacy && useDSLComments,
-		UseDSLLogCalls:         !useLegacy && useDSLCalls,
-		UseDSLMultiLineCalls:   !useLegacy && useDSLMultiLine,
-		DSLMultiLineStyle:      dslMultiLineStyle,
-		DSLCallPolicy:          policy,
-		UseDSLExpr:             !useLegacy && useDSLExpr,
-		DSLExprLogicalStyle:    dslExprLogicalStyle,
-		DSLExprArithmeticStyle: dslExprArithmeticStyle,
-		DSLExprCaseClauseStyle: dslExprCaseClauseStyle,
-		UseDSLFuncSigs:         !useLegacy && useDSLSigs,
-		UseDSLFuncSigsNative:   !useLegacy && useDSLSigsNative,
-		DSLSigsStyle:           dslSigsStyle,
-		UseDSLBlankLines:       !useLegacy && useDSLBlankLines,
-		UseDSLBlankLinesNative: !useLegacy && useDSLBlankLinesNative,
-		TraceDSL:               traceDSL && !useLegacy,
-		AllowDSLCallArgs:       allowDSLCallArgs && !useLegacy,
-		AutoDSLCallArgs:        autoDSLCallArgs && !useLegacy,
+		ColumnLimit:               colLimit,
+		TabStop:                   tabStop,
+		MoveInlineAbove:           moveInline,
+		Excludes:                  excludes,
+		UseDSLComments:            !useLegacy && useDSLComments,
+		UseDSLLogCalls:            !useLegacy && useDSLCalls,
+		UseDSLMultiLineCalls:      !useLegacy && useDSLMultiLine,
+		DSLMultiLineStyle:         dslMultiLineStyle,
+		DSLCallPolicy:             policy,
+		UseDSLExpr:                !useLegacy && useDSLExpr,
+		DSLExprLogicalStyle:       dslExprLogicalStyle,
+		DSLExprArithmeticStyle:    dslExprArithmeticStyle,
+		DSLExprCaseClauseStyle:    dslExprCaseClauseStyle,
+		DSLExprSelectorChainStyle: dslExprSelectorStyle,
+		UseDSLFuncSigs:            !useLegacy && useDSLSigs,
+		UseDSLFuncSigsNative:      !useLegacy && useDSLSigsNative,
+		DSLSigsStyle:              dslSigsStyle,
+		UseDSLBlankLines:          !useLegacy && useDSLBlankLines,
+		UseDSLBlankLinesNative:    !useLegacy && useDSLBlankLinesNative,
+		TraceDSL:                  traceDSL && !useLegacy,
+		AllowDSLCallArgs:          allowDSLCallArgs && !useLegacy,
+		AutoDSLCallArgs:           autoDSLCallArgs && !useLegacy,
 	})
 	out := pipeline.Format(data)
 

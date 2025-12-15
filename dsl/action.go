@@ -431,6 +431,31 @@ type BreakCaseClauseLayoutAction struct {
 	Target string
 }
 
+// BreakSelectorChainLayoutAction breaks long selector chains such as
+// `pkg.subpkg.Symbol.Field` using the layout engine.
+//
+// It breaks after dots using a soft line break so that flat rendering produces
+// `a.b.c` (no illegal spaces), while broken rendering produces:
+//
+//	a.
+//	    b.
+//	    c
+type BreakSelectorChainLayoutAction struct {
+	Target string
+}
+
+// BreakBinaryExprLayoutAction tries to break a binary expression using the
+// layout engine, based on configured style toggles.
+//
+// This provides a single entry point for contexts that capture a BinaryExpr
+// (e.g. `for` conditions or `return` statements) without duplicating operator-
+// specific rule logic.
+type BreakBinaryExprLayoutAction struct {
+	Target          string
+	LogicalStyle    string // "legacy"|"layout"
+	ArithmeticStyle string // "legacy"|"layout"
+}
+
 // opPriority returns a priority for operators (lower = prefer to break here).
 // Prefer breaking at && over || to keep "|| operand" together on the next line.
 // Logical operators are preferred over comparison/arithmetic.
@@ -781,6 +806,99 @@ func (a *BreakCaseClauseLayoutAction) Execute(caps Captures, ctx *Context) ([]by
 		return nil, false
 	}
 	return out, true
+}
+
+// Execute implements Action for BreakSelectorChainLayoutAction.
+func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	sel, ok := node.(*ast.SelectorExpr)
+	if !ok || sel == nil {
+		return nil, false
+	}
+
+	if ctx.LineWidth(sel) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(sel.Pos()).Offset
+	end := ctx.Fset.Position(sel.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	original := string(ctx.Source[start:end])
+	if hasLineComment(original) {
+		return nil, false
+	}
+
+	// Collect selector chain components.
+	var sels []string
+	base := ast.Expr(sel)
+	for {
+		cur, ok := base.(*ast.SelectorExpr)
+		if !ok || cur == nil {
+			break
+		}
+		sels = append(sels, cur.Sel.Name)
+		base = cur.X
+	}
+	if len(sels) < 2 {
+		// Too short to benefit.
+		return nil, false
+	}
+
+	// Reverse sels to get left-to-right order.
+	for i, j := 0, len(sels)-1; i < j; i, j = i+1, j-1 {
+		sels[i], sels[j] = sels[j], sels[i]
+	}
+
+	indent := ctx.IndentAt(sel)
+	contIndent := indent + "\t"
+
+	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	remaining := ctx.ColumnLimit - prefixWidth
+	if remaining < 10 {
+		remaining = 10
+	}
+
+	var docs []layout.Doc
+	docs = append(docs, layout.T(renderNode(base, ctx.Fset)))
+	for _, name := range sels {
+		docs = append(docs, layout.T("."), layout.SL(), layout.T(name))
+	}
+
+	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	if formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// Execute implements Action for BreakBinaryExprLayoutAction.
+func (a *BreakBinaryExprLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	binExpr, ok := node.(*ast.BinaryExpr)
+	if !ok || binExpr == nil {
+		return nil, false
+	}
+
+	// Try the operator-specific layout action if the style enables it.
+	switch binExpr.Op {
+	case token.LAND, token.LOR:
+		if a.LogicalStyle == "layout" {
+			return (&BreakLogicalChainLayoutAction{Target: a.Target}).Execute(caps, ctx)
+		}
+	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+		if a.ArithmeticStyle == "layout" {
+			return (&BreakArithmeticChainLayoutAction{Target: a.Target}).Execute(caps, ctx)
+		}
+	}
+
+	return nil, false
 }
 
 // ReflowStringConcatAction rewrites a long string concatenation expression into

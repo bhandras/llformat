@@ -43,6 +43,10 @@ type PipelineConfig struct {
 	// DSLExprCaseClauseStyle controls long `case A, B, ...:` list formatting
 	// inside the DSL expression stage. Empty means legacy behavior.
 	DSLExprCaseClauseStyle string
+
+	// DSLExprSelectorChainStyle controls long selector chain formatting inside
+	// the DSL expression stage. Empty means legacy behavior.
+	DSLExprSelectorChainStyle string
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -83,6 +87,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		if cfg.DSLExprCaseClauseStyle == "" {
 			cfg.DSLExprCaseClauseStyle = "layout"
 		}
+		if cfg.DSLExprSelectorChainStyle == "" {
+			cfg.DSLExprSelectorChainStyle = "layout"
+		}
 		cfg.AutoDSLCallArgs = true
 		cfg.UseDSLFuncSigs = true
 		cfg.UseDSLFuncSigsNative = true
@@ -96,24 +103,25 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
-		CommentMoveInline:      cfg.MoveInlineAbove,
-		Excludes:               cfg.Excludes,
-		UseDSLComments:         cfg.UseDSLComments,
-		UseDSLLogCalls:         cfg.UseDSLLogCalls,
-		UseDSLMultiLineCalls:   cfg.UseDSLMultiLineCalls,
-		DSLMultiLineStyle:      cfg.DSLMultiLineStyle,
-		UseDSLExpr:             cfg.UseDSLExpr,
-		UseDSLFuncSigs:         cfg.UseDSLFuncSigs,
-		UseDSLFuncSigsNative:   cfg.UseDSLFuncSigsNative,
-		DSLSigsStyle:           cfg.DSLSigsStyle,
-		UseDSLBlankLines:       cfg.UseDSLBlankLines,
-		UseDSLBlankLinesNative: cfg.UseDSLBlankLinesNative,
-		TraceDSL:               cfg.TraceDSL,
-		AllowDSLCallArgs:       cfg.AllowDSLCallArgs,
-		AutoDSLCallArgs:        cfg.AutoDSLCallArgs,
-		DSLExprLogicalStyle:    cfg.DSLExprLogicalStyle,
-		DSLExprArithmeticStyle: cfg.DSLExprArithmeticStyle,
-		DSLExprCaseClauseStyle: cfg.DSLExprCaseClauseStyle,
+		CommentMoveInline:         cfg.MoveInlineAbove,
+		Excludes:                  cfg.Excludes,
+		UseDSLComments:            cfg.UseDSLComments,
+		UseDSLLogCalls:            cfg.UseDSLLogCalls,
+		UseDSLMultiLineCalls:      cfg.UseDSLMultiLineCalls,
+		DSLMultiLineStyle:         cfg.DSLMultiLineStyle,
+		UseDSLExpr:                cfg.UseDSLExpr,
+		UseDSLFuncSigs:            cfg.UseDSLFuncSigs,
+		UseDSLFuncSigsNative:      cfg.UseDSLFuncSigsNative,
+		DSLSigsStyle:              cfg.DSLSigsStyle,
+		UseDSLBlankLines:          cfg.UseDSLBlankLines,
+		UseDSLBlankLinesNative:    cfg.UseDSLBlankLinesNative,
+		TraceDSL:                  cfg.TraceDSL,
+		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
+		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
+		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,
+		DSLExprArithmeticStyle:    cfg.DSLExprArithmeticStyle,
+		DSLExprCaseClauseStyle:    cfg.DSLExprCaseClauseStyle,
+		DSLExprSelectorChainStyle: cfg.DSLExprSelectorChainStyle,
 	})
 
 	return &Pipeline{

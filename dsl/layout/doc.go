@@ -23,6 +23,13 @@ type Line struct{}
 
 func (Line) isDoc() {}
 
+// SoftLine is either "" (flat mode) or a newline+indent (break mode). This is
+// useful for tokens where inserting a space in flat mode would be invalid, e.g.
+// selector chains: `foo.\n\tBar()` vs `foo.Bar()`.
+type SoftLine struct{}
+
+func (SoftLine) isDoc() {}
+
 type Concat []Doc
 
 func (Concat) isDoc() {}
@@ -40,6 +47,7 @@ func (Nest) isDoc() {}
 
 func T(s string) Doc { return Text(s) }
 func L() Doc         { return Line{} }
+func SL() Doc        { return SoftLine{} }
 func G(d Doc) Doc    { return Group{Doc: d} }
 func N(indent string, d Doc) Doc {
 	return Nest{Indent: indent, Doc: d}

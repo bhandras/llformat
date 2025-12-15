@@ -133,6 +133,10 @@ type StageOptions struct {
 	// DSLExprCaseClauseStyle controls long `case A, B, ...:` list formatting
 	// inside the DSL expression stage. Empty means legacy behavior.
 	DSLExprCaseClauseStyle string
+
+	// DSLExprSelectorChainStyle controls long selector chain formatting
+	// inside the DSL expression stage. Empty means legacy behavior.
+	DSLExprSelectorChainStyle string
 }
 
 // DefaultStages returns the standard llformat stage configuration.
@@ -173,7 +177,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	}
 
 	exprRules := dsl.LongExprRules()
-	if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs {
+	if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs || opts.DSLExprLogicalStyle != "" || opts.DSLExprArithmeticStyle != "" || opts.DSLExprCaseClauseStyle != "" || opts.DSLExprSelectorChainStyle != "" {
 		callArgsPolicy := dsl.CallArgsPolicyOff
 		if opts.AutoDSLCallArgs {
 			callArgsPolicy = dsl.CallArgsPolicyAuto
@@ -193,6 +197,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			LogicalChainStyle:    opts.DSLExprLogicalStyle,
 			ArithmeticChainStyle: opts.DSLExprArithmeticStyle,
 			CaseClauseStyle:      opts.DSLExprCaseClauseStyle,
+			SelectorChainStyle:   opts.DSLExprSelectorChainStyle,
 		})
 	}
 

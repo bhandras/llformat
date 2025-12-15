@@ -897,6 +897,11 @@ type LongExprOptions struct {
 	// Supported: "legacy" (single-break BreakCaseClauseAction) and "layout"
 	// (layout engine, may break multiple times). Empty defaults to "legacy".
 	CaseClauseStyle string
+
+	// SelectorChainStyle controls formatting of long selector chains.
+	// Supported: "legacy" (disabled) and "layout" (layout engine).
+	// Empty defaults to "legacy".
+	SelectorChainStyle string
 }
 
 // LongExprRulesWithOptions returns LongExprRules with explicit options.
@@ -916,6 +921,10 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 	caseStyle := opts.CaseClauseStyle
 	if caseStyle == "" {
 		caseStyle = "legacy"
+	}
+	selectorStyle := opts.SelectorChainStyle
+	if selectorStyle == "" {
+		selectorStyle = "legacy"
 	}
 
 	return []Rule{
@@ -953,6 +962,31 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 			},
 			Priority: 25,
 			Action:   &ReflowStringConcatAction{Target: "node"},
+		},
+
+		// Long selector chains (`a.b.c.d`) - prefer breaking after dots using
+		// the layout engine (modern opt-in only). Skip if the selector chain is
+		// part of a call expression; call stages own method chains.
+		{
+			Name:    "long_selector_chain",
+			Pattern: &NodePattern{Type: "SelectorExpr"},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&ExprEditSafeCond{Target: "node"},
+					&NotCond{Cond: &IsParentTypeCond{Target: "node", Type: "SelectorExpr"}},
+					&NotCond{Cond: &IsAncestorTypeCond{Target: "node", Type: "CallExpr"}},
+				},
+			},
+			Priority: 24,
+			Action: func() Action {
+				switch selectorStyle {
+				case "layout":
+					return &BreakSelectorChainLayoutAction{Target: "node"}
+				default:
+					return &NoOpAction{}
+				}
+			}(),
 		},
 
 		// Long logical chain (with or without calls) - break after && / ||.
@@ -1037,7 +1071,14 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 			Priority: 45,
-			Action:   &BreakAtOpAction{Target: "cond", BreakAfter: true},
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target:          "cond",
+					LogicalStyle:    style,
+					ArithmeticStyle: arithStyle,
+				},
+				Else: &BreakAtOpAction{Target: "cond", BreakAfter: true},
+			},
 		},
 
 		// Return statement with long binary expression (excluding string concat).
@@ -1060,7 +1101,14 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 			Priority: 35,
-			Action:   &BreakAtOpAction{Target: "expr", BreakAfter: true},
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target:          "expr",
+					LogicalStyle:    style,
+					ArithmeticStyle: arithStyle,
+				},
+				Else: &BreakAtOpAction{Target: "expr", BreakAfter: true},
+			},
 		},
 
 		// Long case clause - break at comma.
@@ -1107,7 +1155,14 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 			Priority: 32,
-			Action:   &BreakAtOpAction{Target: "expr", BreakAfter: true},
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target:          "expr",
+					LogicalStyle:    style,
+					ArithmeticStyle: arithStyle,
+				},
+				Else: &BreakAtOpAction{Target: "expr", BreakAfter: true},
+			},
 		},
 	}
 }

@@ -17,3 +17,15 @@ func TestRenderGroupBreaksWhenItDoesNotFit(t *testing.T) {
 	out := Render(doc, 10, 8, "\t")
 	require.Equal(t, "alpha,\n\t\tbeta,\n\t\tgamma", out)
 }
+
+func TestRenderSoftLineIsEmptyWhenFlat(t *testing.T) {
+	doc := G(C(T("a."), SL(), T("b")))
+	out := Render(doc, 80, 8, "\t")
+	require.Equal(t, "a.b", out)
+}
+
+func TestRenderSoftLineBreaksWhenNotFlat(t *testing.T) {
+	doc := N("\t", C(T("a."), SL(), T("b")))
+	out := Render(doc, 1, 8, "\t")
+	require.Equal(t, "a.\n\t\tb", out)
+}
