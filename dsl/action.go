@@ -138,7 +138,7 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	}
 
 	// Build result by replacing the call in source
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}
@@ -678,7 +678,6 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 	}
 
 	indent := ctx.IndentAt(binExpr)
-	contIndent := indent + "\t"
 
 	// Account for any non-whitespace prefix before the expression (e.g. "if ").
 	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
@@ -687,12 +686,12 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 		remaining = 10
 	}
 
-	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
 
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}
@@ -733,7 +732,6 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 	}
 
 	indent := ctx.IndentAt(binExpr)
-	contIndent := indent + "\t"
 
 	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 	remaining := ctx.ColumnLimit - prefixWidth
@@ -741,12 +739,12 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 		remaining = 10
 	}
 
-	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
 
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}
@@ -798,7 +796,7 @@ func (a *BreakCaseClauseLayoutAction) Execute(caps Captures, ctx *Context) ([]by
 		return nil, false
 	}
 
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}
@@ -828,7 +826,6 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 	}
 
 	indent := ctx.IndentAt(sel)
-	contIndent := indent + "\t"
 
 	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 	remaining := ctx.ColumnLimit - prefixWidth
@@ -840,12 +837,12 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 	if !ok {
 		return nil, false
 	}
-	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
 
-	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	out, err := replaceSpan(ctx.Source, start, end, []byte(formatted))
 	if err != nil {
 		return nil, false
 	}
@@ -875,7 +872,6 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]b
 	}
 
 	indent := ctx.IndentAt(call)
-	contIndent := indent + "\t"
 
 	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 	remaining := ctx.ColumnLimit - prefixWidth
@@ -888,7 +884,7 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]b
 		return nil, false
 	}
 
-	formatted := layout.Render(doc, remaining, ctx.TabStop, contIndent)
+	formatted := layout.Render(layout.N("\t", doc), remaining, ctx.TabStop, indent)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}

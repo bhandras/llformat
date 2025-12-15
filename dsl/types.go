@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/token"
 	"strings"
+
+	"github.com/lightninglabs/llformat/scanner"
 )
 
 // Rule represents a formatting rule.
@@ -266,29 +268,27 @@ func hasLineComment(s string) bool {
 // string literals. This is used to detect inline comments that would be lost
 // during reformatting.
 func hasBlockComment(s string) bool {
-	inStr := byte(0)
-	esc := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if inStr != 0 {
-			if inStr == '"' && c == '\\' && !esc {
-				esc = true
-				continue
+	src := []byte(s)
+	for i := 0; i < len(src); {
+		switch {
+		case scanner.IsStringStart(src, i):
+			next := scanner.ScanString(src, i)
+			if next == -1 {
+				// Unclosed literal; treat as "no safe comment found" rather than
+				// claiming a comment that might be inside a string.
+				return false
 			}
-			if esc {
-				esc = false
-			} else if c == inStr {
-				inStr = 0
+			i = next
+		case scanner.IsLineCommentStart(src, i):
+			next := scanner.ScanLineComment(src, i)
+			if next == -1 {
+				return false
 			}
-			continue
-		}
-		switch c {
-		case '"', '`':
-			inStr = c
-		case '/':
-			if i+1 < len(s) && s[i+1] == '*' {
-				return true
-			}
+			i = next
+		case scanner.IsBlockCommentStart(src, i):
+			return true
+		default:
+			i++
 		}
 	}
 	return false

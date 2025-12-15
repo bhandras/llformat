@@ -9,9 +9,7 @@ func hasAnyComment(s string) bool {
 	if hasLineComment(s) {
 		return true
 	}
-	// Be conservative: treat any block comment marker as unsafe, even if it
-	// might appear inside a string literal.
-	return strings.Contains(s, "/*")
+	return hasBlockComment(s)
 }
 
 // isSafeStandaloneExprSpan reports whether s looks safe to replace as a single
@@ -26,4 +24,3 @@ func isSafeStandaloneExprSpan(s string) bool {
 	_, err := parser.ParseExpr(s)
 	return err == nil
 }
-
