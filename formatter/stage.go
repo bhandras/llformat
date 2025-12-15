@@ -103,6 +103,7 @@ type StageOptions struct {
 	Excludes             []string
 	UseDSLLogCalls       bool // Use DSL-based log/printf call stage
 	UseDSLMultiLineCalls bool // Use DSL-based multiline call stage
+	DSLMultiLineStyle    string
 	UseDSLExpr           bool // Use DSL-based expression stage
 	TraceDSL             bool // Enable DSL rule tracing (DSL stages only)
 
@@ -124,6 +125,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 		Excludes:             excludes,
 		UseDSLLogCalls:       false,
 		UseDSLMultiLineCalls: false,
+		DSLMultiLineStyle:    "",
 		UseDSLExpr:           false,
 	})
 }
@@ -182,13 +184,40 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		SkipGofmt:   true,
 	})
 	if opts.UseDSLMultiLineCalls {
-		multiLineFormatter = NewDSLExprFormatter(DSLExprConfig{
-			ColumnLimit: cfg.ColumnLimit,
-			TabStop:     cfg.TabStop,
-			Rules: dsl.LegacyMultiLineScanRulesWithOptions(
+		style := opts.DSLMultiLineStyle
+		if style == "" {
+			style = "legacy"
+		}
+
+		var rules []dsl.Rule
+		switch style {
+		case "legacy", "legacy-scan", "scan":
+			rules = dsl.LegacyMultiLineScanRulesWithOptions(
 				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
 				FormatOneMultiLineCallInSource,
-			),
+			)
+		case "packed":
+			rules = dsl.PackedMultiLineOnlyRulesWithOptions(
+				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+				FormatCallPackedMultiLine,
+			)
+		case "packed-chain":
+			rules = dsl.MultiLineCallRulesWithOptions(
+				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+				FormatCallPackedMultiLine,
+			)
+		default:
+			// Unknown style: fall back to legacy parity mode.
+			rules = dsl.LegacyMultiLineScanRulesWithOptions(
+				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+				FormatOneMultiLineCallInSource,
+			)
+		}
+
+		multiLineFormatter = NewDSLExprFormatter(DSLExprConfig{
+			ColumnLimit:   cfg.ColumnLimit,
+			TabStop:       cfg.TabStop,
+			Rules:         rules,
 			Trace:         opts.TraceDSL,
 			MaxIterations: 20,
 			SkipGofmt:     true,

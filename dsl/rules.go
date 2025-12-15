@@ -690,6 +690,41 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 	}
 }
 
+// PackedMultiLineOnlyRules returns multiline call rules that format only
+// non-method-chain call expressions using packed multiline formatting.
+//
+// This is a smaller-scope variant of MultiLineCallRules that avoids method-chain
+// breaking (which is a more opinionated behavior change).
+func PackedMultiLineOnlyRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
+	return PackedMultiLineOnlyRulesWithOptions(MultiLineCallOptions{}, formatFunc...)
+}
+
+// PackedMultiLineOnlyRulesWithOptions is the configurable form of
+// PackedMultiLineOnlyRules.
+func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions, formatFunc ...PackedMultiLineFormatFunc) []Rule {
+	action := &PackedMultiLineCallAction{Target: "node"}
+	if len(formatFunc) > 0 && formatFunc[0] != nil {
+		action.FormatFunc = formatFunc[0]
+	}
+
+	return []Rule{
+		{
+			Name:    "long_call_expr_packed",
+			Pattern: &NodePattern{Type: "CallExpr"},
+			When: &AndCond{
+				Conds: []Condition{
+					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
+					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+				},
+			},
+			Priority: 50,
+			Action:   action,
+		},
+	}
+}
+
 // LegacyMultiLineCallRules returns a rule set intended to match the legacy
 // MultiLineCallFormatter behavior more closely (one argument per line, no
 // method-chain breaking).

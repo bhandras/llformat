@@ -12,6 +12,7 @@ type PipelineConfig struct {
 	Excludes             []string // Functions to exclude from multiline formatting
 	UseDSLLogCalls       bool     // Use DSL-based log/printf call formatting
 	UseDSLMultiLineCalls bool     // Use DSL-based multiline call formatting
+	DSLMultiLineStyle    string   // DSL multiline formatting style (empty => legacy)
 	UseDSLExpr           bool     // Use DSL-based expression formatter
 	TraceDSL             bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
@@ -46,6 +47,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		Excludes:             cfg.Excludes,
 		UseDSLLogCalls:       cfg.UseDSLLogCalls,
 		UseDSLMultiLineCalls: cfg.UseDSLMultiLineCalls,
+		DSLMultiLineStyle:    cfg.DSLMultiLineStyle,
 		UseDSLExpr:           cfg.UseDSLExpr,
 		TraceDSL:             cfg.TraceDSL,
 		AllowDSLCallArgs:     cfg.AllowDSLCallArgs,
