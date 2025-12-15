@@ -20,8 +20,21 @@ type frame struct {
 // Render renders a document into a string with the given column limit.
 // indent is the initial indentation for any broken lines.
 func Render(doc Doc, colLimit int, tabStop int, indent string) string {
+	return RenderAt(doc, colLimit, tabStop, indent, 0)
+}
+
+// RenderAt renders a document as if it started at startCol columns into the
+// current line (used when replacing a sub-span of a line rather than the whole
+// line).
+//
+// indent is the indentation for broken lines at the current nesting level (it
+// should be a literal prefix written after newline, not a column count).
+func RenderAt(doc Doc, colLimit int, tabStop int, indent string, startCol int) string {
 	var out strings.Builder
-	col := 0
+	if startCol < 0 {
+		startCol = 0
+	}
+	col := startCol
 
 	stack := []frame{{doc: doc, indent: indent, mode: modeBreak}}
 
@@ -76,7 +89,7 @@ func Render(doc Doc, colLimit int, tabStop int, indent string) string {
 			stack = append(stack, frame{doc: d.Doc, indent: indent, mode: f.mode})
 		case Group:
 			// Try flat: if it doesn't fit, render broken.
-			if fits(d.Doc, colLimit-col, tabStop) {
+			if fitsAt(d.Doc, colLimit-col, tabStop, col) {
 				stack = append(stack, frame{doc: d.Doc, indent: f.indent, mode: modeFlat})
 			} else {
 				stack = append(stack, frame{doc: d.Doc, indent: f.indent, mode: modeBreak})
@@ -89,10 +102,13 @@ func Render(doc Doc, colLimit int, tabStop int, indent string) string {
 	return out.String()
 }
 
-func fits(doc Doc, remaining int, tabStop int) bool {
+func fitsAt(doc Doc, remaining int, tabStop int, startCol int) bool {
 	// Conservative fit check: any broken line forces failure.
 	stack := []frame{{doc: doc, indent: "", mode: modeFlat}}
-	col := 0
+	if startCol < 0 {
+		startCol = 0
+	}
+	col := startCol
 	for len(stack) > 0 {
 		f := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
