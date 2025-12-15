@@ -24,6 +24,7 @@ func TestDSLSigsNativeMatchesLegacyOnValidGo(t *testing.T) {
 		TabStop:              8,
 		UseDSLFuncSigs:       true,
 		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
 	})
 	got := native.Format(inData)
 

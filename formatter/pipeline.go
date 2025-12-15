@@ -18,6 +18,7 @@ type PipelineConfig struct {
 	UseDSLExpr             bool     // Use DSL-based expression formatter
 	UseDSLFuncSigs         bool     // Use DSL-based signature formatter (delegates to legacy)
 	UseDSLFuncSigsNative   bool     // Use native DSL signature rules (fallback to legacy)
+	DSLSigsStyle           string   // DSL signature style: legacy|dsl (empty => legacy)
 	UseDSLBlankLines       bool     // Use DSL-based blank line formatter
 	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
 	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
@@ -64,6 +65,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.AutoDSLCallArgs = true
 		cfg.UseDSLFuncSigs = true
 		cfg.UseDSLFuncSigsNative = true
+		if cfg.DSLSigsStyle == "" {
+			cfg.DSLSigsStyle = "legacy"
+		}
 		cfg.UseDSLBlankLines = true
 	default:
 		// Unknown policy: ignore (callers can still set individual toggles).
@@ -80,6 +84,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		UseDSLExpr:             cfg.UseDSLExpr,
 		UseDSLFuncSigs:         cfg.UseDSLFuncSigs,
 		UseDSLFuncSigsNative:   cfg.UseDSLFuncSigsNative,
+		DSLSigsStyle:           cfg.DSLSigsStyle,
 		UseDSLBlankLines:       cfg.UseDSLBlankLines,
 		UseDSLBlankLinesNative: cfg.UseDSLBlankLinesNative,
 		TraceDSL:               cfg.TraceDSL,

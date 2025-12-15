@@ -27,6 +27,7 @@ func main() {
 		useDSLExpr             bool
 		useDSLSigs             bool
 		useDSLSigsNative       bool
+		dslSigsStyle           string
 		useDSLBlankLines       bool
 		useDSLBlankLinesNative bool
 		allowDSLCallArgs       bool
@@ -49,6 +50,7 @@ func main() {
 	flag.BoolVar(&useDSLExpr, "dsl-expr", true, "use DSL expression formatter (DSL mode only)")
 	flag.BoolVar(&useDSLSigs, "dsl-sigs", true, "use DSL signature formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLSigsNative, "dsl-sigs-native", false, "use native DSL signature rules (fallback to legacy; DSL mode only, experimental)")
+	flag.StringVar(&dslSigsStyle, "dsl-sigs-style", "legacy", "DSL signature style: legacy|dsl (DSL mode only, experimental)")
 	flag.BoolVar(&useDSLBlankLines, "dsl-blank-lines", true, "use DSL blank line formatter (DSL mode only)")
 	flag.BoolVar(&useDSLBlankLinesNative, "dsl-blank-lines-native", false, "use native DSL blank line rules (fallback to legacy; DSL mode only, experimental)")
 	flag.BoolVar(&allowDSLCallArgs, "dsl-allow-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments (DSL mode only, experimental)")
@@ -64,6 +66,9 @@ func main() {
 		useDSLExpr = true
 		useDSLSigs = true
 		useDSLSigsNative = true
+		if dslSigsStyle == "" || dslSigsStyle == "legacy" {
+			dslSigsStyle = "legacy"
+		}
 		useDSLBlankLines = true
 		autoDSLCallArgs = true
 		if dslMultiLineStyle == "" || dslMultiLineStyle == "legacy" {
@@ -72,7 +77,7 @@ func main() {
 	}
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-sigs] [--dsl-sigs-native] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
 		os.Exit(2)
 	}
 
@@ -111,6 +116,7 @@ func main() {
 		UseDSLExpr:             !useLegacy && useDSLExpr,
 		UseDSLFuncSigs:         !useLegacy && useDSLSigs,
 		UseDSLFuncSigsNative:   !useLegacy && useDSLSigsNative,
+		DSLSigsStyle:           dslSigsStyle,
 		UseDSLBlankLines:       !useLegacy && useDSLBlankLines,
 		UseDSLBlankLinesNative: !useLegacy && useDSLBlankLinesNative,
 		TraceDSL:               traceDSL && !useLegacy,
