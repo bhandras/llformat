@@ -22,6 +22,13 @@ type exprDocInfo struct {
 	NeedsContinuationIndent bool
 }
 
+type exprDocKind int
+
+const (
+	exprDocKindTopLevel exprDocKind = iota
+	exprDocKindCallArg
+)
+
 // exprDoc is a small AST-to-layout.Doc builder for a limited subset of Go
 // expressions.
 //
@@ -30,6 +37,10 @@ type exprDocInfo struct {
 // chains). It returns ok=false for unsupported forms so callers can fall back
 // to legacy/parity logic.
 func exprDoc(expr ast.Expr, ctx *Context) (info exprDocInfo, ok bool) {
+	return exprDocWithKind(expr, ctx, exprDocKindTopLevel)
+}
+
+func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDocInfo, ok bool) {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
 		doc, ok := selectorChainDoc(e, ctx)
@@ -41,11 +52,29 @@ func exprDoc(expr ast.Expr, ctx *Context) (info exprDocInfo, ok bool) {
 		if doc, ok := methodChainDoc(e, ctx); ok {
 			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 		}
+		if kind == exprDocKindCallArg {
+			if doc, ok := genericCallDoc(e, ctx); ok {
+				return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+			}
+		}
+		// For top-level expression layout rules, we intentionally do not build
+		// generic call docs yet: call formatting is owned by the call/multiline
+		// stages.
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
 		if doc, ok := genericCallDoc(e, ctx); ok {
 			return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 		}
 		return exprDocInfo{}, false
 	case *ast.BinaryExpr:
+		if kind == exprDocKindCallArg && (e.Op == token.LAND || e.Op == token.LOR) {
+			doc, ok := logicalBinaryExprDoc(e, ctx, kind)
+			if !ok {
+				return exprDocInfo{}, false
+			}
+			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+		}
 		doc, ok := sameOpBinaryChainDoc(e, ctx)
 		if !ok {
 			return exprDocInfo{}, false
@@ -199,7 +228,7 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 		// Prefer a structured doc for supported expression forms so nested
 		// expressions can lay out cleanly within nested calls.
 		if expr, okCast := arg.(ast.Expr); okCast {
-			if info, okDoc := exprDoc(expr, ctx); okDoc {
+			if info, okDoc := exprDocWithKind(expr, ctx, exprDocKindCallArg); okDoc {
 				d := info.Doc
 				if info.NeedsContinuationIndent {
 					d = layout.N("\t", d)
@@ -245,7 +274,7 @@ func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
 		return nil, false
 	}
 
-	info, ok := exprDoc(p.X, ctx)
+	info, ok := exprDocWithKind(p.X, ctx, exprDocKindCallArg)
 	if !ok {
 		return nil, false
 	}
@@ -264,6 +293,42 @@ func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
 		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
 		layout.SL(),
 		layout.T(")"),
+	)), true
+}
+
+func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if bin == nil || ctx == nil {
+		return nil, false
+	}
+	if bin.Op != token.LAND && bin.Op != token.LOR {
+		return nil, false
+	}
+
+	// Left operand: prefer doc, fall back to printed node.
+	leftInfo, leftOK := exprDocWithKind(bin.X, ctx, kind)
+	left := layout.T(renderNode(bin.X, ctx.Fset))
+	if leftOK {
+		left = leftInfo.Doc
+		if leftInfo.NeedsContinuationIndent {
+			left = layout.N("\t", left)
+		}
+	}
+
+	rightInfo, rightOK := exprDocWithKind(bin.Y, ctx, kind)
+	right := layout.T(renderNode(bin.Y, ctx.Fset))
+	if rightOK {
+		right = rightInfo.Doc
+		if rightInfo.NeedsContinuationIndent {
+			right = layout.N("\t", right)
+		}
+	}
+
+	return layout.G(layout.C(
+		left,
+		layout.T(" "),
+		layout.T(bin.Op.String()),
+		layout.L(),
+		right,
 	)), true
 }
 

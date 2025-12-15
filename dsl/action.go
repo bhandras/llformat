@@ -946,7 +946,7 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 		// expressions (e.g. method chains, selector chains, same-op binary chains)
 		// can be laid out consistently within argument lists.
 		if expr, okCast := arg.(ast.Expr); okCast {
-			if info, okDoc := exprDoc(expr, ctx); okDoc {
+			if info, okDoc := exprDocWithKind(expr, ctx, exprDocKindCallArg); okDoc {
 				argDoc := info.Doc
 				if info.NeedsContinuationIndent {
 					argDoc = layout.N("\t", argDoc)

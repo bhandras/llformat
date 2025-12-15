@@ -101,6 +101,17 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		// Unknown policy: ignore (callers can still set individual toggles).
 	}
 
+	// Stage ownership: when multiline formatting is explicitly configured to
+	// own layout of call arguments, prefer the DSL expression stage so the legacy
+	// expression formatter does not interfere inside call args. The DSL
+	// expression stage is call-args-safe by default (CallArgsPolicyOff).
+	if cfg.UseDSLMultiLineCalls && !cfg.UseDSLExpr {
+		switch cfg.DSLMultiLineStyle {
+		case "layout-args", "layout-all":
+			cfg.UseDSLExpr = true
+		}
+	}
+
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline:         cfg.MoveInlineAbove,

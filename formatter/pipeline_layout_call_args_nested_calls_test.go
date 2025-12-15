@@ -22,10 +22,6 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          60,
 		TabStop:              8,
-		// Use the DSL expression stage to ensure call arguments are not modified
-		// by the legacy expression formatter; in this test the multiline stage
-		// owns formatting within call args.
-		UseDSLExpr:           true,
 		UseDSLMultiLineCalls: true,
 		DSLMultiLineStyle:    "layout-args",
 	})
