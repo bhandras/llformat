@@ -13,6 +13,7 @@ type PipelineConfig struct {
 	UseDSLLogCalls       bool     // Use DSL-based log/printf call formatting
 	UseDSLMultiLineCalls bool     // Use DSL-based multiline call formatting
 	DSLMultiLineStyle    string   // DSL multiline formatting style (empty => legacy)
+	DSLCallPolicy        string   // DSL call policy bundle (empty => no override)
 	UseDSLExpr           bool     // Use DSL-based expression formatter
 	TraceDSL             bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
@@ -39,6 +40,23 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = DefaultTabStop
+	}
+
+	// Apply a policy bundle (if requested). This gives callers a single knob for
+	// a coherent set of call-related DSL behaviors, while keeping legacy-parity
+	// as the default and preserving golden fixtures.
+	switch cfg.DSLCallPolicy {
+	case "", "legacy":
+		// No override.
+	case "modern":
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "packed-chain"
+		}
+		cfg.UseDSLExpr = true
+	default:
+		// Unknown policy: ignore (callers can still set individual toggles).
 	}
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
