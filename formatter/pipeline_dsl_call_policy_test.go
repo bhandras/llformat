@@ -56,10 +56,10 @@ var headers interface{}
 	require.Contains(t, legacyOut, "WithHeaders(headers).Execute(")
 	require.NotContains(t, legacyOut, ".WithHeaders(\n")
 
-	// Modern policy enables method-chain breaking (packed-chain multiline rules).
+	// Modern policy enables method-chain breaking.
 	require.NotContains(t, modernOut, "WithHeaders(headers).Execute(ctx, req)")
-	require.Contains(t, modernOut, ".WithHeaders(")
-	require.Contains(t, modernOut, ").Execute(")
+	require.Contains(t, modernOut, ".\n\t\tWithHeaders(")
+	require.Contains(t, modernOut, ".\n\t\tExecute(")
 }
 
 func TestDSLCallPolicyModernDoesNotRewriteInlineCommentArgs(t *testing.T) {

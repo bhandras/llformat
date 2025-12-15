@@ -74,8 +74,8 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLComments = true
 		cfg.UseDSLLogCalls = true
 		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "packed-chain"
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" || cfg.DSLMultiLineStyle == "packed-chain" {
+			cfg.DSLMultiLineStyle = "packed-chain-layout"
 		}
 		cfg.UseDSLExpr = true
 		if cfg.DSLExprLogicalStyle == "" {

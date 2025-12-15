@@ -49,7 +49,7 @@ func main() {
 	flag.BoolVar(&useDSLComments, "dsl-comments", true, "use DSL comment formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLCalls, "dsl-calls", true, "use DSL log/printf call formatter (DSL mode only)")
 	flag.BoolVar(&useDSLMultiLine, "dsl-multiline-calls", true, "use DSL multiline call formatter (DSL mode only)")
-	flag.StringVar(&dslMultiLineStyle, "dsl-multiline-style", "legacy", "DSL multiline call style: legacy|packed|packed-chain (DSL mode only)")
+	flag.StringVar(&dslMultiLineStyle, "dsl-multiline-style", "legacy", "DSL multiline call style: legacy|packed|packed-chain|packed-chain-layout (DSL mode only)")
 	flag.StringVar(&dslCallPolicy, "dsl-call-policy", "legacy", "DSL call policy bundle: legacy|modern (DSL mode only)")
 	flag.BoolVar(&useDSLExpr, "dsl-expr", true, "use DSL expression formatter (DSL mode only)")
 	flag.StringVar(&dslExprLogicalStyle, "dsl-expr-logical-style", "", "DSL expression logical chain style: legacy|layout (DSL mode only, experimental)")
@@ -91,13 +91,13 @@ func main() {
 		}
 		useDSLBlankLines = true
 		autoDSLCallArgs = true
-		if dslMultiLineStyle == "" || dslMultiLineStyle == "legacy" {
-			dslMultiLineStyle = "packed-chain"
+		if dslMultiLineStyle == "" || dslMultiLineStyle == "legacy" || dslMultiLineStyle == "packed-chain" {
+			dslMultiLineStyle = "packed-chain-layout"
 		}
 	}
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
 		os.Exit(2)
 	}
 

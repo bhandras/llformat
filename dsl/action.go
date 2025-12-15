@@ -444,6 +444,21 @@ type BreakSelectorChainLayoutAction struct {
 	Target string
 }
 
+// BreakMethodChainLayoutAction breaks method call chains such as:
+//
+//	client.WithTimeout(30*time.Second).WithRetry(3).Execute(ctx, req)
+//
+// It breaks after dots (to avoid semicolon insertion) and indents continuation
+// lines with the standard continuation indent (`indent + "\t"`).
+//
+// This action is intentionally conservative:
+// - skips chains with inline comments (AST printing would drop them)
+// - skips chains with multiline argument expressions
+// - handles only selector-based calls (skips generic instantiation / index fun)
+type BreakMethodChainLayoutAction struct {
+	Target string
+}
+
 // BreakBinaryExprLayoutAction tries to break a binary expression using the
 // layout engine, based on configured style toggles.
 //
@@ -864,6 +879,116 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 	docs = append(docs, layout.T(renderNode(base, ctx.Fset)))
 	for _, name := range sels {
 		docs = append(docs, layout.T("."), layout.SL(), layout.T(name))
+	}
+
+	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)
+	if formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// Execute implements Action for BreakMethodChainLayoutAction.
+func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil {
+		return nil, false
+	}
+
+	if ctx.LineWidth(call) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(call.Pos()).Offset
+	end := ctx.Fset.Position(call.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	original := string(ctx.Source[start:end])
+	if hasLineComment(original) {
+		return nil, false
+	}
+
+	type segment struct {
+		name     string
+		typeArgs string
+		args     []string
+		ellipsis bool
+	}
+
+	var segs []segment
+	cur := call
+	var base ast.Expr
+
+	for {
+		sel, ok := cur.Fun.(*ast.SelectorExpr)
+		if !ok || sel == nil {
+			return nil, false
+		}
+
+		seg := segment{name: sel.Sel.Name, ellipsis: cur.Ellipsis.IsValid()}
+
+		// Collect args as rendered text; skip multiline args to avoid awkward
+		// interactions with the chain layout (leave to existing formatters).
+		for _, arg := range cur.Args {
+			argText := renderNode(arg, ctx.Fset)
+			if strings.Contains(argText, "\n") {
+				return nil, false
+			}
+			seg.args = append(seg.args, argText)
+		}
+		segs = append(segs, seg)
+
+		next, ok := sel.X.(*ast.CallExpr)
+		if !ok {
+			base = sel.X
+			break
+		}
+		cur = next
+	}
+
+	if base == nil || len(segs) < 2 {
+		return nil, false
+	}
+
+	// Reverse to left-to-right chain order.
+	for i, j := 0, len(segs)-1; i < j; i, j = i+1, j-1 {
+		segs[i], segs[j] = segs[j], segs[i]
+	}
+
+	indent := ctx.IndentAt(call)
+	contIndent := indent + "\t"
+
+	prefixWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	remaining := ctx.ColumnLimit - prefixWidth
+	if remaining < 10 {
+		remaining = 10
+	}
+
+	var docs []layout.Doc
+	docs = append(docs, layout.T(renderNode(base, ctx.Fset)))
+	for _, seg := range segs {
+		// `.\n\t\tMethod(` is safe (dot avoids semicolon insertion).
+		docs = append(docs, layout.T("."), layout.SL(), layout.T(seg.name))
+		docs = append(docs, layout.T("("))
+		if len(seg.args) > 0 {
+			for i, arg := range seg.args {
+				if i > 0 {
+					docs = append(docs, layout.T(", "))
+				}
+				docs = append(docs, layout.T(arg))
+			}
+			if seg.ellipsis && len(seg.args) > 0 {
+				docs = append(docs, layout.T("..."))
+			}
+		}
+		docs = append(docs, layout.T(")"))
 	}
 
 	formatted := layout.Render(layout.G(layout.C(docs...)), remaining, ctx.TabStop, contIndent)

@@ -646,6 +646,11 @@ type MultiLineCallOptions struct {
 	// Excludes is a list of function names that should be excluded from multiline
 	// call formatting (matches "foo" or "pkg.Foo").
 	Excludes []string
+
+	// MethodChainStyle controls how long method chains are broken.
+	// Supported: ""/"legacy" (existing BreakMethodChainAction) and "layout"
+	// (layout engine).
+	MethodChainStyle string
 }
 
 // MultiLineCallRulesWithOptions returns MultiLineCallRules with explicit options.
@@ -667,7 +672,14 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 				},
 			},
 			Priority: 60,
-			Action:   &BreakMethodChainAction{Target: "node"},
+			Action: func() Action {
+				switch opts.MethodChainStyle {
+				case "layout":
+					return &BreakMethodChainLayoutAction{Target: "node"}
+				default:
+					return &BreakMethodChainAction{Target: "node"}
+				}
+			}(),
 		},
 		// Generic call expression that exceeds column limit
 		// Skip method chains (handled above) and log/printf calls

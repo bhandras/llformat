@@ -259,6 +259,11 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
 				FormatCallPackedMultiLine,
 			)
+		case "packed-chain-layout", "layout-chain":
+			rules = dsl.MultiLineCallRulesWithOptions(
+				dsl.MultiLineCallOptions{Excludes: opts.Excludes, MethodChainStyle: "layout"},
+				FormatCallPackedMultiLine,
+			)
 		default:
 			// Unknown style: fall back to legacy parity mode.
 			rules = dsl.LegacyMultiLineScanRulesWithOptions(
