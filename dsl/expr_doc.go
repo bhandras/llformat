@@ -88,6 +88,15 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		// ParenExpr controls its own indentation; callers should treat it like a
 		// self-contained block.
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+	case *ast.KeyValueExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		doc, ok := keyValueExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 	case *ast.CompositeLit:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -376,6 +385,39 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 		layout.N("\t", body),
 		layout.SL(),
 		layout.T("}"),
+	)), true
+}
+
+func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if kv == nil || ctx == nil || kv.Key == nil || kv.Value == nil {
+		return nil, false
+	}
+
+	keyText := renderNode(kv.Key, ctx.Fset)
+	if strings.Contains(keyText, "\n") || hasAnyComment(keyText) {
+		return nil, false
+	}
+
+	// Prefer a structured doc for the value (call-arg context).
+	valueText := renderNode(kv.Value, ctx.Fset)
+	if strings.Contains(valueText, "\n") || hasAnyComment(valueText) {
+		return nil, false
+	}
+
+	valueDoc := layout.T(valueText)
+	if info, ok := exprDocWithKind(kv.Value, ctx, kind); ok {
+		valueDoc = info.Doc
+		if info.NeedsContinuationIndent {
+			valueDoc = layout.N("\t", valueDoc)
+		}
+	}
+
+	// Keep `Key: ` on the same line, but allow value to break with an extra
+	// continuation indentation.
+	return layout.G(layout.C(
+		layout.T(keyText),
+		layout.T(": "),
+		layout.N("\t", valueDoc),
 	)), true
 }
 
