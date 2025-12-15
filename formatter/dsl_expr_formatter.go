@@ -15,11 +15,13 @@ type DSLExprFormatter struct {
 
 // DSLExprConfig holds configuration for the DSL expression formatter.
 type DSLExprConfig struct {
-	ColumnLimit int
-	TabStop     int
-	Rules       []dsl.Rule // Custom rules (if nil, uses defaults)
-	Trace       bool       // Enable DSL rule tracing to stderr
-	SkipGofmt   bool       // Skip gofmt (pipelines may run gofmt once at end)
+	ColumnLimit   int
+	TabStop       int
+	Rules         []dsl.Rule // Custom rules (if nil, uses defaults)
+	Trace         bool       // Enable DSL rule tracing to stderr
+	NodeOrder     dsl.NodeOrder
+	MaxIterations int  // Override engine MaxIterations (0 keeps default)
+	SkipGofmt     bool // Skip gofmt (pipelines may run gofmt once at end)
 }
 
 // NewDSLExprFormatter creates a new DSL-based expression formatter.
@@ -42,6 +44,10 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 		engine.TabStop = cfg.TabStop
 	}
 	engine.Trace = cfg.Trace
+	engine.NodeOrder = cfg.NodeOrder
+	if cfg.MaxIterations > 0 {
+		engine.MaxIterations = cfg.MaxIterations
+	}
 
 	return &DSLExprFormatter{
 		engine:                engine,

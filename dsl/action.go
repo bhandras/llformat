@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	llast "github.com/lightninglabs/llformat/ast"
+	"github.com/lightninglabs/llformat/scanner"
 	"github.com/lightninglabs/llformat/text"
 )
 
@@ -924,6 +925,184 @@ type PackedMultiLineCallAction struct {
 	// FormatFunc is an optional function that formats the call using legacy
 	// logic. If nil, a simplified fallback is used.
 	FormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
+}
+
+// LegacyOnePerLineCallAction formats generic function calls using the legacy
+// MultiLineCallFormatter style (one argument per line). Unlike AST-based call
+// actions, this action preserves comments inside argument lists because it only
+// rearranges the existing source bytes.
+type LegacyOnePerLineCallAction struct {
+	Target string
+
+	// FormatFunc is an optional function that formats the call using legacy
+	// logic. If nil, a simplified fallback is used.
+	FormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
+}
+
+// LegacyMultiLineScanFunc applies a single legacy multiline-call formatting
+// pass to src and reports whether it changed anything.
+//
+// This intentionally mirrors the legacy MultiLineCallFormatter behavior of
+// making at most one change per pass and repeating up to a fixed iteration cap.
+type LegacyMultiLineScanFunc func(src []byte, colLimit, tabStop int, excludes []string) ([]byte, bool)
+
+// LegacyMultiLineScanAction delegates multiline-call detection + rewriting to a
+// scan-based implementation, matching the legacy formatter's behavior (including
+// its lexical detection quirks).
+type LegacyMultiLineScanAction struct {
+	Excludes []string
+	ScanFunc LegacyMultiLineScanFunc
+}
+
+// Execute implements Action for LegacyMultiLineScanAction.
+func (a *LegacyMultiLineScanAction) Execute(_ Captures, ctx *Context) ([]byte, bool) {
+	if a.ScanFunc == nil {
+		return nil, false
+	}
+
+	out, changed := a.ScanFunc(ctx.Source, ctx.ColumnLimit, ctx.TabStop, a.Excludes)
+	if !changed {
+		return nil, false
+	}
+	return out, true
+}
+
+// Execute implements Action for LegacyOnePerLineCallAction.
+func (a *LegacyOnePerLineCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+
+	if len(call.Args) == 0 {
+		return nil, false
+	}
+
+	open := ctx.Fset.Position(call.Lparen).Offset
+	close := ctx.Fset.Position(call.Rparen).Offset
+	if open < 0 || close < open || close >= len(ctx.Source) {
+		return nil, false
+	}
+
+	start := legacyCallStartForLparen(ctx.Source, open)
+	end := close + 1
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+
+	original := ctx.Source[start:end]
+	wsIndent := ctx.IndentAt(call)
+
+	// Mirror legacy decision: compute the visual width of the prefix before the
+	// call on the current line plus the call itself. This intentionally does not
+	// collapse whitespace.
+	ls := lineStart(ctx.Source, start)
+	prefixLen := visualLen(string(ctx.Source[ls:start]), ctx.TabStop)
+	callLen := visualLen(string(original), ctx.TabStop)
+	if prefixLen+callLen <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	var formatted string
+	if a.FormatFunc != nil {
+		formatted = a.FormatFunc(original, wsIndent, ctx.ColumnLimit, ctx.TabStop)
+	} else {
+		formatted = legacyFormatCallOnePerLine(original, wsIndent)
+	}
+
+	if formatted == string(original) {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+func legacyCallStartForLparen(src []byte, lparen int) int {
+	if lparen <= 0 {
+		return 0
+	}
+	if lparen > len(src) {
+		lparen = len(src)
+	}
+
+	// Scan left from the '(' to find the start of the identifier/selector chain.
+	i := lparen - 1
+	for i >= 0 && (src[i] == ' ' || src[i] == '\t') {
+		i--
+	}
+
+	for i >= 0 {
+		if text.IsIdentifierChar(src[i]) {
+			i--
+			continue
+		}
+		if src[i] == '.' {
+			// If the selector is applied to something like a call or composite
+			// literal, stop at the method name (legacy scanner starts at the
+			// selector, not the receiver call).
+			if i-1 >= 0 {
+				prev := src[i-1]
+				if prev == ')' || prev == ']' || prev == '}' {
+					break
+				}
+			}
+			i--
+			continue
+		}
+		break
+	}
+
+	return i + 1
+}
+
+func legacyFormatCallOnePerLine(callBytes []byte, wsIndent string) string {
+	s := string(callBytes)
+	open := strings.IndexByte(s, '(')
+	if open == -1 || !strings.HasSuffix(s, ")") {
+		return s
+	}
+
+	head := s[:open]
+	argsBody := s[open+1 : len(s)-1]
+	args := scanner.SplitTopLevel(argsBody)
+	if len(args) == 0 {
+		return s
+	}
+
+	var b strings.Builder
+	b.WriteString(head)
+	b.WriteString("(\n")
+
+	argIndent := wsIndent + "\t"
+	for i, arg := range args {
+		trimmedArg := strings.TrimSpace(arg)
+		if trimmedArg == "" {
+			continue
+		}
+		b.WriteString(argIndent)
+		lines := strings.Split(trimmedArg, "\n")
+		for j, line := range lines {
+			if j > 0 {
+				b.WriteString("\n")
+				b.WriteString(argIndent)
+			}
+			b.WriteString(strings.TrimSpace(line))
+		}
+		b.WriteString(",")
+		if i < len(args)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(wsIndent)
+	b.WriteString(")")
+	return b.String()
 }
 
 // Execute implements Action for PackedMultiLineCallAction.

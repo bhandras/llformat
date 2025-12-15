@@ -99,11 +99,12 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 
 // StageOptions contains options for configuring the stage pipeline.
 type StageOptions struct {
-	CommentMoveInline bool
-	Excludes          []string
-	UseDSLLogCalls    bool // Use DSL-based log/printf call stage
-	UseDSLExpr        bool // Use DSL-based expression stage
-	TraceDSL          bool // Enable DSL rule tracing (DSL stages only)
+	CommentMoveInline    bool
+	Excludes             []string
+	UseDSLLogCalls       bool // Use DSL-based log/printf call stage
+	UseDSLMultiLineCalls bool // Use DSL-based multiline call stage
+	UseDSLExpr           bool // Use DSL-based expression stage
+	TraceDSL             bool // Enable DSL rule tracing (DSL stages only)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -119,10 +120,11 @@ type StageOptions struct {
 // This creates stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
 	return DefaultStagesWithOptions(cfg, StageOptions{
-		CommentMoveInline: commentMoveInline,
-		Excludes:          excludes,
-		UseDSLLogCalls:    false,
-		UseDSLExpr:        false,
+		CommentMoveInline:    commentMoveInline,
+		Excludes:             excludes,
+		UseDSLLogCalls:       false,
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
 	})
 }
 
@@ -179,9 +181,19 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		Excludes:    opts.Excludes,
 		SkipGofmt:   true,
 	})
-	// Multi-line generic call formatting remains legacy for now; it is more
-	// sensitive and we want to preserve llformat's current behavior during the
-	// initial call-stage migration.
+	if opts.UseDSLMultiLineCalls {
+		multiLineFormatter = NewDSLExprFormatter(DSLExprConfig{
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+			Rules: dsl.LegacyMultiLineScanRulesWithOptions(
+				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+				FormatOneMultiLineCallInSource,
+			),
+			Trace:         opts.TraceDSL,
+			MaxIterations: 20,
+			SkipGofmt:     true,
+		})
+	}
 
 	return []Stage{
 		{

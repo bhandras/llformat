@@ -40,6 +40,20 @@ type EditAction interface {
 	ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error)
 }
 
+// NodeOrder controls the order the DSL engine considers nodes when searching for
+// a matching rule.
+type NodeOrder int
+
+const (
+	// NodeOrderPreorder processes nodes in AST pre-order (current default).
+	NodeOrderPreorder NodeOrder = iota
+
+	// NodeOrderSourceOrder processes nodes in ascending source offset order.
+	// This more closely matches behavior of the legacy scanner-based formatters
+	// which operate left-to-right through the file.
+	NodeOrderSourceOrder
+)
+
 // Context provides formatting context to conditions and actions.
 type Context struct {
 	Fset        *token.FileSet

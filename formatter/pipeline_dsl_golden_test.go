@@ -34,10 +34,11 @@ func TestPipelineDSLMatchesLegacy(t *testing.T) {
 			want := legacy.Format(inData)
 
 			dslPipeline := NewPipeline(PipelineConfig{
-				ColumnLimit:    80,
-				TabStop:        8,
-				UseDSLLogCalls: true,
-				UseDSLExpr:     true,
+				ColumnLimit:          80,
+				TabStop:              8,
+				UseDSLLogCalls:       true,
+				UseDSLMultiLineCalls: true,
+				UseDSLExpr:           true,
 			})
 			got := dslPipeline.Format(inData)
 

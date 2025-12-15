@@ -663,7 +663,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&IsMethodChainCond{Target: "node", MinCalls: 2},
-					&NotCond{Cond: &IsCallFuncInListCond{Target: "node", Names: opts.Excludes}},
+					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
 				},
 			},
 			Priority: 60,
@@ -681,11 +681,66 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
 					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
 					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-					&NotCond{Cond: &IsCallFuncInListCond{Target: "node", Names: opts.Excludes}},
+					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
 				},
 			},
 			Priority: 50,
 			Action:   action,
+		},
+	}
+}
+
+// LegacyMultiLineCallRules returns a rule set intended to match the legacy
+// MultiLineCallFormatter behavior more closely (one argument per line, no
+// method-chain breaking).
+func LegacyMultiLineCallRules(formatFunc ...PackedMultiLineFormatFunc) []Rule {
+	return LegacyMultiLineCallRulesWithOptions(MultiLineCallOptions{}, formatFunc...)
+}
+
+// LegacyMultiLineCallRulesWithOptions returns LegacyMultiLineCallRules with explicit options.
+func LegacyMultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...PackedMultiLineFormatFunc) []Rule {
+	action := &LegacyOnePerLineCallAction{Target: "node"}
+	if len(formatFunc) > 0 && formatFunc[0] != nil {
+		action.FormatFunc = formatFunc[0]
+	}
+
+	return []Rule{
+		{
+			Name:    "legacy_long_call_expr",
+			Pattern: &NodePattern{Type: "CallExpr"},
+			When: &AndCond{
+				Conds: []Condition{
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
+					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+				},
+			},
+			Priority: 50,
+			Action:   action,
+		},
+	}
+}
+
+// LegacyMultiLineScanRules returns a rule set that delegates to the legacy
+// scan-based multiline call formatter. This is used to preserve exact legacy
+// behavior (including detection quirks) while running in the DSL engine.
+func LegacyMultiLineScanRules(scanFunc LegacyMultiLineScanFunc) []Rule {
+	return LegacyMultiLineScanRulesWithOptions(MultiLineCallOptions{}, scanFunc)
+}
+
+// LegacyMultiLineScanRulesWithOptions is the configurable form of
+// LegacyMultiLineScanRules.
+func LegacyMultiLineScanRulesWithOptions(opts MultiLineCallOptions, scanFunc LegacyMultiLineScanFunc) []Rule {
+	return []Rule{
+		{
+			Name:    "legacy_multiline_scan",
+			Pattern: &NodePattern{Type: "File"},
+			When:    &TrueCond{},
+			// Keep priority in the same band as other legacy-format parity rules.
+			Priority: 50,
+			Action: &LegacyMultiLineScanAction{
+				Excludes: opts.Excludes,
+				ScanFunc: scanFunc,
+			},
 		},
 	}
 }

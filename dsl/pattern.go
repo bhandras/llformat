@@ -7,8 +7,8 @@ import (
 
 // NodePattern matches a specific AST node type with field constraints.
 type NodePattern struct {
-	Type   string                 // "CallExpr", "BinaryExpr", etc.
-	Fields map[string]FieldMatch  // Field constraints
+	Type   string                // "CallExpr", "BinaryExpr", etc.
+	Fields map[string]FieldMatch // Field constraints
 }
 
 // FieldMatch specifies how to match a field.
@@ -80,6 +80,9 @@ func (p *NodePattern) Match(n ast.Node, fset *token.FileSet) (Captures, bool) {
 
 func (p *NodePattern) matchType(n ast.Node) bool {
 	switch p.Type {
+	case "File":
+		_, ok := n.(*ast.File)
+		return ok
 	case "CallExpr":
 		_, ok := n.(*ast.CallExpr)
 		return ok

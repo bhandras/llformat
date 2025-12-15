@@ -38,6 +38,35 @@ func (c *IsCallFuncInListCond) Eval(caps Captures, ctx *Context) bool {
 	return stringInSlice(callExprFuncName(call), c.Names)
 }
 
+// IsCallFuncContainsAnyCond checks whether the target node is a CallExpr whose
+// callee name contains any of the provided substrings. This matches legacy
+// multiline-exclude semantics (strings.Contains).
+type IsCallFuncContainsAnyCond struct {
+	Target string
+	Names  []string
+}
+
+func (c *IsCallFuncContainsAnyCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	name := callExprFuncName(call)
+	if name == "" {
+		return false
+	}
+	for _, sub := range c.Names {
+		if sub == "" {
+			continue
+		}
+		if strings.Contains(name, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 // TrueCond always returns true (no condition / always applies).
 type TrueCond struct{}
 

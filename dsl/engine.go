@@ -17,6 +17,7 @@ type Engine struct {
 	TabStop       int
 	MaxIterations int
 	Trace         bool // Enable trace logging
+	NodeOrder     NodeOrder
 }
 
 // NewEngine creates a rule engine with default settings.
@@ -34,6 +35,7 @@ func NewEngine(rules []Rule) *Engine {
 		ColumnLimit:   80,
 		TabStop:       8,
 		MaxIterations: 100,
+		NodeOrder:     NodeOrderPreorder,
 	}
 }
 
@@ -232,6 +234,14 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 	ctx.SetParentMap(parentMap)
 
 	// Try each node
+	if e.NodeOrder == NodeOrderSourceOrder {
+		sort.SliceStable(nodes, func(i, j int) bool {
+			pi := nodeOrderOffset(ctx, nodes[i])
+			pj := nodeOrderOffset(ctx, nodes[j])
+			return pi < pj
+		})
+	}
+
 	for _, n := range nodes {
 		if changed {
 			break
@@ -275,6 +285,23 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 	}
 
 	return result, changed
+}
+
+func nodeOrderOffset(ctx *Context, n ast.Node) int {
+	if ctx == nil || ctx.Fset == nil || n == nil {
+		return 0
+	}
+
+	// For call expressions, use the '(' position. For selector calls this avoids
+	// the "all calls start at the receiver" ambiguity and more closely matches
+	// legacy scanner left-to-right behavior.
+	if call, ok := n.(*ast.CallExpr); ok {
+		if call.Lparen.IsValid() {
+			return ctx.Fset.Position(call.Lparen).Offset
+		}
+	}
+
+	return ctx.Fset.Position(n.Pos()).Offset
 }
 
 func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified []byte, changed bool, ok bool) {

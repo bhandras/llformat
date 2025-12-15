@@ -345,3 +345,81 @@ func (f *MultiLineCallFormatter) formatAsMultiLine(callBytes []byte, wsIndent st
 	return b.String()
 }
 
+// FormatOneMultiLineCallInSource applies exactly one legacy multiline call
+// rewrite pass to src, matching MultiLineCallFormatter's internal scanner.
+//
+// This is exported so the DSL stage can delegate to the legacy scan-based
+// implementation without creating an import cycle.
+func FormatOneMultiLineCallInSource(src []byte, colLimit, tabStop int, excludes []string) ([]byte, bool) {
+	cfg := MultiLineConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+		Excludes:    excludes,
+		SkipGofmt:   true,
+	}
+
+	// Keep behavior consistent with MultiLineCallFormatter.FormatFile, which
+	// sets these package-level values used by width helpers.
+	columnLimit = cfg.ColumnLimit
+	tabStop = cfg.TabStop
+
+	f := NewMultiLineCallFormatter(cfg)
+	return f.formatOneCallInSource(src)
+}
+
+// FormatCallOnePerLineMultiLine formats a call using the legacy MultiLineCallFormatter
+// style (one argument per line).
+//
+// This is used by DSL call rules to delegate formatting to the established
+// string-scanner behavior to preserve output parity.
+func FormatCallOnePerLineMultiLine(call []byte, wsIndent string, colLimit, tabStop int) string {
+	// colLimit/tabStop are accepted for parity with other injected formatter
+	// functions; the legacy one-per-line formatter is not width-adaptive.
+	_ = colLimit
+	_ = tabStop
+
+	s := string(call)
+	open := strings.IndexByte(s, '(')
+	if open == -1 || !strings.HasSuffix(s, ")") {
+		return s
+	}
+
+	head := s[:open]
+	argsBody := s[open+1 : len(s)-1]
+
+	args := scanner.SplitTopLevel(argsBody)
+	if len(args) == 0 {
+		return s
+	}
+
+	var b strings.Builder
+	b.WriteString(head)
+	b.WriteString("(\n")
+
+	argIndent := wsIndent + "\t"
+	for i, arg := range args {
+		trimmedArg := strings.TrimSpace(arg)
+		if trimmedArg == "" {
+			continue
+		}
+
+		b.WriteString(argIndent)
+		lines := strings.Split(trimmedArg, "\n")
+		for j, line := range lines {
+			if j > 0 {
+				b.WriteString("\n")
+				b.WriteString(argIndent)
+			}
+			b.WriteString(strings.TrimSpace(line))
+		}
+		b.WriteString(",")
+		if i < len(args)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(wsIndent)
+	b.WriteString(")")
+	return b.String()
+}

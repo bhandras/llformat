@@ -6,13 +6,14 @@ import (
 
 // PipelineConfig holds configuration for the formatting pipeline.
 type PipelineConfig struct {
-	ColumnLimit     int
-	TabStop         int
-	MoveInlineAbove bool     // For comment formatter
-	Excludes        []string // Functions to exclude from multiline formatting
-	UseDSLLogCalls  bool     // Use DSL-based log/printf call formatting
-	UseDSLExpr      bool     // Use DSL-based expression formatter
-	TraceDSL        bool     // Enable DSL rule tracing (only when UseDSLExpr)
+	ColumnLimit          int
+	TabStop              int
+	MoveInlineAbove      bool     // For comment formatter
+	Excludes             []string // Functions to exclude from multiline formatting
+	UseDSLLogCalls       bool     // Use DSL-based log/printf call formatting
+	UseDSLMultiLineCalls bool     // Use DSL-based multiline call formatting
+	UseDSLExpr           bool     // Use DSL-based expression formatter
+	TraceDSL             bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -41,13 +42,14 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
-		CommentMoveInline: cfg.MoveInlineAbove,
-		Excludes:          cfg.Excludes,
-		UseDSLLogCalls:    cfg.UseDSLLogCalls,
-		UseDSLExpr:        cfg.UseDSLExpr,
-		TraceDSL:          cfg.TraceDSL,
-		AllowDSLCallArgs:  cfg.AllowDSLCallArgs,
-		AutoDSLCallArgs:   cfg.AutoDSLCallArgs,
+		CommentMoveInline:    cfg.MoveInlineAbove,
+		Excludes:             cfg.Excludes,
+		UseDSLLogCalls:       cfg.UseDSLLogCalls,
+		UseDSLMultiLineCalls: cfg.UseDSLMultiLineCalls,
+		UseDSLExpr:           cfg.UseDSLExpr,
+		TraceDSL:             cfg.TraceDSL,
+		AllowDSLCallArgs:     cfg.AllowDSLCallArgs,
+		AutoDSLCallArgs:      cfg.AutoDSLCallArgs,
 	})
 
 	return &Pipeline{
