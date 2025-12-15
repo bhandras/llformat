@@ -8,6 +8,20 @@ import (
 	"github.com/lightninglabs/llformat/dsl/layout"
 )
 
+type exprDocInfo struct {
+	Doc layout.Doc
+
+	// NeedsContinuationIndent indicates the caller should wrap the doc in a
+	// standard continuation indentation (`layout.N("\t", ...)`) so that any
+	// internal breaks are indented by one extra tab relative to the current
+	// indentation.
+	//
+	// For some docs (notably generic CallExpr docs), this is false because the
+	// doc already controls indentation and expects to align closing parens with
+	// the current indentation level.
+	NeedsContinuationIndent bool
+}
+
 // exprDoc is a small AST-to-layout.Doc builder for a limited subset of Go
 // expressions.
 //
@@ -15,17 +29,30 @@ import (
 // "modern layout" actions (selector chains, method chains, same-op binary
 // chains). It returns ok=false for unsupported forms so callers can fall back
 // to legacy/parity logic.
-func exprDoc(expr ast.Expr, ctx *Context) (doc layout.Doc, ok bool) {
+func exprDoc(expr ast.Expr, ctx *Context) (info exprDocInfo, ok bool) {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
-		return selectorChainDoc(e, ctx)
+		doc, ok := selectorChainDoc(e, ctx)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 	case *ast.CallExpr:
-		// Only method-call chains for now.
-		return methodChainDoc(e, ctx)
+		if doc, ok := methodChainDoc(e, ctx); ok {
+			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+		}
+		if doc, ok := genericCallDoc(e, ctx); ok {
+			return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+		}
+		return exprDocInfo{}, false
 	case *ast.BinaryExpr:
-		return sameOpBinaryChainDoc(e, ctx)
+		doc, ok := sameOpBinaryChainDoc(e, ctx)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 	default:
-		return nil, false
+		return exprDocInfo{}, false
 	}
 }
 
@@ -137,6 +164,54 @@ func methodChainDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	return layout.G(layout.C(docs...)), true
 }
 
+func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
+	if call == nil || ctx == nil {
+		return nil, false
+	}
+	if len(call.Args) == 0 {
+		return nil, false
+	}
+
+	// Be conservative: skip any comment-containing args, or args that already
+	// contain newlines (we don't try to reindent nested multiline spans yet).
+	var argDocs []layout.Doc
+	for i, arg := range call.Args {
+		argText := renderNode(arg, ctx.Fset)
+		if strings.Contains(argText, "\n") {
+			return nil, false
+		}
+		if hasAnyComment(argText) {
+			return nil, false
+		}
+
+		if i > 0 {
+			argDocs = append(argDocs, layout.T(","), layout.L())
+		}
+		argDocs = append(argDocs, layout.T(argText))
+	}
+
+	// Handle ellipsis call syntax: f(args...)
+	if call.Ellipsis.IsValid() && len(argDocs) > 0 {
+		argDocs[len(argDocs)-1] = layout.C(argDocs[len(argDocs)-1], layout.T("..."))
+	}
+
+	argsGroup := layout.G(layout.C(
+		layout.SL(),
+		layout.C(argDocs...),
+		layout.IB(layout.T(","), layout.T("")),
+	))
+
+	doc := layout.G(layout.C(
+		layout.T(renderNode(call.Fun, ctx.Fset)),
+		layout.T("("),
+		layout.N("\t", argsGroup),
+		layout.SL(),
+		layout.T(")"),
+	))
+
+	return doc, true
+}
+
 func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) {
 	if bin == nil {
 		return nil, false
@@ -163,4 +238,3 @@ func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) 
 	}
 	return layout.G(layout.C(docs...)), true
 }
-

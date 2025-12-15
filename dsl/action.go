@@ -682,7 +682,7 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 		return nil, false
 	}
 
-	doc, ok := exprDoc(binExpr, ctx)
+	info, ok := exprDoc(binExpr, ctx)
 	if !ok {
 		return nil, false
 	}
@@ -692,7 +692,11 @@ func (a *BreakLogicalChainLayoutAction) Execute(caps Captures, ctx *Context) ([]
 	// Account for any non-whitespace prefix before the expression (e.g. "if ").
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
+	doc := info.Doc
+	if info.NeedsContinuationIndent {
+		doc = layout.N("\t", doc)
+	}
+	formatted := layout.RenderAt(doc, ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -732,7 +736,7 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 		return nil, false
 	}
 
-	doc, ok := exprDoc(binExpr, ctx)
+	info, ok := exprDoc(binExpr, ctx)
 	if !ok {
 		return nil, false
 	}
@@ -741,7 +745,11 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures, ctx *Context) 
 
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
+	doc := info.Doc
+	if info.NeedsContinuationIndent {
+		doc = layout.N("\t", doc)
+	}
+	formatted := layout.RenderAt(doc, ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -827,11 +835,15 @@ func (a *BreakSelectorChainLayoutAction) Execute(caps Captures, ctx *Context) ([
 
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	doc, ok := exprDoc(sel, ctx)
+	info, ok := exprDoc(sel, ctx)
 	if !ok {
 		return nil, false
 	}
-	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
+	doc := info.Doc
+	if info.NeedsContinuationIndent {
+		doc = layout.N("\t", doc)
+	}
+	formatted := layout.RenderAt(doc, ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -868,12 +880,16 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) ([]b
 	indent := ctx.IndentAt(call)
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	doc, ok := exprDoc(call, ctx)
+	info, ok := exprDoc(call, ctx)
 	if !ok {
 		return nil, false
 	}
 
-	formatted := layout.RenderAt(layout.N("\t", doc), ctx.ColumnLimit, ctx.TabStop, indent, startCol)
+	doc := info.Doc
+	if info.NeedsContinuationIndent {
+		doc = layout.N("\t", doc)
+	}
+	formatted := layout.RenderAt(doc, ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {
 		return nil, false
 	}
@@ -924,6 +940,23 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 		}
 		if hasAnyComment(argText) {
 			return nil, false
+		}
+
+		// Use a structured doc for known expression forms so nested long
+		// expressions (e.g. method chains, selector chains, same-op binary chains)
+		// can be laid out consistently within argument lists.
+		if expr, okCast := arg.(ast.Expr); okCast {
+			if info, okDoc := exprDoc(expr, ctx); okDoc {
+				argDoc := info.Doc
+				if info.NeedsContinuationIndent {
+					argDoc = layout.N("\t", argDoc)
+				}
+				if i > 0 {
+					argDocs = append(argDocs, layout.T(","), layout.L())
+				}
+				argDocs = append(argDocs, argDoc)
+				continue
+			}
 		}
 
 		if i > 0 {
