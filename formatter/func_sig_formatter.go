@@ -198,6 +198,9 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int, indent 
 	var sigBuilder strings.Builder
 	linesConsumed := 0
 	braceFound := false
+	inlineBodyFound := false
+	inlineBody := ""
+	inlineAfterClose := ""
 	parenDepth := 0
 	inString := false
 	escaped := false
@@ -231,8 +234,25 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int, indent 
 				parenDepth--
 			} else if c == '{' && parenDepth == 0 {
 				braceFound = true
-				// Include everything up to and including the brace
+				// Include everything up to and including the brace.
+				//
+				// Note: if the function body is also on this same line (e.g.
+				// `func f(...) { return 0 }`) we must not drop it. We'll detect
+				// and preserve the inline body below, after formatting the
+				// signature.
 				sigBuilder.WriteString(strings.TrimRight(line[:i+1], " \t"))
+
+				// Preserve inline bodies like `{ return 0 }` so that signature
+				// formatting does not delete code.
+				//
+				// This uses a balanced-brace scan to correctly handle nested
+				// braces in composite literals (e.g. `return T{}`).
+				closeIdx := scanner.ScanBalanced([]byte(line), i, '{', '}')
+				if closeIdx != -1 && closeIdx > i {
+					inlineBodyFound = true
+					inlineBody = line[i+1 : closeIdx]
+					inlineAfterClose = line[closeIdx+1:]
+				}
 				break
 			}
 		}
@@ -264,6 +284,32 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int, indent 
 	// Now format the signature
 	formatted := f.breakSignature(sig, indent)
 
+	// If this was a one-line function with an inline body, preserve that body.
+	// The formatter's job is to reflow the signature, not to delete code.
+	if inlineBodyFound {
+		body := strings.TrimSpace(inlineBody)
+		afterClose := strings.TrimRight(inlineAfterClose, " \t")
+
+		if strings.Count(formatted, "\n") == 0 {
+			// Signature stayed on a single line; keep the body inline.
+			//
+			// Always emit the closing brace, since we trimmed at the opening
+			// brace when building `sig`.
+			if body != "" {
+				formatted += " " + body + " }"
+			} else {
+				formatted += " }"
+			}
+			formatted += afterClose
+		} else {
+			// Signature became multi-line; put the body on the next line and
+			// keep the closing brace on its own line (plus any trailing comment).
+			if body != "" {
+				formatted += "\n" + indent + "\t" + body
+			}
+			formatted += "\n" + indent + "}" + afterClose
+		}
+	} else {
 	// Check if we need to add a blank line after the opening brace
 	// (only if signature became multi-line)
 	isMultiLine := strings.Count(formatted, "\n") > 0
@@ -277,6 +323,7 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int, indent 
 				formatted += "\n"
 			}
 		}
+	}
 	}
 
 	// Add trailing newline if not the last line
