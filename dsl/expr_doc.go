@@ -51,6 +51,18 @@ func exprDoc(expr ast.Expr, ctx *Context) (info exprDocInfo, ok bool) {
 			return exprDocInfo{}, false
 		}
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+	case *ast.ParenExpr:
+		doc, ok := parenExprDoc(e, ctx)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		// ParenExpr controls its own indentation; callers should treat it like a
+		// self-contained block.
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+	case *ast.Ident, *ast.BasicLit, *ast.UnaryExpr, *ast.IndexExpr, *ast.SliceExpr:
+		// Render atomic expressions as-is. These are safe to embed as docs but do
+		// not participate in internal breaking yet.
+		return exprDocInfo{Doc: layout.T(renderNode(expr, ctx.Fset)), NeedsContinuationIndent: false}, true
 	default:
 		return exprDocInfo{}, false
 	}
@@ -184,6 +196,22 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 			return nil, false
 		}
 
+		// Prefer a structured doc for supported expression forms so nested
+		// expressions can lay out cleanly within nested calls.
+		if expr, okCast := arg.(ast.Expr); okCast {
+			if info, okDoc := exprDoc(expr, ctx); okDoc {
+				d := info.Doc
+				if info.NeedsContinuationIndent {
+					d = layout.N("\t", d)
+				}
+				if i > 0 {
+					argDocs = append(argDocs, layout.T(","), layout.L())
+				}
+				argDocs = append(argDocs, d)
+				continue
+			}
+		}
+
 		if i > 0 {
 			argDocs = append(argDocs, layout.T(","), layout.L())
 		}
@@ -210,6 +238,33 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	))
 
 	return doc, true
+}
+
+func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
+	if p == nil || ctx == nil || p.X == nil {
+		return nil, false
+	}
+
+	info, ok := exprDoc(p.X, ctx)
+	if !ok {
+		return nil, false
+	}
+	inner := info.Doc
+	if info.NeedsContinuationIndent {
+		inner = layout.N("\t", inner)
+	}
+
+	// Keep parens explicit while allowing the inner expression to break:
+	// flat:  (inner)
+	// break: (
+	//          inner
+	//        )
+	return layout.G(layout.C(
+		layout.T("("),
+		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
+		layout.SL(),
+		layout.T(")"),
+	)), true
 }
 
 func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) {
