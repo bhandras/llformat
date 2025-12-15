@@ -1571,7 +1571,7 @@ func indentContinuationLines(s, indent string) string {
 	}
 	parts := strings.Split(s, "\n")
 	for i := 1; i < len(parts); i++ {
-		parts[i] = indent + strings.TrimLeft(parts[i], " \t")
+		parts[i] = indent + parts[i]
 	}
 	return strings.Join(parts, "\n")
 }
@@ -1685,6 +1685,7 @@ func expandInlineBracedTypeLiteral(s, keyword string) string {
 			if part == "" {
 				continue
 			}
+			out.WriteByte('\t')
 			out.WriteString(part)
 			out.WriteByte('\n')
 		}
@@ -1700,6 +1701,121 @@ func expandInlineTypeLiterals(s string) string {
 	s = expandInlineBracedTypeLiteral(s, "struct")
 	s = expandInlineBracedTypeLiteral(s, "interface")
 	return s
+}
+
+func findTopLevelFuncBodyBrace(sig string, start int) int {
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	inStr := byte(0)
+	escaped := false
+
+	for i := start; i < len(sig); i++ {
+		c := sig[i]
+
+		if inStr != 0 {
+			if inStr == '"' && c == '\\' && !escaped {
+				escaped = true
+				continue
+			}
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '`':
+			inStr = c
+			continue
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '{':
+			// When not nested inside a type literal (struct{...}/interface{...}),
+			// the first top-level "{" after the parameter list is the function body.
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 {
+				// Avoid mis-identifying `struct{...}` / `interface{...}` type literals
+				// in result types as the function body brace.
+				j := i - 1
+				for j >= 0 && (sig[j] == ' ' || sig[j] == '\t') {
+					j--
+				}
+				k := j
+				for k >= 0 && (sig[k] >= 'a' && sig[k] <= 'z' || sig[k] >= 'A' && sig[k] <= 'Z') {
+					k--
+				}
+				word := sig[k+1 : j+1]
+				if word != "struct" && word != "interface" {
+					return i
+				}
+			}
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		}
+	}
+
+	return -1
+}
+
+func isParenthesizedTypeList(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) < 2 || s[0] != '(' || s[len(s)-1] != ')' {
+		return false
+	}
+
+	depth := 0
+	inStr := byte(0)
+	escaped := false
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		if inStr != 0 {
+			if inStr == '"' && c == '\\' && !escaped {
+				escaped = true
+				continue
+			}
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == inStr {
+				inStr = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '`':
+			inStr = c
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 && i != len(s)-1 {
+				return false
+			}
+		}
+	}
+
+	return depth == 0
 }
 
 // formatSignatureSimple is a fallback formatter that breaks at commas.
@@ -1729,9 +1845,16 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 		return indent + sig, false
 	}
 
+	bodyBrace := findTopLevelFuncBodyBrace(sig, closeParen+1)
+	if bodyBrace == -1 {
+		return indent + sig, false
+	}
+
 	prefix := sig[:openParen+1] // "func name("
 	params := sig[openParen+1 : closeParen]
-	suffix := sig[closeParen:] // ") returns {"
+	returns := strings.TrimSpace(sig[closeParen+1 : bodyBrace]) // "returns"
+	hasReturns := returns != ""
+	bodySuffix := sig[bodyBrace:] // "{"
 
 	// Split params
 	paramList := splitTopLevelSimple(params)
@@ -1769,14 +1892,7 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 		testAdd := separator + param
 		testLine := currentLine + testAdd
 
-		// For last param, include suffix in check
-		isLast := i == len(paramList)-1
-		lineWithSuffix := testLine
-		if isLast {
-			lineWithSuffix = testLine + suffix
-		}
-
-		if paramIsMultiline || visualLen(lineWithSuffix, tabStop) > colLimit {
+		if paramIsMultiline || visualLen(testLine, tabStop) > colLimit {
 			// Break to new line
 			if i > 0 {
 				result.WriteByte(',')
@@ -1798,7 +1914,102 @@ func formatSignatureSimple(sig, indent string, colLimit, tabStop int) (string, b
 		}
 	}
 
-	result.WriteString(suffix)
+	// Close parameter list.
+	result.WriteByte(')')
+	currentLine = lastLineText(result.String())
+
+	// Format results (if present) before the opening brace.
+	if hasReturns {
+		// Keep a space between ")" and the return type list when staying on the same line.
+		// Note: newlines are legal whitespace in signatures, so we can break before returns.
+		returnsOut := returns
+		if expandTypes {
+			returnsOut = expandInlineTypeLiterals(returnsOut)
+		}
+
+		if isParenthesizedTypeList(returns) {
+			inner := strings.TrimSpace(returnsOut[1 : len(returnsOut)-1])
+			innerList := splitTopLevelSimple(inner)
+
+			// If we can't split, keep as-is.
+			if len(innerList) == 0 {
+				// Never break the line between ")" and the first return token:
+				// a newline here triggers Go's semicolon insertion and breaks parsing.
+				result.WriteByte(' ')
+				result.WriteString(indentContinuationLines(returnsOut, contIndent))
+				currentLine = currentLine + " " + lastLineText(returnsOut)
+			} else {
+				// Build multiline return list if needed.
+				// We prefer a multiline result list when:
+				// - params already broke, or
+				// - the combined line would exceed the limit, or
+				// - any element becomes multiline due to expanded inline struct/interface.
+				needMulti := strings.Contains(result.String(), "\n") || visualLen(currentLine+" "+returnsOut, tabStop) > colLimit
+
+				formattedElems := make([]string, 0, len(innerList))
+				for _, elem := range innerList {
+					elem = strings.TrimSpace(elem)
+					if elem == "" {
+						continue
+					}
+					elemOut := elem
+					if expandTypes {
+						elemOut = expandInlineTypeLiterals(elemOut)
+						elemOut = indentContinuationLines(elemOut, contIndent)
+					}
+					if strings.Contains(elemOut, "\n") {
+						needMulti = true
+					}
+					formattedElems = append(formattedElems, elemOut)
+				}
+
+				if !needMulti {
+					result.WriteString(" (")
+					for i, elem := range formattedElems {
+						if i > 0 {
+							result.WriteString(", ")
+						}
+						result.WriteString(elem)
+					}
+					result.WriteString(")")
+					currentLine = currentLine + " (" + strings.Join(formattedElems, ", ") + ")"
+				} else {
+					// Keep the opening "(" on the same line as ")" to avoid
+					// semicolon insertion after the parameter list.
+					result.WriteString(" (\n")
+					for i, elem := range formattedElems {
+						if i > 0 {
+							result.WriteString(",\n")
+						}
+						result.WriteString(contIndent)
+						result.WriteByte('\t')
+						result.WriteString(elem)
+					}
+					result.WriteString(",\n")
+					result.WriteString(contIndent)
+					result.WriteString(")")
+					currentLine = contIndent + ")"
+				}
+			}
+		} else {
+			// Single return type/expression.
+			// Never break the line between ")" and the return token: a newline
+			// after ")" triggers Go's semicolon insertion.
+			result.WriteByte(' ')
+			result.WriteString(indentContinuationLines(returnsOut, contIndent))
+			currentLine = currentLine + " " + lastLineText(returnsOut)
+		}
+	}
+
+	// Append body opener.
+	built := result.String()
+	if len(built) > 0 {
+		last := built[len(built)-1]
+		if last != '\n' && last != ' ' && last != '\t' {
+			result.WriteByte(' ')
+		}
+	}
+	result.WriteString(bodySuffix)
 
 	isMultiLine := strings.Contains(result.String(), "\n")
 	return result.String(), isMultiLine
@@ -2012,7 +2223,8 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 
 	prefix := method[:openParen+1]
 	params := method[openParen+1 : closeParen]
-	suffix := method[closeParen:] // ") returns"
+	returns := strings.TrimSpace(method[closeParen+1:]) // "returns"
+	hasReturns := returns != ""
 
 	paramList := splitTopLevelSimple(params)
 	if len(paramList) == 0 {
@@ -2049,13 +2261,7 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 		testAdd := separator + param
 		testLine := currentLine + testAdd
 
-		isLast := i == len(paramList)-1
-		lineWithSuffix := testLine
-		if isLast {
-			lineWithSuffix = testLine + suffix
-		}
-
-		if paramIsMultiline || visualLen(lineWithSuffix, tabStop) > colLimit {
+		if paramIsMultiline || visualLen(testLine, tabStop) > colLimit {
 			if i > 0 {
 				result.WriteByte(',')
 			}
@@ -2076,7 +2282,77 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 		}
 	}
 
-	result.WriteString(suffix)
+	// Close parameter list.
+	result.WriteByte(')')
+	currentLine = lastLineText(result.String())
+
+	// Results (if present).
+	if hasReturns {
+		returnsOut := returns
+		if expandTypes {
+			returnsOut = expandInlineTypeLiterals(returnsOut)
+		}
+
+		if isParenthesizedTypeList(returns) {
+			inner := strings.TrimSpace(returnsOut[1 : len(returnsOut)-1])
+			innerList := splitTopLevelSimple(inner)
+			if len(innerList) == 0 {
+				// Never break the line between ")" and the first return token: a
+				// newline here triggers semicolon insertion and breaks parsing.
+				result.WriteByte(' ')
+				result.WriteString(indentContinuationLines(returnsOut, contIndent))
+			} else {
+				needMulti := strings.Contains(result.String(), "\n") || visualLen(currentLine+" "+returnsOut, tabStop) > colLimit
+
+				formattedElems := make([]string, 0, len(innerList))
+				for _, elem := range innerList {
+					elem = strings.TrimSpace(elem)
+					if elem == "" {
+						continue
+					}
+					elemOut := elem
+					if expandTypes {
+						elemOut = expandInlineTypeLiterals(elemOut)
+						elemOut = indentContinuationLines(elemOut, contIndent)
+					}
+					if strings.Contains(elemOut, "\n") {
+						needMulti = true
+					}
+					formattedElems = append(formattedElems, elemOut)
+				}
+
+				if !needMulti {
+					result.WriteString(" (")
+					for i, elem := range formattedElems {
+						if i > 0 {
+							result.WriteString(", ")
+						}
+						result.WriteString(elem)
+					}
+					result.WriteString(")")
+				} else {
+					// Keep "(" on the same line as ")" to avoid semicolon insertion.
+					result.WriteString(" (\n")
+					for i, elem := range formattedElems {
+						if i > 0 {
+							result.WriteString(",\n")
+						}
+						result.WriteString(contIndent)
+						result.WriteByte('\t')
+						result.WriteString(elem)
+					}
+					result.WriteString(",\n")
+					result.WriteString(contIndent)
+					result.WriteString(")")
+				}
+			}
+		} else {
+			// Never break the line between ")" and the return token: a newline
+			// after ")" triggers semicolon insertion.
+			result.WriteByte(' ')
+			result.WriteString(indentContinuationLines(returnsOut, contIndent))
+		}
+	}
 
 	return result.String()
 }
