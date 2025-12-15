@@ -967,6 +967,73 @@ func (a *LegacyMultiLineScanAction) Execute(_ Captures, ctx *Context) ([]byte, b
 	return out, true
 }
 
+// LegacyCommentFormatFunc formats comments in src and reports whether it changed
+// anything.
+type LegacyCommentFormatFunc func(src []byte, colLimit, tabStop int, moveInlineAbove bool) ([]byte, bool)
+
+// LegacyCommentFormatAction delegates comment formatting to an injected legacy
+// formatter implementation.
+type LegacyCommentFormatAction struct {
+	MoveInlineAbove bool
+	FormatFunc      LegacyCommentFormatFunc
+}
+
+// Execute implements Action for LegacyCommentFormatAction.
+func (a *LegacyCommentFormatAction) Execute(_ Captures, ctx *Context) ([]byte, bool) {
+	if a.FormatFunc == nil {
+		return nil, false
+	}
+	out, changed := a.FormatFunc(ctx.Source, ctx.ColumnLimit, ctx.TabStop, a.MoveInlineAbove)
+	if !changed {
+		return nil, false
+	}
+	return out, true
+}
+
+// LegacyFuncSigFormatFunc formats function signatures in src and reports whether
+// it changed anything.
+type LegacyFuncSigFormatFunc func(src []byte, colLimit, tabStop int) ([]byte, bool)
+
+// LegacyFuncSigFormatAction delegates function signature formatting to an
+// injected legacy formatter implementation.
+type LegacyFuncSigFormatAction struct {
+	FormatFunc LegacyFuncSigFormatFunc
+}
+
+// Execute implements Action for LegacyFuncSigFormatAction.
+func (a *LegacyFuncSigFormatAction) Execute(_ Captures, ctx *Context) ([]byte, bool) {
+	if a.FormatFunc == nil {
+		return nil, false
+	}
+	out, changed := a.FormatFunc(ctx.Source, ctx.ColumnLimit, ctx.TabStop)
+	if !changed {
+		return nil, false
+	}
+	return out, true
+}
+
+// LegacyBlankLinesFormatFunc formats blank lines in src and reports whether it
+// changed anything.
+type LegacyBlankLinesFormatFunc func(src []byte) ([]byte, bool)
+
+// LegacyBlankLinesFormatAction delegates blank line formatting to an injected
+// legacy formatter implementation.
+type LegacyBlankLinesFormatAction struct {
+	FormatFunc LegacyBlankLinesFormatFunc
+}
+
+// Execute implements Action for LegacyBlankLinesFormatAction.
+func (a *LegacyBlankLinesFormatAction) Execute(_ Captures, ctx *Context) ([]byte, bool) {
+	if a.FormatFunc == nil {
+		return nil, false
+	}
+	out, changed := a.FormatFunc(ctx.Source)
+	if !changed {
+		return nil, false
+	}
+	return out, true
+}
+
 // Execute implements Action for LegacyOnePerLineCallAction.
 func (a *LegacyOnePerLineCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	node := resolveTarget(caps, a.Target)

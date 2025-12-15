@@ -66,10 +66,18 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 		line := lines[i]
 		// Try line comment block
 		if isStandaloneLineComment(line) {
+			// Preserve directive comments verbatim. These lines are not
+			// "text" in the normal sense; tools expect specific formats.
+			if isDirectiveLineComment(line) {
+				out = append(out, line)
+				i++
+				continue
+			}
+
 			indent, _ := splitIndent(line)
 			// Collect consecutive standalone `//` lines.
 			start := i
-			for i < len(lines) && isStandaloneLineComment(lines[i]) {
+			for i < len(lines) && isStandaloneLineComment(lines[i]) && !isDirectiveLineComment(lines[i]) {
 				i++
 			}
 			block := lines[start:i]
@@ -103,6 +111,36 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 	return []byte(strings.Join(out, "\n"))
 }
 
+// FormatCommentsInSource applies the legacy comment formatter to src and reports
+// whether it changed anything.
+//
+// This is exported so DSL stages can delegate to the legacy implementation
+// without creating an import cycle.
+func FormatCommentsInSource(src []byte, colLimit, tabStop int, moveInlineAbove bool) ([]byte, bool) {
+	f := NewCommentFormatter(CommentConfig{
+		ColumnLimit:     colLimit,
+		TabStop:         tabStop,
+		MoveInlineAbove: moveInlineAbove,
+	})
+	out := f.FormatFile(src)
+	if bytesEqual(out, src) {
+		return nil, false
+	}
+	return out, true
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // splitLines preserves all lines without dropping trailing empty line info.
 func splitLines(s string) []string {
 	// Normalize to raw lines without retaining trailing newline sentinel;
@@ -132,6 +170,54 @@ func isStandaloneLineComment(s string) bool {
 	indent, rest := splitIndent(s)
 	_ = indent
 	return strings.HasPrefix(rest, "//")
+}
+
+// isDirectiveLineComment reports whether s is a line comment that should be
+// preserved verbatim because it encodes a tool/build directive.
+//
+// This intentionally errs on the conservative side: it's better to leave a
+// directive-looking comment unchanged than to wrap/hoist it and break tools.
+func isDirectiveLineComment(s string) bool {
+	_, rest := splitIndent(s)
+	if !strings.HasPrefix(rest, "//") {
+		return false
+	}
+
+	// Go toolchain directives must have no space between `//` and `go:`.
+	if strings.HasPrefix(rest, "//go:") {
+		return true
+	}
+
+	// Build tags are typically `// +build ...` but be tolerant of `//+build ...`.
+	if strings.HasPrefix(rest, "// +build") || strings.HasPrefix(rest, "//+build") {
+		return true
+	}
+
+	// `//line` directives must have no space between `//` and `line`.
+	// Avoid treating ordinary comment prose like "the next line ..." as a directive.
+	if strings.HasPrefix(rest, "//line") {
+		return true
+	}
+
+	// Linter directives are commonly written without a space, but some linters
+	// also accept a space. Keep this conservative but avoid matching arbitrary
+	// prose: require the directive token to be the first non-space after `//`.
+	text := strings.TrimPrefix(rest, "//")
+	text = strings.TrimLeft(text, " \t")
+	switch {
+	case strings.HasPrefix(text, "nolint"):
+		return true
+	case strings.HasPrefix(text, "lint:"):
+		return true
+	case strings.HasPrefix(text, "revive:"):
+		return true
+	case strings.HasPrefix(text, "staticcheck:"):
+		return true
+	case strings.HasPrefix(text, "gosec:"):
+		return true
+	default:
+		return false
+	}
 }
 
 func isStandaloneBlockStart(s string) bool {
@@ -424,6 +510,12 @@ func hoistInlineComments(src []byte) []byte {
 		commentText := strings.TrimSpace(line[end:])
 		switch kind {
 		case "//":
+			// Never hoist directive-like comments; tools can require them
+			// to remain trailing on the same line.
+			if isDirectiveLineComment(indent + line[start:]) {
+				out = append(out, line)
+				continue
+			}
 			text := strings.TrimSpace(line[start+2:])
 			if text != "" {
 				out = append(out, indent+"// "+text)

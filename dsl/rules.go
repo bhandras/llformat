@@ -780,6 +780,52 @@ func LegacyMultiLineScanRulesWithOptions(opts MultiLineCallOptions, scanFunc Leg
 	}
 }
 
+// LegacyCommentRules delegates comment formatting to a legacy formatter.
+func LegacyCommentRules(formatFunc LegacyCommentFormatFunc, moveInlineAbove bool) []Rule {
+	return []Rule{
+		{
+			Name:     "legacy_comment_format",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &TrueCond{},
+			Priority: 90,
+			Action: &LegacyCommentFormatAction{
+				MoveInlineAbove: moveInlineAbove,
+				FormatFunc:      formatFunc,
+			},
+		},
+	}
+}
+
+// LegacyFuncSigRules delegates function signature formatting to a legacy formatter.
+func LegacyFuncSigRules(formatFunc LegacyFuncSigFormatFunc) []Rule {
+	return []Rule{
+		{
+			Name:     "legacy_func_sig_format",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &TrueCond{},
+			Priority: 60,
+			Action: &LegacyFuncSigFormatAction{
+				FormatFunc: formatFunc,
+			},
+		},
+	}
+}
+
+// LegacyBlankLinesRules delegates blank line formatting to a legacy formatter.
+func LegacyBlankLinesRules(formatFunc LegacyBlankLinesFormatFunc) []Rule {
+	return []Rule{
+		{
+			Name:     "legacy_blank_lines_format",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &TrueCond{},
+			Priority: 40,
+			Action: &LegacyBlankLinesFormatAction{
+				FormatFunc: formatFunc,
+			},
+		},
+	}
+}
+
 // LongExprRules returns a rule set intended to match the legacy long expression
 // formatter behavior: break long boolean/arithmetic chains and case clauses,
 // without reformatting calls or signatures.

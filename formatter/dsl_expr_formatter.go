@@ -22,6 +22,11 @@ type DSLExprConfig struct {
 	NodeOrder     dsl.NodeOrder
 	MaxIterations int  // Override engine MaxIterations (0 keeps default)
 	SkipGofmt     bool // Skip gofmt (pipelines may run gofmt once at end)
+
+	// DisableLegacyBlankLinesShim controls whether DSL blank-line rules are
+	// delegated to the legacy blank-line formatter for parity. When true, DSL
+	// blank-line rules are executed directly by the DSL engine.
+	DisableLegacyBlankLinesShim bool
 }
 
 // NewDSLExprFormatter creates a new DSL-based expression formatter.
@@ -31,7 +36,7 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 		rules = dsl.DefaultRules()
 	}
 
-	applyLegacyBlankLines := hasDSLBlankLineRules(rules)
+	applyLegacyBlankLines := hasDSLBlankLineRules(rules) && !cfg.DisableLegacyBlankLinesShim
 	if applyLegacyBlankLines {
 		rules = filterDSLBlankLineRules(rules)
 	}

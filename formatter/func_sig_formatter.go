@@ -101,6 +101,32 @@ func (f *FuncSigFormatter) FormatFile(src []byte) []byte {
 	return out.Bytes()
 }
 
+// FormatFuncSigsInSource applies the legacy function signature formatter to src
+// and reports whether it changed anything.
+//
+// This is exported so DSL stages can delegate to the legacy implementation
+// without creating an import cycle.
+func FormatFuncSigsInSource(src []byte, colLimit, tabStop int) ([]byte, bool) {
+	f := NewFuncSigFormatter(FuncSigConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+	})
+	out := f.FormatFile(src)
+	if len(out) == len(src) {
+		same := true
+		for i := range out {
+			if out[i] != src[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return nil, false
+		}
+	}
+	return out, true
+}
+
 // isFuncSignature checks if a line starts a function signature.
 func (f *FuncSigFormatter) isFuncSignature(trimmed string) bool {
 	// Match: func name(, func (receiver) name(, or method in interface

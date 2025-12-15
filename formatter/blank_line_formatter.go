@@ -134,6 +134,32 @@ func (f *BlankLineFormatter) FormatFile(src []byte) []byte {
 	return out.Bytes()
 }
 
+// FormatBlankLinesInSource applies the legacy blank-line formatter to src and
+// reports whether it changed anything.
+//
+// This is exported so DSL stages can delegate without creating an import cycle.
+func FormatBlankLinesInSource(src []byte) ([]byte, bool) {
+	f := NewBlankLineFormatter(BlankLineConfig{
+		BeforeReturn:            true,
+		BetweenCases:            true,
+		BetweenInterfaceMethods: true,
+	})
+	out := f.FormatFile(src)
+	if len(out) == len(src) {
+		same := true
+		for i := range out {
+			if out[i] != src[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return nil, false
+		}
+	}
+	return out, true
+}
+
 // classifyLine determines the type of a line for blank line insertion logic.
 func (f *BlankLineFormatter) classifyLine(trimmed string, inSwitch,
 	inInterface bool) string {

@@ -48,8 +48,37 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		fset := token.NewFileSet()
 		file, err := parser.ParseFile(fset, "", result, parser.ParseComments)
 		if err != nil {
-			// If we can't parse, return what we have
-			return result, nil
+			// If we can't parse, we can still try to apply file-scoped
+			// scan/delegation rules that don't require an AST (e.g. legacy
+			// comment formatting).
+			ctx := NewContext(token.NewFileSet(), result, e.ColumnLimit, e.TabStop)
+			modified, changed := e.applyOneFileRuleWithoutAST(ctx)
+			if !changed {
+				return result, nil
+			}
+
+			if e.Trace {
+				start, endBefore, endAfter := changedSpan(ctx.Source, modified)
+				line, col := offsetToLineCol(ctx.Source, start)
+				fmt.Fprintf(os.Stderr, "dsl: iter=%d rule=%s prio=%d node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d snippet=%q\n",
+					iter+1,
+					ctx.LastAppliedRule,
+					ctx.LastAppliedRulePriority,
+					ctx.LastAppliedNodeType,
+					ctx.LastAppliedNodeStart,
+					ctx.LastAppliedNodeEnd,
+					start,
+					endBefore,
+					start,
+					endAfter,
+					line,
+					col,
+					snippetForRange(ctx.Source, start, endBefore),
+				)
+			}
+
+			result = modified
+			continue
 		}
 
 		ctx := NewContext(fset, result, e.ColumnLimit, e.TabStop)
@@ -90,6 +119,41 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 	}
 
 	return result, nil
+}
+
+func (e *Engine) applyOneFileRuleWithoutAST(ctx *Context) ([]byte, bool) {
+	for _, rule := range e.Rules {
+		np, ok := rule.Pattern.(*NodePattern)
+		if !ok || np.Type != "File" {
+			continue
+		}
+		// Only support truly file-scoped rules in this fallback: no field
+		// constraints (which would require an AST).
+		if len(np.Fields) != 0 {
+			continue
+		}
+		if rule.When == nil {
+			continue
+		}
+
+		caps := Captures{"node": nil}
+		if !rule.When.Eval(caps, ctx) {
+			continue
+		}
+
+		out, changed := rule.Action.Execute(caps, ctx)
+		if !changed || out == nil {
+			continue
+		}
+
+		ctx.LastAppliedRule = rule.Name
+		ctx.LastAppliedRulePriority = rule.Priority
+		ctx.LastAppliedNodeType = "File"
+		ctx.LastAppliedNodeStart = 0
+		ctx.LastAppliedNodeEnd = len(ctx.Source)
+		return out, true
+	}
+	return nil, false
 }
 
 // changedSpan finds a minimal differing span between before and after.

@@ -10,11 +10,14 @@ type PipelineConfig struct {
 	TabStop              int
 	MoveInlineAbove      bool     // For comment formatter
 	Excludes             []string // Functions to exclude from multiline formatting
+	UseDSLComments       bool     // Use DSL-based comment formatting (delegates to legacy)
 	UseDSLLogCalls       bool     // Use DSL-based log/printf call formatting
 	UseDSLMultiLineCalls bool     // Use DSL-based multiline call formatting
 	DSLMultiLineStyle    string   // DSL multiline formatting style (empty => legacy)
 	DSLCallPolicy        string   // DSL call policy bundle (empty => no override)
 	UseDSLExpr           bool     // Use DSL-based expression formatter
+	UseDSLFuncSigs       bool     // Use DSL-based signature formatter (delegates to legacy)
+	UseDSLBlankLines     bool     // Use DSL-based blank line formatter
 	TraceDSL             bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
@@ -49,12 +52,15 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	case "", "legacy":
 		// No override.
 	case "modern":
+		cfg.UseDSLComments = true
 		cfg.UseDSLLogCalls = true
 		cfg.UseDSLMultiLineCalls = true
 		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
 			cfg.DSLMultiLineStyle = "packed-chain"
 		}
 		cfg.UseDSLExpr = true
+		cfg.UseDSLFuncSigs = true
+		cfg.UseDSLBlankLines = true
 	default:
 		// Unknown policy: ignore (callers can still set individual toggles).
 	}
@@ -63,10 +69,13 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline:    cfg.MoveInlineAbove,
 		Excludes:             cfg.Excludes,
+		UseDSLComments:       cfg.UseDSLComments,
 		UseDSLLogCalls:       cfg.UseDSLLogCalls,
 		UseDSLMultiLineCalls: cfg.UseDSLMultiLineCalls,
 		DSLMultiLineStyle:    cfg.DSLMultiLineStyle,
 		UseDSLExpr:           cfg.UseDSLExpr,
+		UseDSLFuncSigs:       cfg.UseDSLFuncSigs,
+		UseDSLBlankLines:     cfg.UseDSLBlankLines,
 		TraceDSL:             cfg.TraceDSL,
 		AllowDSLCallArgs:     cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:      cfg.AutoDSLCallArgs,

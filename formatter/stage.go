@@ -101,10 +101,13 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 type StageOptions struct {
 	CommentMoveInline    bool
 	Excludes             []string
+	UseDSLComments       bool // Use DSL-based comment stage (delegates to legacy)
 	UseDSLLogCalls       bool // Use DSL-based log/printf call stage
 	UseDSLMultiLineCalls bool // Use DSL-based multiline call stage
 	DSLMultiLineStyle    string
 	UseDSLExpr           bool // Use DSL-based expression stage
+	UseDSLFuncSigs       bool // Use DSL-based signature stage (delegates to legacy)
+	UseDSLBlankLines     bool // Use DSL-based blank line stage (pure DSL)
 	TraceDSL             bool // Enable DSL rule tracing (DSL stages only)
 
 	// AllowDSLCallArgs enables limited expression formatting within call
@@ -123,15 +126,34 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 	return DefaultStagesWithOptions(cfg, StageOptions{
 		CommentMoveInline:    commentMoveInline,
 		Excludes:             excludes,
+		UseDSLComments:       false,
 		UseDSLLogCalls:       false,
 		UseDSLMultiLineCalls: false,
 		DSLMultiLineStyle:    "",
 		UseDSLExpr:           false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
 	})
 }
 
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
+	var commentFormatter Formatter = NewCommentFormatter(CommentConfig{
+		ColumnLimit:     cfg.ColumnLimit,
+		TabStop:         cfg.TabStop,
+		MoveInlineAbove: opts.CommentMoveInline,
+	})
+	if opts.UseDSLComments {
+		commentFormatter = NewDSLExprFormatter(DSLExprConfig{
+			ColumnLimit:   cfg.ColumnLimit,
+			TabStop:       cfg.TabStop,
+			Rules:         dsl.LegacyCommentRules(FormatCommentsInSource, opts.CommentMoveInline),
+			Trace:         opts.TraceDSL,
+			MaxIterations: 1,
+			SkipGofmt:     true,
+		})
+	}
+
 	exprRules := dsl.LongExprRules()
 	if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs {
 		callArgsPolicy := dsl.CallArgsPolicyOff
@@ -226,13 +248,9 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 
 	return []Stage{
 		{
-			Name: "comments",
-			Formatter: NewCommentFormatter(CommentConfig{
-				ColumnLimit:     cfg.ColumnLimit,
-				TabStop:         cfg.TabStop,
-				MoveInlineAbove: opts.CommentMoveInline,
-			}),
-			Requires: nil, // First stage, no dependencies
+			Name:      "comments",
+			Formatter: commentFormatter,
+			Requires:  nil, // First stage, no dependencies
 		},
 		{
 			Name:      "compact-calls",
@@ -251,19 +269,43 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		},
 		{
 			Name: "signatures",
-			Formatter: NewFuncSigFormatter(FuncSigConfig{
-				ColumnLimit: cfg.ColumnLimit,
-				TabStop:     cfg.TabStop,
-			}),
+			Formatter: func() Formatter {
+				if !opts.UseDSLFuncSigs {
+					return NewFuncSigFormatter(FuncSigConfig{
+						ColumnLimit: cfg.ColumnLimit,
+						TabStop:     cfg.TabStop,
+					})
+				}
+				return NewDSLExprFormatter(DSLExprConfig{
+					ColumnLimit:   cfg.ColumnLimit,
+					TabStop:       cfg.TabStop,
+					Rules:         dsl.LegacyFuncSigRules(FormatFuncSigsInSource),
+					Trace:         opts.TraceDSL,
+					MaxIterations: 1,
+					SkipGofmt:     true,
+				})
+			}(),
 			Requires: []string{"multiline-calls"}, // After call formatting
 		},
 		{
 			Name: "blank-lines",
-			Formatter: NewBlankLineFormatter(BlankLineConfig{
-				BeforeReturn:            true,
-				BetweenCases:            true,
-				BetweenInterfaceMethods: true,
-			}),
+			Formatter: func() Formatter {
+				if !opts.UseDSLBlankLines {
+					return NewBlankLineFormatter(BlankLineConfig{
+						BeforeReturn:            true,
+						BetweenCases:            true,
+						BetweenInterfaceMethods: true,
+					})
+				}
+				return NewDSLExprFormatter(DSLExprConfig{
+					ColumnLimit:   cfg.ColumnLimit,
+					TabStop:       cfg.TabStop,
+					Rules:         dsl.LegacyBlankLinesRules(FormatBlankLinesInSource),
+					Trace:         opts.TraceDSL,
+					MaxIterations: 1,
+					SkipGofmt:     true,
+				})
+			}(),
 			Requires: []string{"signatures"}, // After signature formatting
 		},
 	}
