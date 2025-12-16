@@ -108,3 +108,25 @@ func f() {
 	require.Equal(t, string(outScan), string(outAST))
 }
 
+func TestCompactCallFormatter_FallbackDoesNotMisDetectTypeAssertionsAsCalls(t *testing.T) {
+	const in = `package p
+
+func f() {
+	_ = someInterfaceValueNameThatIsVeryLong.(SomeConcreteTypeNameThatIsVeryLong)
+}
+`
+
+	cfg := Config{
+		ColumnLimit:        20,
+		TabStop:            8,
+		FallbackNonTargets: true,
+		SkipGofmt:          true,
+		UseASTSelection:    false,
+	}
+
+	out := NewCompactCallFormatter(cfg).FormatFile([]byte(in))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
+	require.NoError(t, err, "formatted output was not parseable:\n%s", string(out))
+}

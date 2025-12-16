@@ -271,6 +271,11 @@ func findGenericCallAt(src []byte, i int) (start int, end int) {
 	for j < len(src) && (text.IsIdentifierChar(src[j]) || src[j] == '.') {
 		j++
 	}
+	// Reject incomplete selector chains like `pkg.` or `x.`. This prevents
+	// mis-detecting type assertions (`x.(T)`) as calls on `x.`.
+	if j > i && src[j-1] == '.' {
+		return 0, 0
+	}
 	// Skip language keywords (e.g., import, var) which are not calls.
 	if text.IsKeyword(string(src[i:j])) {
 		return 0, 0
