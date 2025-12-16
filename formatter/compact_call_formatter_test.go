@@ -4,6 +4,7 @@ import (
 	formatstd "go/format"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lightninglabs/llformat/dsl"
@@ -51,4 +52,15 @@ func TestLogsExamplesDSL(t *testing.T) {
 		want = formatted
 	}
 	require.Equal(t, string(want), string(got))
+}
+
+func TestBuildSplitQuoted_DoesNotEmitDanglingPlusWhenIndentTooDeep(t *testing.T) {
+	// When the indentation itself exceeds the configured width, splitting a
+	// string literal cannot make it fit. We should still emit valid Go (no
+	// dangling '+' followed by a comma/newline in the caller).
+	out := buildSplitQuoted("%s", 200, "\t\t", 48)
+	trimmed := strings.TrimRight(out, " \t")
+	require.NotEmpty(t, trimmed)
+	require.NotEqual(t, '+', trimmed[len(trimmed)-1], "split output must not end with '+'")
+	require.NotContains(t, out, "+\n\t\t\t,", "must not end with a dangling '+', then comma on the next line")
 }

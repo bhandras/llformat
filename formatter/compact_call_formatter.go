@@ -658,7 +658,6 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 	return b.String()
 }
 
-
 // callHasAlwaysMultilineComposite reports whether the call expression's
 // arguments contain a map/struct composite literal that should be block
 // formatted when inside a multiline call.
@@ -707,6 +706,20 @@ func buildSplitQuoted(text string, startCol int, contIndent string, width int) s
 		if rest == "" {
 			break
 		}
+		// If there's not even enough room for a minimal quoted segment (quotes +
+		// at least one rune) within the width budget, splitting can't produce a
+		// "better" layout. Emit a single quoted literal and stop.
+		if width-curStart <= 4 {
+			out.WriteString(quoteGoString(rest))
+			break
+		}
+		// If the indentation itself already exceeds the available width budget,
+		// splitting can't help (no segment can ever "fit"). Emit a single quoted
+		// literal and stop to avoid producing degenerate/dangling split output.
+		if curStart >= width {
+			out.WriteString(quoteGoString(rest))
+			break
+		}
 		// If the whole rest fits as a quoted literal on this line, emit and finish.
 		if advanceCols(curStart, quoteGoString(rest)) <= width {
 			out.WriteString(quoteGoString(rest))
@@ -724,6 +737,14 @@ func buildSplitQuoted(text string, startCol int, contIndent string, width int) s
 			if idx <= 0 {
 				idx = 1
 			}
+			// If we end up consuming all remaining content, emit it as a single
+			// quoted literal and stop. This matters when curStart > width (deep
+			// indentation): we can’t make progress by splitting, and emitting a
+			// dangling '+' would produce invalid Go like `"x" +\n,`.
+			if idx >= len(rest) {
+				out.WriteString(quoteGoString(rest))
+				break
+			}
 			seg := rest[:idx]
 			out.WriteString(quoteGoString(seg))
 			out.WriteByte('+')
@@ -734,6 +755,12 @@ func buildSplitQuoted(text string, startCol int, contIndent string, width int) s
 			continue
 		}
 		seg := rest[:cut+1]
+		// If the split point consumes all remaining content, emit and stop to
+		// avoid emitting a dangling '+'.
+		if cut+1 >= len(rest) {
+			out.WriteString(quoteGoString(rest))
+			break
+		}
 		out.WriteString(quoteGoString(seg))
 		out.WriteByte('+')
 		out.WriteByte('\n')
@@ -741,7 +768,17 @@ func buildSplitQuoted(text string, startCol int, contIndent string, width int) s
 		rest = rest[cut+1:]
 		curStart = contStart
 	}
-	return out.String()
+	// Defensive cleanup: if we ever end up with a dangling trailing '+', drop it.
+	// This can happen when indentation already exceeds the width budget and a
+	// split attempt fails to make progress. Leaving a dangling '+' would produce
+	// invalid Go when the surrounding call formatter appends a comma/newline.
+	result := out.String()
+	trimmed := strings.TrimRight(result, " \t\n")
+	if strings.HasSuffix(trimmed, "+") {
+		trimmed = strings.TrimRight(trimmed[:len(trimmed)-1], " \t")
+		return trimmed
+	}
+	return result
 }
 
 // formatCallGreedy applies a simple greedy layout: keep arguments on the
@@ -1035,6 +1072,17 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 				}
 				// Hard cut by visual columns.
 				idx := cutIndexForWidthFrom(curLen, rest, capCols)
+				if idx >= len(rest) {
+					// Splitting didn't make progress (typically because indentation
+					// already exceeds the width budget). Emit the full literal and
+					// stop; emitting a dangling '+' would produce invalid Go when
+					// followed by a comma/newline from argument formatting.
+					q := quoteGoString(rest)
+					b.WriteString(q)
+					curLen = advanceCols(curLen, q)
+					rest = ""
+					break
+				}
 				seg := rest[:idx]
 				writeSplit(seg, i < len(normArgs)-1)
 				didSplit = true
@@ -1043,6 +1091,13 @@ func formatCallGreedy(call []byte, wsIndent string, baseLen int) string {
 			}
 			// Pure greedy: no additional word-pushing heuristics.
 			// Pure greedy: take the last space within capacity.
+			if cut+1 >= len(rest) {
+				q := quoteGoString(rest)
+				b.WriteString(q)
+				curLen = advanceCols(curLen, q)
+				rest = ""
+				break
+			}
 			seg := rest[:cut+1] // keep the space at end
 			writeSplit(seg, i < len(normArgs)-1)
 			didSplit = true
