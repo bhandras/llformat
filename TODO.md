@@ -68,7 +68,7 @@
 - [x] Add a large table-driven regression suite (~100 snippets) for `layout-args` that checks parseability + idempotence (no goldens).
 - [ ] Expand crash/parse-failure coverage:
   - [x] DSL engine can still apply file rules even if `go/parser` fails.
-  - [ ] Add targeted tests for common “invalid go” fixtures patterns (multiple `package` blocks, etc.).
+  - [x] Add targeted tests for common “invalid go” fixtures patterns (multiple `package` blocks, etc.).
 
 ## Legacy → AST selection (parity-first migration)
 - [x] Port multiline call *selection* to AST (opt-in), keep legacy formatting unchanged.
@@ -84,6 +84,10 @@
 - [x] Add parse-safe mode to legacy long-expr stage (opt-in).
   - [x] Add pipeline knob `PipelineConfig.LongExprParseSafe` and stage option wiring.
   - [x] Add tests: parse-safe never rewrites unparseable sources; still rewrites valid sources with AST equivalence.
+- [ ] Port legacy long-expr *selection* to AST (opt-in), keep legacy breaking logic unchanged.
+  - [ ] Add pipeline knob `PipelineConfig.LongExprUseASTSelect` and stage option wiring.
+  - [ ] Default policy: don’t rewrite inside call-arg lists/composite literals (reduce stage fighting).
+  - [ ] Add tests: long-expr AST selection avoids rewriting inside call args; still rewrites standalone long expressions; output remains parseable + AST-equivalent.
 - [ ] Decide default rollout strategy for AST selection knobs (when to flip default `false → true`).
   - [ ] Add broader “cursor-positioned call selection” fuzz-ish tests (no goldens).
   - [ ] Add more snippets around: method values, func literals, index-list generics, and mixed selector/index/type-assert chains.
