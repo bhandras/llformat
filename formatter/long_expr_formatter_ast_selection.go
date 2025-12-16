@@ -4,45 +4,22 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"sort"
 )
 
-type offsetSpan struct {
-	start int
-	end   int
-}
-
-func (s offsetSpan) contains(off int) bool {
-	return off >= s.start && off < s.end
-}
-
-func (f *LongExprFormatter) forbiddenSpansForASTSelection(src []byte) []offsetSpan {
+func (f *LongExprFormatter) forbiddenSpansForASTSelection(src []byte) offsetSpanSet {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors)
 	if err != nil || file == nil {
 		// On parse failure, fall back to legacy behavior.
-		return nil
+		return offsetSpanSet{}
 	}
 
 	return collectForbiddenLongExprSpans(file, fset, src)
 }
 
-func isOffsetInAnySpan(off int, spans []offsetSpan) bool {
-	// spans are sorted by start.
-	for _, s := range spans {
-		if off < s.start {
-			return false
-		}
-		if s.contains(off) {
-			return true
-		}
-	}
-	return false
-}
-
-func collectForbiddenLongExprSpans(file *ast.File, fset *token.FileSet, src []byte) []offsetSpan {
+func collectForbiddenLongExprSpans(file *ast.File, fset *token.FileSet, src []byte) offsetSpanSet {
 	if file == nil || fset == nil {
-		return nil
+		return offsetSpanSet{}
 	}
 
 	var spans []offsetSpan
@@ -93,12 +70,5 @@ func collectForbiddenLongExprSpans(file *ast.File, fset *token.FileSet, src []by
 		return true
 	})
 
-	sort.Slice(spans, func(i, j int) bool {
-		if spans[i].start != spans[j].start {
-			return spans[i].start < spans[j].start
-		}
-		return spans[i].end < spans[j].end
-	})
-
-	return spans
+	return newOffsetSpanSet(spans)
 }

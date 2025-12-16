@@ -59,7 +59,7 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 			break // All lines fit
 		}
 
-		var forbidden []offsetSpan
+		var forbidden offsetSpanSet
 		if f.cfg.UseASTSelection {
 			forbidden = f.forbiddenSpansForASTSelection(result)
 		}
@@ -165,10 +165,10 @@ func (f *LongExprFormatter) findLongLines(src []byte) []lineInfo {
 // breakLongLine attempts to break a long line at an appropriate point.
 // Returns the modified source and whether a change was made.
 func (f *LongExprFormatter) breakLongLine(src []byte, info lineInfo) ([]byte, bool) {
-	return f.breakLongLineWithForbidden(src, info, nil)
+	return f.breakLongLineWithForbidden(src, info, offsetSpanSet{})
 }
 
-func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo, forbidden []offsetSpan) ([]byte, bool) {
+func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo, forbidden offsetSpanSet) ([]byte, bool) {
 	line := info.content
 	trimmed := strings.TrimLeft(line, " \t")
 
@@ -202,14 +202,12 @@ func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo
 		return src, false
 	}
 
-	if len(forbidden) > 0 {
-		abs := info.start + breakPoint.pos
-		// Ensure the chosen break operator doesn't fall inside a call-arg list
-		// or composite literal. Those regions are owned by call/composite
-		// formatters and breaking there tends to cause stage fighting.
-		if isOffsetInAnySpan(abs, forbidden) || isOffsetInAnySpan(abs+len(breakPoint.op)-1, forbidden) {
-			return src, false
-		}
+	abs := info.start + breakPoint.pos
+	// Ensure the chosen break operator doesn't fall inside a call-arg list or
+	// composite literal. Those regions are owned by call/composite formatters
+	// and breaking there tends to cause stage fighting.
+	if forbidden.containsOffset(abs) || forbidden.containsOffset(abs+len(breakPoint.op)-1) {
+		return src, false
 	}
 
 	// In Go, we must break AFTER the operator (can't have newline before binary op)
