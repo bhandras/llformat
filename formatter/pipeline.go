@@ -28,6 +28,11 @@ type PipelineConfig struct {
 	// intentionally opt-in to preserve golden fixtures.
 	MultiLineUseASTSelect bool
 
+	// CompactCallUseASTSelect enables AST-based call selection for the legacy
+	// compact call formatter stage. This is an internal migration knob and is
+	// intentionally opt-in to preserve golden fixtures.
+	CompactCallUseASTSelect bool
+
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
 	AllowDSLCallArgs bool
@@ -133,6 +138,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		UseDSLBlankLinesNative:    cfg.UseDSLBlankLinesNative,
 		TraceDSL:                  cfg.TraceDSL,
 		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
+		CompactCallUseASTSelect:   cfg.CompactCallUseASTSelect,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
 		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,

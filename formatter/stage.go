@@ -113,6 +113,7 @@ type StageOptions struct {
 	DSLSigsStyle           string
 	TraceDSL               bool // Enable DSL rule tracing (DSL stages only)
 	MultiLineUseASTSelect  bool // Use AST-based selection in legacy multiline formatter
+	CompactCallUseASTSelect bool // Use AST-based selection in legacy compact call formatter
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -157,6 +158,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 		UseDSLFuncSigsNative:   false,
 		DSLSigsStyle:           "",
 		MultiLineUseASTSelect:  false,
+		CompactCallUseASTSelect: false,
 	})
 }
 
@@ -206,6 +208,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	var callFormatter Formatter = NewCompactCallFormatter(Config{
 		ColumnLimit: cfg.ColumnLimit,
 		TabStop:     cfg.TabStop,
+		UseASTSelection: opts.CompactCallUseASTSelect,
 		SkipGofmt:   true,
 	})
 	if opts.UseDSLLogCalls {

@@ -27,6 +27,14 @@ type Config struct {
 	// FallbackNonTargets enables formatting of non-targeted function calls
 	// that exceed the column limit using a packed multi-line style.
 	FallbackNonTargets bool
+
+	// UseASTSelection switches this legacy call formatter from scan-based call
+	// detection to AST-based call selection. The formatting logic remains the
+	// same; only the "which calls do we consider next?" selector changes.
+	//
+	// This is intentionally opt-in to preserve golden fixtures.
+	UseASTSelection bool
+
 	// SkipGofmt skips the internal gofmt pass, useful when running in a pipeline
 	// that will run gofmt at the end.
 	SkipGofmt bool
@@ -82,13 +90,20 @@ func (f *CompactCallFormatter) FormatFile(src []byte) []byte {
 	}
 	fallbackNonTargets = f.cfg.FallbackNonTargets
 	skipGofmt = f.cfg.SkipGofmt
-	return formatWithTargets(src, f.cfg.Targets)
+	if f.cfg.UseASTSelection {
+		return formatWithTargetsAST(src, f.cfg.Targets)
+	}
+	return formatWithTargetsScan(src, f.cfg.Targets)
 }
 
 // Core formatting driver given a target signature list.
 var currentTargets []string
 
 func formatWithTargets(src []byte, targets []string) []byte {
+	return formatWithTargetsScan(src, targets)
+}
+
+func formatWithTargetsScan(src []byte, targets []string) []byte {
 	currentTargets = targets
 	// We'll scan for target callsites and rewrite them in-place into a
 	// buffer.
@@ -1395,4 +1410,3 @@ func FormatCallPackedMultiLine(call []byte, wsIndent string, colLimit, ts int) s
 
 	return result
 }
-
