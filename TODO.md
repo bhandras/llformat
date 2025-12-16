@@ -84,10 +84,10 @@
 - [x] Add parse-safe mode to legacy long-expr stage (opt-in).
   - [x] Add pipeline knob `PipelineConfig.LongExprParseSafe` and stage option wiring.
   - [x] Add tests: parse-safe never rewrites unparseable sources; still rewrites valid sources with AST equivalence.
-- [ ] Port legacy long-expr *selection* to AST (opt-in), keep legacy breaking logic unchanged.
-  - [ ] Add pipeline knob `PipelineConfig.LongExprUseASTSelect` and stage option wiring.
-  - [ ] Default policy: don’t rewrite inside call-arg lists/composite literals (reduce stage fighting).
-  - [ ] Add tests: long-expr AST selection avoids rewriting inside call args; still rewrites standalone long expressions; output remains parseable + AST-equivalent.
+- [x] Port legacy long-expr *selection* to AST (opt-in), keep legacy breaking logic unchanged.
+  - [x] Add pipeline knob `PipelineConfig.LongExprUseASTSelect` and stage option wiring.
+  - [x] Default policy: don’t rewrite inside call-arg lists/composite literals/func bodies (reduce stage fighting).
+  - [x] Add tests: AST selection avoids rewriting inside call args/composite bodies; still rewrites standalone long expressions; can still break outside forbidden spans; output remains parseable + AST-equivalent.
 - [ ] Decide default rollout strategy for AST selection knobs (when to flip default `false → true`).
   - [ ] Add broader “cursor-positioned call selection” fuzz-ish tests (no goldens).
   - [ ] Add more snippets around: method values, func literals, index-list generics, and mixed selector/index/type-assert chains.
