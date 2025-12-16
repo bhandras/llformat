@@ -85,7 +85,7 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 			}
 			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 		}
-		doc, ok := sameOpBinaryChainDoc(e, ctx)
+		doc, ok := sameOpBinaryChainDocWithKind(e, ctx, kind)
 		if !ok {
 			return exprDocInfo{}, false
 		}
@@ -538,6 +538,10 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (
 }
 
 func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) {
+	return sameOpBinaryChainDocWithKind(bin, ctx, exprDocKindTopLevel)
+}
+
+func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
 	if bin == nil {
 		return nil, false
 	}
@@ -559,6 +563,16 @@ func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) 
 		if i > 0 {
 			docs = append(docs, layout.T(" "), layout.T(opStr), layout.L())
 		}
+
+		// In call-arg context, prefer structured docs for terms so selector/method
+		// chains can break within the binary expression.
+		if kind == exprDocKindCallArg {
+			if info, ok := exprDocWithKind(term, ctx, kind); ok {
+				docs = append(docs, info.Doc)
+				continue
+			}
+		}
+
 		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
 	}
 	return layout.G(layout.C(docs...)), true
