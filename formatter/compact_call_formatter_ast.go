@@ -126,7 +126,7 @@ func compactCallCandidatesFromAST(file *ast.File, fset *token.FileSet, src []byt
 			return true
 		}
 
-		startPos := compactScanCallStartPos(ce.Fun)
+		startPos := legacyScanCallStartPos(ce.Fun)
 		if startPos == token.NoPos {
 			return true
 		}
@@ -172,45 +172,3 @@ func compactCallCandidatesFromAST(file *ast.File, fset *token.FileSet, src []byt
 
 	return candidates
 }
-
-// compactScanCallStartPos returns the byte position where the legacy
-// scan-based call detector would "start" matching a call.
-//
-// For method calls on non-identifier receivers like `factory().Method(...)`,
-// this returns the selector identifier's position (`Method`), mirroring how
-// the scan-based fallback detects calls starting at the method name.
-func compactScanCallStartPos(fun ast.Expr) token.Pos {
-	switch v := fun.(type) {
-	case *ast.Ident:
-		return v.Pos()
-	case *ast.SelectorExpr:
-		if pos, ok := leftmostIdentPosInSelectorChainCompact(v); ok {
-			return pos
-		}
-		if v.Sel != nil {
-			return v.Sel.Pos()
-		}
-		return token.NoPos
-	default:
-		// The legacy scan-based formatter does not handle generic instantiations
-		// or other non-ident callees.
-		return token.NoPos
-	}
-}
-
-func leftmostIdentPosInSelectorChainCompact(sel *ast.SelectorExpr) (token.Pos, bool) {
-	var current ast.Expr = sel
-	for {
-		s, ok := current.(*ast.SelectorExpr)
-		if !ok {
-			break
-		}
-		current = s.X
-	}
-	base, ok := current.(*ast.Ident)
-	if !ok || base == nil {
-		return token.NoPos, false
-	}
-	return base.Pos(), true
-}
-
