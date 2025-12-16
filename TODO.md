@@ -70,6 +70,24 @@
   - [x] DSL engine can still apply file rules even if `go/parser` fails.
   - [ ] Add targeted tests for common “invalid go” fixtures patterns (multiple `package` blocks, etc.).
 
+## Legacy → AST selection (parity-first migration)
+- [x] Port multiline call *selection* to AST (opt-in), keep legacy formatting unchanged.
+  - [x] Add pipeline knob `PipelineConfig.MultiLineUseASTSelect` and stage option wiring.
+  - [x] Add parity tests: AST selection matches scan selection, and falls back on unparseable sources.
+- [x] Port compact call *selection* to AST (opt-in), keep legacy formatting unchanged.
+  - [x] Add pipeline knob `PipelineConfig.CompactCallUseASTSelect` and stage option wiring.
+  - [x] Harden legacy fallback scan: don’t mis-detect type assertions `x.(T)` as calls.
+  - [x] Add parity tests: AST selection matches scan selection, and falls back on unparseable sources.
+- [x] Consolidate legacy “scan semantics” helpers used by AST selection.
+  - [x] Shared call start logic (`legacyScanCallStartPos`).
+  - [x] Shared call span extraction (`legacyCallSpansFromAST`).
+- [x] Add parse-safe mode to legacy long-expr stage (opt-in).
+  - [x] Add pipeline knob `PipelineConfig.LongExprParseSafe` and stage option wiring.
+  - [x] Add tests: parse-safe never rewrites unparseable sources; still rewrites valid sources with AST equivalence.
+- [ ] Decide default rollout strategy for AST selection knobs (when to flip default `false → true`).
+  - [ ] Add broader “cursor-positioned call selection” fuzz-ish tests (no goldens).
+  - [ ] Add more snippets around: method values, func literals, index-list generics, and mixed selector/index/type-assert chains.
+
 ## Developer UX / CLI
 - [ ] Collapse flags into 2–3 user-facing stable modes (`legacy`, `dsl-parity`, `dsl-modern`) and document compatibility promises.
 - [ ] Improve `--trace-dsl` output to include “why a rule fired/did not fire”.
