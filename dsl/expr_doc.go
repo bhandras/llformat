@@ -174,6 +174,13 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 	}
 }
 
+func indentExprDocIfNeeded(info exprDocInfo) layout.Doc {
+	if info.NeedsContinuationIndent {
+		return layout.N("\t", info.Doc)
+	}
+	return info.Doc
+}
+
 func selectorChainDoc(sel *ast.SelectorExpr, ctx *Context) (layout.Doc, bool) {
 	if sel == nil {
 		return nil, false
@@ -567,6 +574,11 @@ func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Do
 		return nil, false
 	}
 
+	baseDoc := layout.T(baseText)
+	if info, ok := exprDocWithKind(idx.X, ctx, kind); ok {
+		baseDoc = indentExprDocIfNeeded(info)
+	}
+
 	indexText := renderNode(idx.Index, ctx.Fset)
 	if strings.Contains(indexText, "\n") || hasAnyComment(indexText) {
 		return nil, false
@@ -574,7 +586,7 @@ func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Do
 
 	indexDoc := layout.T(indexText)
 	if info, ok := exprDocWithKind(idx.Index, ctx, kind); ok {
-		indexDoc = info.Doc
+		indexDoc = indentExprDocIfNeeded(info)
 	}
 
 	// flat:  a[b]
@@ -583,7 +595,7 @@ func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Do
 	//       b
 	//   ]
 	return layout.G(layout.C(
-		layout.T(baseText),
+		baseDoc,
 		layout.T("["),
 		layout.N("\t", layout.G(layout.C(layout.SL(), indexDoc))),
 		layout.T("]"),
@@ -600,6 +612,11 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (l
 		return nil, false
 	}
 
+	baseDoc := layout.T(baseText)
+	if info, ok := exprDocWithKind(idx.X, ctx, kind); ok {
+		baseDoc = indentExprDocIfNeeded(info)
+	}
+
 	var indexDocs []layout.Doc
 	for i, index := range idx.Indices {
 		indexText := renderNode(index, ctx.Fset)
@@ -609,7 +626,7 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (l
 
 		indexDoc := layout.T(indexText)
 		if info, ok := exprDocWithKind(index, ctx, kind); ok {
-			indexDoc = info.Doc
+			indexDoc = indentExprDocIfNeeded(info)
 		}
 
 		if i > 0 {
@@ -628,7 +645,7 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (l
 	// Note: we intentionally do not put `]` on its own line; doing so can break
 	// parsing due to Go's semicolon insertion.
 	return layout.G(layout.C(
-		layout.T(baseText),
+		baseDoc,
 		layout.T("["),
 		layout.N("\t", inner),
 		layout.T("]"),
@@ -691,6 +708,11 @@ func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context, kind exprDocKind) (l
 		return nil, false
 	}
 
+	recvDoc := layout.T(recvText)
+	if info, ok := exprDocWithKind(t.X, ctx, kind); ok {
+		recvDoc = indentExprDocIfNeeded(info)
+	}
+
 	typeText := renderNode(t.Type, ctx.Fset)
 	if strings.Contains(typeText, "\n") || hasAnyComment(typeText) {
 		return nil, false
@@ -698,7 +720,7 @@ func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context, kind exprDocKind) (l
 
 	typeDoc := layout.T(typeText)
 	if info, ok := exprDocWithKind(t.Type, ctx, kind); ok {
-		typeDoc = info.Doc
+		typeDoc = indentExprDocIfNeeded(info)
 	}
 
 	// flat:  x.(T)
@@ -710,7 +732,7 @@ func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context, kind exprDocKind) (l
 	// semicolon insertion hazard), and we intentionally do not put `)` on its own
 	// line.
 	return layout.G(layout.C(
-		layout.T(recvText),
+		recvDoc,
 		layout.T(".("),
 		layout.N("\t", layout.G(layout.C(layout.SL(), typeDoc))),
 		layout.T(")"),
@@ -727,13 +749,18 @@ func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc,
 		return nil, false
 	}
 
+	baseDoc := layout.T(baseText)
+	if info, ok := exprDocWithKind(s.X, ctx, kind); ok {
+		baseDoc = indentExprDocIfNeeded(info)
+	}
+
 	partDoc := func(e ast.Expr) (layout.Doc, bool) {
 		text := renderNode(e, ctx.Fset)
 		if strings.Contains(text, "\n") || hasAnyComment(text) {
 			return nil, false
 		}
 		if info, ok := exprDocWithKind(e, ctx, kind); ok {
-			return info.Doc, true
+			return indentExprDocIfNeeded(info), true
 		}
 		return layout.T(text), true
 	}
@@ -781,7 +808,7 @@ func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc,
 	//       low:high
 	//   ]
 	return layout.G(layout.C(
-		layout.T(baseText),
+		baseDoc,
 		layout.T("["),
 		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
 		layout.T("]"),
