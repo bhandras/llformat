@@ -23,6 +23,11 @@ type PipelineConfig struct {
 	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
 	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
+	// MultiLineUseASTSelect enables AST-based call selection for the legacy
+	// multiline call formatter. This is an internal migration knob and is
+	// intentionally opt-in to preserve golden fixtures.
+	MultiLineUseASTSelect bool
+
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
 	AllowDSLCallArgs bool
@@ -127,6 +132,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		UseDSLBlankLines:          cfg.UseDSLBlankLines,
 		UseDSLBlankLinesNative:    cfg.UseDSLBlankLinesNative,
 		TraceDSL:                  cfg.TraceDSL,
+		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
 		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,

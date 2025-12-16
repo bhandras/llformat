@@ -14,6 +14,13 @@ type MultiLineConfig struct {
 	ColumnLimit int
 	TabStop     int
 	Excludes    []string // Functions to exclude from formatting
+
+	// UseASTSelection switches the legacy multiline call formatter from
+	// scan-based call detection to AST-based call selection. The formatting
+	// logic remains unchanged; only the "what should we format next?" selector
+	// changes. This is intentionally opt-in to preserve golden fixtures.
+	UseASTSelection bool
+
 	// SkipGofmt skips the internal gofmt pass, useful when running in a pipeline
 	// that will run gofmt at the end.
 	SkipGofmt bool
@@ -50,17 +57,21 @@ func (f *MultiLineCallFormatter) FormatFile(src []byte) []byte {
 	// Apply config to package-level parameters used by helpers.
 	columnLimit = f.cfg.ColumnLimit
 	tabStop = f.cfg.TabStop
-	return f.formatMultiLineCallsInSource(src)
+	if f.cfg.UseASTSelection {
+		return f.formatMultiLineCallsInSourceAST(src)
+	}
+	return f.formatMultiLineCallsInSourceScan(src)
 }
 
-// formatMultiLineCallsInSource scans source and reformats function calls that exceed column limit.
+// formatMultiLineCallsInSourceScan scans source and reformats function calls
+// that exceed column limit.
 // It works iteratively - expanding one call at a time until no more long lines remain.
-func (f *MultiLineCallFormatter) formatMultiLineCallsInSource(src []byte) []byte {
+func (f *MultiLineCallFormatter) formatMultiLineCallsInSourceScan(src []byte) []byte {
 	result := src
 	maxIterations := 20
 
 	for iter := 0; iter < maxIterations; iter++ {
-		modified, changed := f.formatOneCallInSource(result)
+		modified, changed := f.formatOneCallInSourceScan(result)
 		if !changed {
 			break
 		}
@@ -76,9 +87,9 @@ func (f *MultiLineCallFormatter) formatMultiLineCallsInSource(src []byte) []byte
 	return result
 }
 
-// formatOneCallInSource finds and expands one function call that exceeds the column limit.
+// formatOneCallInSourceScan finds and expands one function call that exceeds the column limit.
 // Returns the modified source and whether a change was made.
-func (f *MultiLineCallFormatter) formatOneCallInSource(src []byte) ([]byte, bool) {
+func (f *MultiLineCallFormatter) formatOneCallInSourceScan(src []byte) ([]byte, bool) {
 	var out bytes.Buffer
 	i := 0
 	changed := false
@@ -377,7 +388,7 @@ func FormatOneMultiLineCallInSource(src []byte, colLimit, tabStop int, excludes 
 	tabStop = cfg.TabStop
 
 	f := NewMultiLineCallFormatter(cfg)
-	return f.formatOneCallInSource(src)
+	return f.formatOneCallInSourceScan(src)
 }
 
 // FormatCallOnePerLineMultiLine formats a call using the legacy MultiLineCallFormatter

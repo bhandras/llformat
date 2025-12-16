@@ -112,6 +112,7 @@ type StageOptions struct {
 	UseDSLFuncSigsNative   bool // Use native DSL signature rules (fallback to legacy)
 	DSLSigsStyle           string
 	TraceDSL               bool // Enable DSL rule tracing (DSL stages only)
+	MultiLineUseASTSelect  bool // Use AST-based selection in legacy multiline formatter
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -155,6 +156,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 		UseDSLBlankLinesNative: false,
 		UseDSLFuncSigsNative:   false,
 		DSLSigsStyle:           "",
+		MultiLineUseASTSelect:  false,
 	})
 }
 
@@ -234,6 +236,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		ColumnLimit: cfg.ColumnLimit,
 		TabStop:     cfg.TabStop,
 		Excludes:    opts.Excludes,
+		UseASTSelection: opts.MultiLineUseASTSelect,
 		SkipGofmt:   true,
 	})
 	if opts.UseDSLMultiLineCalls {
