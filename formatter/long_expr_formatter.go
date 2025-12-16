@@ -14,6 +14,11 @@ type LongExprConfig struct {
 	ColumnLimit   int
 	TabStop       int
 	MaxIterations int // Maximum iterations for breaking (default 5)
+
+	// ParseSafe enables parse-safe behavior: a rewrite is only accepted if gofmt
+	// succeeds on the candidate output. This prevents the formatter from
+	// returning syntactically invalid Go when a heuristic rewrite goes wrong.
+	ParseSafe bool
 }
 
 // LongExprFormatter breaks long expressions that exceed the column limit.
@@ -48,18 +53,38 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 			break // All lines fit
 		}
 
-		// Try to break a long line (skip ones we've already tried)
+		// Try to break a long line (skip ones we've already tried).
+		// If ParseSafe is enabled, we keep trying other lines in the same pass
+		// when a candidate rewrite would make gofmt fail.
 		var modified []byte
 		changed := false
 		for _, lineInfo := range longLines {
 			if skippedLines[lineInfo.lineNum] {
 				continue
 			}
-			modified, changed = f.breakLongLine(result, lineInfo)
-			if changed {
+			candidate, candidateChanged := f.breakLongLine(result, lineInfo)
+			if !candidateChanged {
+				// Couldn't break this line, remember to skip it.
+				skippedLines[lineInfo.lineNum] = true
+				continue
+			}
+
+			if !f.cfg.ParseSafe {
+				modified = candidate
+				changed = true
 				break
 			}
-			// Couldn't break this line, remember to skip it
+
+			// ParseSafe: only accept this rewrite if gofmt succeeds.
+			if formatted, err := formatstd.Source(candidate); err == nil {
+				result = formatted
+				// Reset skipped lines since line numbers may have changed.
+				skippedLines = make(map[int]bool)
+				changed = true
+				break
+			}
+
+			// Reject rewrite and keep searching.
 			skippedLines[lineInfo.lineNum] = true
 		}
 
@@ -67,13 +92,16 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 			break // No more lines we can break
 		}
 
-		// Run gofmt to normalize
-		if formatted, err := formatstd.Source(modified); err == nil {
-			result = formatted
-			// Reset skipped lines since line numbers may have changed
-			skippedLines = make(map[int]bool)
-		} else {
-			result = modified
+		// Run gofmt to normalize (only for non-ParseSafe mode, where we accept
+		// candidate rewrites even if gofmt fails).
+		if !f.cfg.ParseSafe {
+			if formatted, err := formatstd.Source(modified); err == nil {
+				result = formatted
+				// Reset skipped lines since line numbers may have changed.
+				skippedLines = make(map[int]bool)
+			} else {
+				result = modified
+			}
 		}
 	}
 	return result

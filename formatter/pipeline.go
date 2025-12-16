@@ -33,6 +33,12 @@ type PipelineConfig struct {
 	// intentionally opt-in to preserve golden fixtures.
 	CompactCallUseASTSelect bool
 
+	// LongExprParseSafe enables parse-safe behavior in the legacy long
+	// expression formatter: it will only accept a rewrite if gofmt succeeds on
+	// the candidate output. This is an internal hardening knob and is
+	// intentionally opt-in to preserve golden fixtures.
+	LongExprParseSafe bool
+
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
 	AllowDSLCallArgs bool
@@ -139,6 +145,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		TraceDSL:                  cfg.TraceDSL,
 		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
 		CompactCallUseASTSelect:   cfg.CompactCallUseASTSelect,
+		LongExprParseSafe:         cfg.LongExprParseSafe,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
 		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,
