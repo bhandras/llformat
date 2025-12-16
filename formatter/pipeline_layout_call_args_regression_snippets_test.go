@@ -58,15 +58,15 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 	indexBase := "someVeryLongReceiverNameThatIsVeryLong.FieldA().FieldB().FieldC"
 
 	baseExprs := map[string]string{
-		"logical_and":   logicalAnd,
-		"logical_or":    logicalOr,
-		"comparison":    comparison,
-		"arithmetic":    arithmetic,
-		"nested_call":   nestedCall,
-		"generic_call":  genericCall,
-		"method_chain":  methodChain,
+		"logical_and":    logicalAnd,
+		"logical_or":     logicalOr,
+		"comparison":     comparison,
+		"arithmetic":     arithmetic,
+		"nested_call":    nestedCall,
+		"generic_call":   genericCall,
+		"method_chain":   methodChain,
 		"selector_chain": selectorChain,
-		"index_base":    indexBase,
+		"index_base":     indexBase,
 	}
 
 	for name, expr := range baseExprs {
@@ -127,10 +127,33 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 	add("nested_call_in_arg", "outerFunctionNameThatIsVeryLong(innerFunctionNameThatIsVeryLong("+logicalAnd+", 7), 42)")
 	add("nested_generic_call_in_arg", "outerFunctionNameThatIsVeryLong(genericFunctionNameThatIsVeryLong[VeryLongTypeNameThatIsVeryLong]("+logicalOr+"), 42)")
 	add("nested_method_chain_in_arg", "outerFunctionNameThatIsVeryLong("+methodChain+", 42)")
+	add("double_nested_call_in_arg", "outerFunctionNameThatIsVeryLong(innerFunctionNameThatIsVeryLong(innerFunctionNameThatIsVeryLong("+logicalAnd+", 7), 8), 42)")
 
 	// String concatenation inside call args (legacy expr stage historically handled these).
 	add("string_concat", `"prefix: " + someVeryLongIdentifierNameThatIsVeryLong + ": " + anotherVeryLongIdentifierNameThatIsVeryLong`)
 	add("string_concat_with_call", `"prefix: " + innerFunctionNameThatIsVeryLong(`+logicalAnd+`, 7) + ": suffix"`)
+
+	// Parenthesized callees (semicolon insertion hazards if mishandled).
+	add("paren_callee_ident", "(innerFunctionNameThatIsVeryLong)("+logicalAnd+", 7)")
+	add("paren_callee_selector", "(someVeryLongReceiverNameThatIsVeryLong.MethodNameThatIsVeryLong)("+logicalOr+")")
+	add("call_returning_func_then_call", "functionThatReturnsFuncNameThatIsVeryLong("+logicalAnd+")(anotherVeryLongIdentifierNameThatIsVeryLong)")
+
+	// Type assertion to a function type, immediately called.
+	add("type_assert_func_then_call", "someInterfaceValueNameThatIsVeryLong.(func(int, int) int)(1, 2)")
+
+	// Three-index slices with long indices (parseable even if not type-checkable).
+	add("slice_three_index_logical_comparison_arith", "someSliceNameThatIsVeryLong["+logicalAnd+":"+comparison+":"+arithmetic+"]")
+
+	// Func literals used as args (exercise block/comment/string skipping logic).
+	add("func_lit_arg", "outerFunctionNameThatIsVeryLong(func(x int) int { return x + 1 }(7), 42)")
+	add("func_lit_direct", "func(x int) int { return x + 1 }(someVeryLongIdentifierNameThatIsVeryLong)")
+
+	// Composite literals with func-typed fields/values.
+	add("struct_with_func_field", "struct{ FieldNameThatIsVeryLong func(int) int }{FieldNameThatIsVeryLong: func(x int) int { return x + 1 }}")
+	add("map_with_func_values", `map[string]func(int) int{"firstVeryLongKeyName": func(x int) int { return x + 1 }, "secondVeryLongKeyName": func(y int) int { return y + 2 }}`)
+
+	// Keys that are themselves calls.
+	add("map_kv_call_key", `map[string]int{fmt.Sprintf("%s", someVeryLongIdentifierNameThatIsVeryLong): 1, fmt.Sprintf("%s", anotherVeryLongIdentifierNameThatIsVeryLong): 2}`)
 
 	// Build up additional variations without adding brittle expectations.
 	// Keep the suite deterministic and easy to extend.
@@ -147,7 +170,14 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 		wrap("type_assert_"+name, "someInterfaceValueNameThatIsVeryLong.("+exprToType(expr)+")")
 	}
 
-	require.GreaterOrEqual(t, len(cases), 100, "expected at least 100 regression cases")
+	// Additional cross-product expansions.
+	for name, expr := range baseExprs {
+		add("type_conversion_"+name, "SomeConcreteTypeNameThatIsVeryLong("+expr+")")
+		add("paren_"+name+"_then_call", "("+expr+").SomeMethodNameThatIsVeryLong("+logicalAnd+")")
+		add("addr_of_"+name, "&("+expr+")")
+	}
+
+	require.GreaterOrEqual(t, len(cases), 180, "expected at least 180 regression cases")
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
