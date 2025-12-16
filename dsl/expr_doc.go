@@ -290,6 +290,16 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 		return nil, false
 	}
 
+	funDoc := layout.T(renderNode(call.Fun, ctx.Fset))
+	// Prefer structured docs for the callee too (useful for generic instantiation
+	// expressions like `f[T, U]`), but keep it tightly coupled to the `(` to
+	// avoid semicolon-insertion hazards (`f\n(` is not valid Go).
+	if call.Fun != nil {
+		if info, ok := exprDocWithKind(call.Fun, ctx, exprDocKindCallArg); ok {
+			funDoc = info.Doc
+		}
+	}
+
 	// Be conservative: skip any comment-containing args, or args that already
 	// contain newlines (we don't try to reindent nested multiline spans yet).
 	var argDocs []layout.Doc
@@ -336,7 +346,7 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	))
 
 	doc := layout.G(layout.C(
-		layout.T(renderNode(call.Fun, ctx.Fset)),
+		funDoc,
 		layout.T("("),
 		layout.N("\t", argsGroup),
 		layout.SL(),
