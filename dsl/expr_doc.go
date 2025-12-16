@@ -336,11 +336,13 @@ func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
 	// flat:  (inner)
 	// break: (
 	//          inner
-	//        )
+	//        inner)
+	//
+	// Note: we intentionally do not place `)` on its own line; doing so can break
+	// parsing due to Go's semicolon insertion.
 	return layout.G(layout.C(
 		layout.T("("),
 		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
-		layout.SL(),
 		layout.T(")"),
 	)), true
 }
