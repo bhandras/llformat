@@ -165,6 +165,12 @@ func (f *MultiLineCallFormatter) findFunctionCallAt(src []byte, i int) *callInfo
 		j++
 	}
 
+	// Reject incomplete selector chains like `pkg.` or `x.`. This prevents
+	// mis-detecting type assertions (`x.(T)`) as calls on `x.`.
+	if j > i && src[j-1] == '.' {
+		return nil
+	}
+
 	// Skip whitespace
 	for j < len(src) && (src[j] == ' ' || src[j] == '\t') {
 		j++

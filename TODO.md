@@ -62,10 +62,10 @@
   - [ ] Avoid scattered “compat shims” by keeping them inside `parity` only.
 
 ## Testing and hardening (without touching goldens)
-- [ ] Add AST-equivalence property tests (ignore positions/scopes/Objs) for valid sources:
-  - [ ] Verify formatted output parses and is structurally equivalent to the original AST.
+- [x] Add AST-equivalence property tests (ignore positions/scopes/Objs) for valid sources:
+  - [x] Verify formatted output parses and is structurally equivalent to the original AST.
   - [x] Keep idempotence tests for modern/pure DSL modes.
-- [ ] Add a large table-driven regression suite (~100 snippets) for `layout-args` that checks parseability + idempotence (no goldens).
+- [x] Add a large table-driven regression suite (~100 snippets) for `layout-args` that checks parseability + idempotence (no goldens).
 - [ ] Expand crash/parse-failure coverage:
   - [x] DSL engine can still apply file rules even if `go/parser` fails.
   - [ ] Add targeted tests for common “invalid go” fixtures patterns (multiple `package` blocks, etc.).

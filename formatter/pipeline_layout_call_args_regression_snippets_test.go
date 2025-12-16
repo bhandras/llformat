@@ -182,6 +182,10 @@ func f() {
 			_, err = parser.ParseFile(fset, "out2.go", out2, parser.AllErrors)
 			require.NoError(t, err, "second pass output was not parseable:\n%s", out2Str)
 
+			// Semantic equivalence guard: formatting must not change AST structure.
+			requireASTEquivalent(t, []byte(in), out)
+			requireASTEquivalent(t, []byte(in), out2)
+
 			// Quick sanity: avoid accidentally emitting NUL bytes etc.
 			require.False(t, strings.ContainsRune(outStr, '\x00'))
 		})

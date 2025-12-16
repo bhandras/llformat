@@ -12,12 +12,12 @@ import (
 )
 
 // canonicalASTDump parses src and returns a stable structural dump of the AST
-// that ignores position/scoping information. This is a lightweight semantic
-// regression guard: if formatting only changes whitespace, the AST structure
-// should remain the same.
+// that ignores position/scoping information (and comments). This is a
+// lightweight semantic regression guard: if formatting only changes whitespace
+// and comment layout, the AST structure should remain the same.
 func canonicalASTDump(src []byte) (string, error) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors)
+	file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors|parser.ParseComments)
 	if err != nil {
 		return "", err
 	}
@@ -42,9 +42,28 @@ func stripASTMetadata(node ast.Node) {
 			v.Scope = nil
 			// Unresolved identifiers are not semantically relevant for formatting.
 			v.Unresolved = nil
+			// Ignore comment groups; comment formatting is intentionally allowed to
+			// change while preserving code semantics.
+			v.Comments = nil
 		case *ast.Ident:
 			// Obj links can create cycles; ignore them for structural equivalence.
 			v.Obj = nil
+		case *ast.GenDecl:
+			v.Doc = nil
+		case *ast.FuncDecl:
+			v.Doc = nil
+		case *ast.Field:
+			v.Doc = nil
+			v.Comment = nil
+		case *ast.ImportSpec:
+			v.Doc = nil
+			v.Comment = nil
+		case *ast.TypeSpec:
+			v.Doc = nil
+			v.Comment = nil
+		case *ast.ValueSpec:
+			v.Doc = nil
+			v.Comment = nil
 		}
 		return true
 	})
