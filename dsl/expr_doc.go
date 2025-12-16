@@ -85,6 +85,13 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 			}
 			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 		}
+		if kind == exprDocKindCallArg && isComparisonOp(e.Op) {
+			doc, ok := comparisonBinaryExprDoc(e, ctx, kind)
+			if !ok {
+				return exprDocInfo{}, false
+			}
+			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+		}
 		doc, ok := sameOpBinaryChainDocWithKind(e, ctx, kind)
 		if !ok {
 			return exprDocInfo{}, false
@@ -539,6 +546,53 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (
 
 func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) {
 	return sameOpBinaryChainDocWithKind(bin, ctx, exprDocKindTopLevel)
+}
+
+func isComparisonOp(op token.Token) bool {
+	switch op {
+	case token.EQL, token.NEQ, token.LSS, token.GTR, token.LEQ, token.GEQ:
+		return true
+	default:
+		return false
+	}
+}
+
+func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if bin == nil || ctx == nil || bin.X == nil || bin.Y == nil {
+		return nil, false
+	}
+	if !isComparisonOp(bin.Op) {
+		return nil, false
+	}
+
+	leftText := renderNode(bin.X, ctx.Fset)
+	rightText := renderNode(bin.Y, ctx.Fset)
+	if strings.Contains(leftText, "\n") || strings.Contains(rightText, "\n") {
+		return nil, false
+	}
+	if hasAnyComment(leftText) || hasAnyComment(rightText) {
+		return nil, false
+	}
+
+	leftDoc := layout.T(leftText)
+	if info, ok := exprDocWithKind(bin.X, ctx, kind); ok {
+		leftDoc = info.Doc
+	}
+
+	rightDoc := layout.T(rightText)
+	if info, ok := exprDocWithKind(bin.Y, ctx, kind); ok {
+		rightDoc = info.Doc
+	}
+
+	// flat:  left == right
+	// break: left ==\nright
+	return layout.G(layout.C(
+		leftDoc,
+		layout.T(" "),
+		layout.T(bin.Op.String()),
+		layout.SL(),
+		rightDoc,
+	)), true
 }
 
 func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
