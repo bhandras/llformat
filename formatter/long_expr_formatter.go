@@ -19,6 +19,12 @@ type LongExprConfig struct {
 	// succeeds on the candidate output. This prevents the formatter from
 	// returning syntactically invalid Go when a heuristic rewrite goes wrong.
 	ParseSafe bool
+
+	// UseASTSelection enables AST-guided line selection for breaking. When
+	// enabled, the long-expr formatter will avoid rewriting long lines that
+	// appear inside call-argument lists and composite literals, reducing
+	// interference with call formatting stages.
+	UseASTSelection bool
 }
 
 // LongExprFormatter breaks long expressions that exceed the column limit.
@@ -53,6 +59,11 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 			break // All lines fit
 		}
 
+		var forbidden []offsetSpan
+		if f.cfg.UseASTSelection {
+			forbidden = f.forbiddenSpansForASTSelection(result)
+		}
+
 		// Try to break a long line (skip ones we've already tried).
 		// If ParseSafe is enabled, we keep trying other lines in the same pass
 		// when a candidate rewrite would make gofmt fail.
@@ -62,7 +73,7 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 			if skippedLines[lineInfo.lineNum] {
 				continue
 			}
-			candidate, candidateChanged := f.breakLongLine(result, lineInfo)
+			candidate, candidateChanged := f.breakLongLineWithForbidden(result, lineInfo, forbidden)
 			if !candidateChanged {
 				// Couldn't break this line, remember to skip it.
 				skippedLines[lineInfo.lineNum] = true
@@ -109,13 +120,13 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 
 // lineInfo contains information about a line that exceeds the column limit.
 type lineInfo struct {
-	lineNum    int
-	start      int // byte offset of line start
-	end        int // byte offset of line end (before newline)
-	content    string
-	visualLen  int
-	indent     string
-	indentLen  int
+	lineNum   int
+	start     int // byte offset of line start
+	end       int // byte offset of line end (before newline)
+	content   string
+	visualLen int
+	indent    string
+	indentLen int
 }
 
 // findLongLines returns information about lines exceeding the column limit.
@@ -154,6 +165,10 @@ func (f *LongExprFormatter) findLongLines(src []byte) []lineInfo {
 // breakLongLine attempts to break a long line at an appropriate point.
 // Returns the modified source and whether a change was made.
 func (f *LongExprFormatter) breakLongLine(src []byte, info lineInfo) ([]byte, bool) {
+	return f.breakLongLineWithForbidden(src, info, nil)
+}
+
+func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo, forbidden []offsetSpan) ([]byte, bool) {
 	line := info.content
 	trimmed := strings.TrimLeft(line, " \t")
 
@@ -185,6 +200,16 @@ func (f *LongExprFormatter) breakLongLine(src []byte, info lineInfo) ([]byte, bo
 	breakPoint := f.findBreakPoint(line, info.indentLen, isCaseStmt)
 	if breakPoint == nil {
 		return src, false
+	}
+
+	if len(forbidden) > 0 {
+		abs := info.start + breakPoint.pos
+		// Ensure the chosen break operator doesn't fall inside a call-arg list
+		// or composite literal. Those regions are owned by call/composite
+		// formatters and breaking there tends to cause stage fighting.
+		if isOffsetInAnySpan(abs, forbidden) || isOffsetInAnySpan(abs+len(breakPoint.op)-1, forbidden) {
+			return src, false
+		}
 	}
 
 	// In Go, we must break AFTER the operator (can't have newline before binary op)

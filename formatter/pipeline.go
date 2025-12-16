@@ -39,6 +39,11 @@ type PipelineConfig struct {
 	// intentionally opt-in to preserve golden fixtures.
 	LongExprParseSafe bool
 
+	// LongExprUseASTSelect enables AST-guided selection for the legacy long
+	// expression formatter stage. This is an internal migration knob and is
+	// intentionally opt-in to preserve golden fixtures.
+	LongExprUseASTSelect bool
+
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
 	AllowDSLCallArgs bool
@@ -146,6 +151,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
 		CompactCallUseASTSelect:   cfg.CompactCallUseASTSelect,
 		LongExprParseSafe:         cfg.LongExprParseSafe,
+		LongExprUseASTSelect:      cfg.LongExprUseASTSelect,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
 		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,
