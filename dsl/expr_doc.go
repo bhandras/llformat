@@ -402,8 +402,20 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 	}
 
 	typeText := ""
+	typeDoc := layout.T("")
 	if lit.Type != nil {
 		typeText = renderNode(lit.Type, ctx.Fset)
+		if strings.Contains(typeText, "\n") || hasAnyComment(typeText) {
+			return nil, false
+		}
+
+		typeDoc = layout.T(typeText)
+		// Prefer structured docs for generic instantiations like `T[A, B]`, but
+		// keep the opening `{` tightly coupled to the type to avoid semicolon
+		// insertion hazards.
+		if info, ok := exprDocWithKind(lit.Type, ctx, kind); ok {
+			typeDoc = info.Doc
+		}
 	}
 
 	var eltDocs []layout.Doc
@@ -450,7 +462,7 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 	//       b,
 	//   }
 	return layout.G(layout.C(
-		layout.T(typeText),
+		typeDoc,
 		layout.T("{"),
 		layout.N("\t", body),
 		layout.SL(),
