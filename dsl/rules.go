@@ -664,9 +664,30 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 	if len(formatFunc) > 0 && formatFunc[0] != nil {
 		action.FormatFunc = formatFunc[0]
 	}
-	return []Rule{
-		// Method chain rule - higher priority, handles chains specially
-		{
+
+	longCallConds := []Condition{
+		&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+		&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
+		&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+		&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+	}
+	// When layout is enabled, avoid independently rewriting receiver calls inside
+	// method chains. Those are better handled by the outer method chain / call
+	// argument formatting to prevent oscillation and parse hazards.
+	if opts.CallArgsStyle == "layout" || opts.MethodChainStyle == "layout" {
+		longCallConds = append(longCallConds, &NotCond{Cond: &IsChainedCallReceiverCond{Target: "node"}})
+	}
+
+	var rules []Rule
+
+	// Method chain rule - higher priority, handles chains specially.
+	//
+	// For `layout-args` we intentionally do not run the method-chain rule:
+	// method chains are expected to be formatted as expressions inside outer call
+	// argument lists (via `BreakCallArgsLayoutAction` + expr docs), and rewriting
+	// the chain independently can introduce parse hazards and oscillation.
+	if !(opts.CallArgsStyle == "layout" && opts.MethodChainStyle == "") {
+		rules = append(rules, Rule{
 			Name:    "long_method_chain",
 			Pattern: &NodePattern{Type: "CallExpr"},
 			When: &AndCond{
@@ -685,36 +706,34 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 					return &BreakMethodChainAction{Target: "node"}
 				}
 			}(),
-		},
-		// Generic call expression that exceeds column limit
-		// Skip method chains (handled above) and log/printf calls
-		// Use CollapsedWidthCond to handle multiline calls where the first line
-		// is short but the total content exceeds the column limit.
-		{
-			Name:    "long_call_expr",
-			Pattern: &NodePattern{Type: "CallExpr"},
-			When: &AndCond{
-				Conds: []Condition{
-					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
-					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-				},
-			},
-			Priority: 50,
-			Action: func() Action {
-				switch opts.CallArgsStyle {
-				case "layout":
-					return &TryElseAction{
-						Try:  &BreakCallArgsLayoutAction{Target: "node"},
-						Else: action,
-					}
-				default:
-					return action
-				}
-			}(),
-		},
+		})
 	}
+
+	// Generic call expression that exceeds column limit.
+	// Skip method chains (handled by long_method_chain, when enabled) and
+	// log/printf calls. Use CollapsedWidthCond to handle multiline calls where the
+	// first line is short but the total content exceeds the column limit.
+	rules = append(rules, Rule{
+		Name:    "long_call_expr",
+		Pattern: &NodePattern{Type: "CallExpr"},
+		When: &AndCond{
+			Conds: longCallConds,
+		},
+		Priority: 50,
+		Action: func() Action {
+			switch opts.CallArgsStyle {
+			case "layout":
+				return &TryElseAction{
+					Try:  &BreakCallArgsLayoutAction{Target: "node"},
+					Else: action,
+				}
+			default:
+				return action
+			}
+		}(),
+	})
+
+	return rules
 }
 
 // PackedMultiLineOnlyRules returns multiline call rules that format only

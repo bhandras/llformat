@@ -60,15 +60,13 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 	case *ast.CallExpr:
 		if kind == exprDocKindCallArg {
-			// In call-arg context, prefer a generic call doc so nested calls can
-			// break their arguments. This is intentionally prioritized over method
-			// chain formatting, since methodChainDoc currently keeps per-segment
-			// argument lists atomic.
-			if doc, ok := genericCallDoc(e, ctx); ok {
-				return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
-			}
 			if doc, ok := methodChainDocWithKind(e, ctx, kind); ok {
 				return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+			}
+			// Fall back to generic call formatting so nested calls can break their
+			// arguments (including generic callees like `f[T, U](...)`).
+			if doc, ok := genericCallDoc(e, ctx); ok {
+				return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 			}
 			return exprDocInfo{}, false
 		}
@@ -101,6 +99,15 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		}
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 	case *ast.ParenExpr:
+		// Be conservative with parenthesized calls in call-arg context. These are
+		// particularly prone to producing parse hazards when combined with
+		// argument-list commas and nested call rewrites (Go semicolon insertion is
+		// unforgiving around closing parens).
+		if kind == exprDocKindCallArg {
+			if _, ok := e.X.(*ast.CallExpr); ok {
+				return exprDocInfo{}, false
+			}
+		}
 		doc, ok := parenExprDoc(e, ctx)
 		if !ok {
 			return exprDocInfo{}, false
@@ -283,10 +290,13 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 			var argDocs []layout.Doc
 			for i, arg := range seg.args {
 				argText := renderNode(arg, ctx.Fset)
-				if strings.Contains(argText, "\n") || hasAnyComment(argText) {
+				if hasAnyComment(argText) {
 					return nil, false
 				}
 
+				// If the arg already contains newlines (e.g. produced by a previous
+				// layout pass), only proceed if we can represent it structurally. This
+				// avoids mixing “preformatted” spans with stringified fallbacks.
 				if info, ok := exprDocWithKind(arg, ctx, kind); ok {
 					d := info.Doc
 					if info.NeedsContinuationIndent {
@@ -297,6 +307,10 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 					}
 					argDocs = append(argDocs, d)
 					continue
+				}
+
+				if strings.Contains(argText, "\n") {
+					return nil, false
 				}
 
 				if i > 0 {
@@ -313,11 +327,14 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 			argsGroup := layout.G(layout.C(
 				layout.SL(),
 				layout.C(argDocs...),
-				layout.IB(layout.T(","), layout.T("")),
 			))
 
 			docs = append(docs, layout.N("\t", argsGroup))
-			docs = append(docs, layout.SL(), layout.T(")"))
+			// Keep `)` tightly coupled to the last token of the last argument to
+			// avoid semicolon-insertion hazards. In particular, avoid producing a
+			// line that starts with `)` after an identifier/literal on the previous
+			// line (which would make the source unparseable).
+			docs = append(docs, layout.T(")"))
 			continue
 		}
 
@@ -366,9 +383,6 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	var argDocs []layout.Doc
 	for i, arg := range call.Args {
 		argText := renderNode(arg, ctx.Fset)
-		if strings.Contains(argText, "\n") {
-			return nil, false
-		}
 		if hasAnyComment(argText) {
 			return nil, false
 		}
@@ -387,6 +401,10 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 				argDocs = append(argDocs, d)
 				continue
 			}
+		}
+
+		if strings.Contains(argText, "\n") {
+			return nil, false
 		}
 
 		if i > 0 {

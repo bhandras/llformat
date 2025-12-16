@@ -242,6 +242,16 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			style = "legacy"
 		}
 
+		nodeOrder := dsl.NodeOrderPreorder
+		// For layout-based call-arg formatting, process inner nodes first to
+		// avoid non-idempotent “outer before inner” rewrites (e.g. nested calls
+		// where the inner call is broken after the outer call has already decided
+		// how to pack its arguments).
+		switch style {
+		case "layout-args", "layout-all":
+			nodeOrder = dsl.NodeOrderDeepestFirst
+		}
+
 		var rules []dsl.Rule
 		switch style {
 		case "legacy", "legacy-scan", "scan":
@@ -293,6 +303,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			TabStop:       cfg.TabStop,
 			Rules:         rules,
 			Trace:         opts.TraceDSL,
+			NodeOrder:     nodeOrder,
 			MaxIterations: 20,
 			SkipGofmt:     true,
 		})

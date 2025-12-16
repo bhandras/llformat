@@ -50,8 +50,10 @@
 - [ ] Strengthen precedence/associativity handling for line breaks (avoid any semantic ambiguity).
 - [ ] Make call-argument formatting safe-by-design:
   - [x] `AutoDSLCallArgs` (allow only for known excluded calls).
+  - [x] `layout-args` auto-enables DSL expr stage to avoid stage interference.
   - [ ] Add a principled “never fight later call stages” mechanism (policy-driven, not allowlists).
 - [ ] Improve formatting for mixed chains (selectors, indexing, slicing, calls) under a unified model.
+  - [x] `layout-args` supports key/value, composites, indexing/slicing, generics, unary, parens, and type assertions in call-arg context.
 
 ## Rule set taxonomy (reduce incidental coupling)
 - [ ] Introduce explicit DSL rule set identifiers:
@@ -63,6 +65,7 @@
 - [ ] Add AST-equivalence property tests (ignore positions/scopes/Objs) for valid sources:
   - [ ] Verify formatted output parses and is structurally equivalent to the original AST.
   - [x] Keep idempotence tests for modern/pure DSL modes.
+- [ ] Add a large table-driven regression suite (~100 snippets) for `layout-args` that checks parseability + idempotence (no goldens).
 - [ ] Expand crash/parse-failure coverage:
   - [x] DSL engine can still apply file rules even if `go/parser` fails.
   - [ ] Add targeted tests for common “invalid go” fixtures patterns (multiple `package` blocks, etc.).

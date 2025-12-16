@@ -54,6 +54,12 @@ const (
 	// This more closely matches behavior of the legacy scanner-based formatters
 	// which operate left-to-right through the file.
 	NodeOrderSourceOrder
+
+	// NodeOrderDeepestFirst processes smaller-span nodes before larger-span
+	// nodes. This helps avoid “outer before inner” ordering hazards where an
+	// outer rewrite makes decisions based on inner nodes that have not yet been
+	// rewritten within the same engine run.
+	NodeOrderDeepestFirst
 )
 
 // Context provides formatting context to conditions and actions.

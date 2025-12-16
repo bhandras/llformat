@@ -511,6 +511,39 @@ func (c *CollapsedWidthCond) Eval(caps Captures, ctx *Context) bool {
 	return compareInt(collapsedLen, c.Op, threshold)
 }
 
+// IsChainedCallReceiverCond checks whether a CallExpr is used as the receiver
+// of another call in a method-chain-like expression, i.e. it appears as:
+//   <call>().Method(...)
+//
+// This is useful to prevent “double ownership” where both the receiver call and
+// the full method chain are rewritten independently, causing oscillation.
+type IsChainedCallReceiverCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsChainedCallReceiverCond.
+func (c *IsChainedCallReceiverCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil {
+		return false
+	}
+
+	parent := ctx.Parent(call)
+	sel, ok := parent.(*ast.SelectorExpr)
+	if !ok || sel == nil {
+		return false
+	}
+
+	grandparent := ctx.Parent(sel)
+	_, ok = grandparent.(*ast.CallExpr)
+	return ok
+}
+
 // IsSimpleLiteralCond checks if a node is a simple literal (number, bool, nil).
 type IsSimpleLiteralCond struct {
 	Target string

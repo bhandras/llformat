@@ -305,6 +305,21 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 			return pi < pj
 		})
 	}
+	if e.NodeOrder == NodeOrderDeepestFirst {
+		sort.SliceStable(nodes, func(i, j int) bool {
+			si, ei := nodeSpanOffsets(ctx, nodes[i])
+			sj, ej := nodeSpanOffsets(ctx, nodes[j])
+			li := ei - si
+			lj := ej - sj
+			if li != lj {
+				return li < lj
+			}
+			// Tie-break by source order for determinism.
+			pi := nodeOrderOffset(ctx, nodes[i])
+			pj := nodeOrderOffset(ctx, nodes[j])
+			return pi < pj
+		})
+	}
 
 	for _, n := range nodes {
 		if changed {
@@ -368,6 +383,21 @@ func nodeOrderOffset(ctx *Context, n ast.Node) int {
 	return ctx.Fset.Position(n.Pos()).Offset
 }
 
+func nodeSpanOffsets(ctx *Context, n ast.Node) (start, end int) {
+	if ctx == nil || ctx.Fset == nil || n == nil {
+		return 0, 0
+	}
+	start = ctx.Fset.Position(n.Pos()).Offset
+	end = ctx.Fset.Position(n.End()).Offset
+	if start < 0 {
+		start = 0
+	}
+	if end < start {
+		end = start
+	}
+	return start, end
+}
+
 func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified []byte, changed bool, ok bool) {
 	n, _ := caps["node"]
 	if ctx != nil && n != nil {
@@ -403,11 +433,22 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 		if err != nil {
 			return nil, false, false
 		}
+		// Never accept a transformation that produces syntactically invalid Go.
+		// This ensures the DSL engine won't “brick” a file even if a rule is
+		// imperfect or interacts badly with semicolon insertion.
+		fset := token.NewFileSet()
+		if _, err := parser.ParseFile(fset, "", applied, parser.ParseComments); err != nil {
+			return nil, false, false
+		}
 		return applied, true, true
 	}
 
 	modified, actionChanged := rule.Action.Execute(caps, ctx)
 	if !actionChanged {
+		return nil, false, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "", modified, parser.ParseComments); err != nil {
 		return nil, false, false
 	}
 	return modified, true, true

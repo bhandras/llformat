@@ -142,6 +142,15 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
+
+	// Safety: never emit syntactically invalid Go. Layout-driven formatting can
+	// interact with semicolon insertion and nested rewrites in surprising ways;
+	// if the result is not parseable, bail out so the caller can fall back to a
+	// safer formatter (e.g. packed/legacy multiline).
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+		return nil, false
+	}
 	return out, true
 }
 
@@ -935,9 +944,6 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 	var argDocs []layout.Doc
 	for i, arg := range call.Args {
 		argText := renderNode(arg, ctx.Fset)
-		if strings.Contains(argText, "\n") {
-			return nil, false
-		}
 		if hasAnyComment(argText) {
 			return nil, false
 		}
@@ -957,6 +963,10 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 				argDocs = append(argDocs, argDoc)
 				continue
 			}
+		}
+
+		if strings.Contains(argText, "\n") {
+			return nil, false
 		}
 
 		if i > 0 {
