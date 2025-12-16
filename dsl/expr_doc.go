@@ -135,6 +135,16 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 			return exprDocInfo{}, false
 		}
 		return info, true
+	case *ast.TypeAssertExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		doc, ok := typeAssertExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		// TypeAssertExpr includes `.(` and `)` and controls its own indentation.
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 	case *ast.IndexExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -647,6 +657,42 @@ func starExprDoc(s *ast.StarExpr, ctx *Context, kind exprDocKind) (exprDocInfo, 
 		operandInfo.Doc,
 	))
 	return exprDocInfo{Doc: doc, NeedsContinuationIndent: operandInfo.NeedsContinuationIndent}, true
+}
+
+func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if t == nil || ctx == nil || t.X == nil || t.Type == nil {
+		return nil, false
+	}
+
+	recvText := renderNode(t.X, ctx.Fset)
+	if strings.Contains(recvText, "\n") || hasAnyComment(recvText) {
+		return nil, false
+	}
+
+	typeText := renderNode(t.Type, ctx.Fset)
+	if strings.Contains(typeText, "\n") || hasAnyComment(typeText) {
+		return nil, false
+	}
+
+	typeDoc := layout.T(typeText)
+	if info, ok := exprDocWithKind(t.Type, ctx, kind); ok {
+		typeDoc = info.Doc
+	}
+
+	// flat:  x.(T)
+	// break:
+	//   x.(
+	//       T)
+	//
+	// Note: we intentionally do not allow a newline between `x` and `.(` (Go
+	// semicolon insertion hazard), and we intentionally do not put `)` on its own
+	// line.
+	return layout.G(layout.C(
+		layout.T(recvText),
+		layout.T(".("),
+		layout.N("\t", layout.G(layout.C(layout.SL(), typeDoc))),
+		layout.T(")"),
+	)), true
 }
 
 func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
