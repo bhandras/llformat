@@ -2,11 +2,10 @@ package formatter
 
 import (
 	"bytes"
-	formatstd "go/format"
 	"go/ast"
+	formatstd "go/format"
 	"go/parser"
 	"go/token"
-	"sort"
 	"strings"
 
 	"github.com/lightninglabs/llformat/text"
@@ -115,60 +114,26 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 }
 
 func compactCallCandidatesFromAST(file *ast.File, fset *token.FileSet, src []byte, targets []string) []compactCallCandidate {
-	var candidates []compactCallCandidate
-
-	ast.Inspect(file, func(n ast.Node) bool {
-		ce, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if ce == nil || ce.Lparen == token.NoPos || ce.Rparen == token.NoPos {
-			return true
-		}
-
-		startPos := legacyScanCallStartPos(ce.Fun)
-		if startPos == token.NoPos {
-			return true
-		}
-
-		start := fset.Position(startPos).Offset
-		lparen := fset.Position(ce.Lparen).Offset
-		end := fset.Position(ce.Rparen).Offset + 1
-		if start < 0 || lparen < 0 || end < 0 {
-			return true
-		}
-		if start >= len(src) || lparen >= len(src) || end > len(src) {
-			return true
-		}
-		if start >= lparen || lparen >= end {
-			return true
-		}
-
+	spans := legacyCallSpansFromAST(file, fset, src)
+	candidates := make([]compactCallCandidate, 0, len(spans))
+	for _, s := range spans {
 		targetMatch := ""
 		for _, t := range targets {
 			// The legacy scanner matches a target by exact byte prefix at the
 			// call start, with the '(' immediately after the function name.
-			if start+len(t) <= len(src) && start+len(t)-1 == lparen && string(src[start:start+len(t)]) == t {
+			if s.Start+len(t) <= len(src) && s.Start+len(t)-1 == s.Lparen && string(src[s.Start:s.Start+len(t)]) == t {
 				targetMatch = t
 				break
 			}
 		}
 
 		candidates = append(candidates, compactCallCandidate{
-			start:       start,
-			end:         end,
-			lparen:      lparen,
+			start:       s.Start,
+			end:         s.End,
+			lparen:      s.Lparen,
 			targetMatch: targetMatch,
 		})
-		return true
-	})
-
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].start != candidates[j].start {
-			return candidates[i].start < candidates[j].start
-		}
-		return candidates[i].end < candidates[j].end
-	})
+	}
 
 	return candidates
 }

@@ -6,8 +6,6 @@ import (
 	formatstd "go/format"
 	"go/parser"
 	"go/token"
-	"sort"
-	"strings"
 
 	"github.com/lightninglabs/llformat/text"
 )
@@ -90,48 +88,14 @@ func (f *MultiLineCallFormatter) formatOneCallInSourceAST(src []byte) ([]byte, b
 }
 
 func legacyScanCallCandidatesFromAST(file *ast.File, fset *token.FileSet, src []byte) []legacyScanCallCandidate {
-	var candidates []legacyScanCallCandidate
-
-	ast.Inspect(file, func(n ast.Node) bool {
-		ce, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-
-		startPos := legacyScanCallStartPos(ce.Fun)
-		if startPos == token.NoPos {
-			return true
-		}
-
-		start := fset.Position(startPos).Offset
-		lparen := fset.Position(ce.Lparen).Offset
-		end := fset.Position(ce.Rparen).Offset + 1
-
-		if start < 0 || lparen < 0 || end < 0 {
-			return true
-		}
-		if start >= len(src) || lparen > len(src) || end > len(src) {
-			return true
-		}
-		if start >= lparen || lparen >= end {
-			return true
-		}
-
-		funcName := strings.TrimSpace(string(src[start:lparen]))
+	spans := legacyCallSpansFromAST(file, fset, src)
+	candidates := make([]legacyScanCallCandidate, 0, len(spans))
+	for _, s := range spans {
 		candidates = append(candidates, legacyScanCallCandidate{
-			start:    start,
-			end:      end,
-			funcName: funcName,
+			start:    s.Start,
+			end:      s.End,
+			funcName: s.FuncName,
 		})
-		return true
-	})
-
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].start != candidates[j].start {
-			return candidates[i].start < candidates[j].start
-		}
-		return candidates[i].end < candidates[j].end
-	})
-
+	}
 	return candidates
 }
