@@ -59,22 +59,25 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		// IndexListExpr controls its own bracket indentation decisions.
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 	case *ast.CallExpr:
-		if doc, ok := methodChainDoc(e, ctx); ok {
-			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
-		}
 		if kind == exprDocKindCallArg {
+			// In call-arg context, prefer a generic call doc so nested calls can
+			// break their arguments. This is intentionally prioritized over method
+			// chain formatting, since methodChainDoc currently keeps per-segment
+			// argument lists atomic.
 			if doc, ok := genericCallDoc(e, ctx); ok {
 				return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 			}
-		}
-		// For top-level expression layout rules, we intentionally do not build
-		// generic call docs yet: call formatting is owned by the call/multiline
-		// stages.
-		if kind != exprDocKindCallArg {
+			if doc, ok := methodChainDocWithKind(e, ctx, kind); ok {
+				return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+			}
 			return exprDocInfo{}, false
 		}
-		if doc, ok := genericCallDoc(e, ctx); ok {
-			return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+
+		// Top-level expression rules: call formatting is owned by the call/multiline
+		// stages, but we still support method-call chains (which do not alter call
+		// argument structure).
+		if doc, ok := methodChainDoc(e, ctx); ok {
+			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
 		}
 		return exprDocInfo{}, false
 	case *ast.BinaryExpr:
@@ -222,6 +225,10 @@ func selectorChainDoc(sel *ast.SelectorExpr, ctx *Context) (layout.Doc, bool) {
 }
 
 func methodChainDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
+	return methodChainDocWithKind(call, ctx, exprDocKindTopLevel)
+}
+
+func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
 	if call == nil {
 		return nil, false
 	}
@@ -230,7 +237,7 @@ func methodChainDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	// and whose receiver is another CallExpr (except for the first).
 	type segment struct {
 		name     string
-		args     []string
+		args     []ast.Expr
 		ellipsis bool
 	}
 
@@ -244,17 +251,7 @@ func methodChainDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 			return nil, false
 		}
 
-		seg := segment{name: sel.Sel.Name, ellipsis: cur.Ellipsis.IsValid()}
-
-		// Collect args as rendered text; skip multiline args to avoid awkward
-		// interactions with the chain layout (leave to other formatters).
-		for _, arg := range cur.Args {
-			argText := renderNode(arg, ctx.Fset)
-			if strings.Contains(argText, "\n") {
-				return nil, false
-			}
-			seg.args = append(seg.args, argText)
-		}
+		seg := segment{name: sel.Sel.Name, ellipsis: cur.Ellipsis.IsValid(), args: cur.Args}
 		segs = append(segs, seg)
 
 		next, ok := sel.X.(*ast.CallExpr)
@@ -279,12 +276,62 @@ func methodChainDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	for _, seg := range segs {
 		docs = append(docs, layout.T("."), layout.SL(), layout.T(seg.name))
 		docs = append(docs, layout.T("("))
+
+		// In call-arg context, allow formatting the per-segment argument lists
+		// using the same layout approach as generic calls.
+		if kind == exprDocKindCallArg && len(seg.args) > 0 {
+			var argDocs []layout.Doc
+			for i, arg := range seg.args {
+				argText := renderNode(arg, ctx.Fset)
+				if strings.Contains(argText, "\n") || hasAnyComment(argText) {
+					return nil, false
+				}
+
+				if info, ok := exprDocWithKind(arg, ctx, kind); ok {
+					d := info.Doc
+					if info.NeedsContinuationIndent {
+						d = layout.N("\t", d)
+					}
+					if i > 0 {
+						argDocs = append(argDocs, layout.T(","), layout.L())
+					}
+					argDocs = append(argDocs, d)
+					continue
+				}
+
+				if i > 0 {
+					argDocs = append(argDocs, layout.T(","), layout.L())
+				}
+				argDocs = append(argDocs, layout.T(argText))
+			}
+
+			// Handle ellipsis call syntax: f(args...)
+			if seg.ellipsis && len(argDocs) > 0 {
+				argDocs[len(argDocs)-1] = layout.C(argDocs[len(argDocs)-1], layout.T("..."))
+			}
+
+			argsGroup := layout.G(layout.C(
+				layout.SL(),
+				layout.C(argDocs...),
+				layout.IB(layout.T(","), layout.T("")),
+			))
+
+			docs = append(docs, layout.N("\t", argsGroup))
+			docs = append(docs, layout.SL(), layout.T(")"))
+			continue
+		}
+
+		// Default behavior (top-level / parity): keep argument lists on one line.
 		if len(seg.args) > 0 {
 			for i, arg := range seg.args {
+				argText := renderNode(arg, ctx.Fset)
+				if strings.Contains(argText, "\n") {
+					return nil, false
+				}
 				if i > 0 {
 					docs = append(docs, layout.T(", "))
 				}
-				docs = append(docs, layout.T(arg))
+				docs = append(docs, layout.T(argText))
 			}
 			if seg.ellipsis && len(seg.args) > 0 {
 				docs = append(docs, layout.T("..."))
