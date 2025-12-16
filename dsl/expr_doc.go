@@ -48,6 +48,16 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 			return exprDocInfo{}, false
 		}
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+	case *ast.IndexListExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		doc, ok := indexListExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		// IndexListExpr controls its own bracket indentation decisions.
+		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
 	case *ast.CallExpr:
 		if doc, ok := methodChainDoc(e, ctx); ok {
 			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
@@ -524,6 +534,51 @@ func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Do
 		layout.T(baseText),
 		layout.T("["),
 		layout.N("\t", layout.G(layout.C(layout.SL(), indexDoc))),
+		layout.T("]"),
+	)), true
+}
+
+func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	if idx == nil || ctx == nil || idx.X == nil || len(idx.Indices) == 0 {
+		return nil, false
+	}
+
+	baseText := renderNode(idx.X, ctx.Fset)
+	if strings.Contains(baseText, "\n") || hasAnyComment(baseText) {
+		return nil, false
+	}
+
+	var indexDocs []layout.Doc
+	for i, index := range idx.Indices {
+		indexText := renderNode(index, ctx.Fset)
+		if strings.Contains(indexText, "\n") || hasAnyComment(indexText) {
+			return nil, false
+		}
+
+		indexDoc := layout.T(indexText)
+		if info, ok := exprDocWithKind(index, ctx, kind); ok {
+			indexDoc = info.Doc
+		}
+
+		if i > 0 {
+			indexDocs = append(indexDocs, layout.T(","), layout.L())
+		}
+		indexDocs = append(indexDocs, indexDoc)
+	}
+
+	inner := layout.G(layout.C(layout.SL(), layout.C(indexDocs...)))
+
+	// flat:  x[T, U]
+	// break:
+	//   x[T,
+	//       U]
+	//
+	// Note: we intentionally do not put `]` on its own line; doing so can break
+	// parsing due to Go's semicolon insertion.
+	return layout.G(layout.C(
+		layout.T(baseText),
+		layout.T("["),
+		layout.N("\t", inner),
 		layout.T("]"),
 	)), true
 }
