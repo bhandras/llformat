@@ -117,6 +117,24 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		}
 		// CompositeLit includes its own braces and indentation decisions.
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+	case *ast.UnaryExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		info, ok := unaryExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		return info, true
+	case *ast.StarExpr:
+		if kind != exprDocKindCallArg {
+			return exprDocInfo{}, false
+		}
+		info, ok := starExprDoc(e, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+		return info, true
 	case *ast.IndexExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -137,7 +155,7 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		}
 		// SliceExpr controls its own bracket indentation decisions.
 		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
-	case *ast.Ident, *ast.BasicLit, *ast.UnaryExpr:
+	case *ast.Ident, *ast.BasicLit:
 		// Render atomic expressions as-is. These are safe to embed as docs but do
 		// not participate in internal breaking yet.
 		return exprDocInfo{Doc: layout.T(renderNode(expr, ctx.Fset)), NeedsContinuationIndent: false}, true
@@ -583,6 +601,52 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (l
 		layout.N("\t", inner),
 		layout.T("]"),
 	)), true
+}
+
+func unaryExprDoc(u *ast.UnaryExpr, ctx *Context, kind exprDocKind) (exprDocInfo, bool) {
+	if u == nil || ctx == nil || u.X == nil {
+		return exprDocInfo{}, false
+	}
+
+	operandText := renderNode(u.X, ctx.Fset)
+	if strings.Contains(operandText, "\n") || hasAnyComment(operandText) {
+		return exprDocInfo{}, false
+	}
+
+	operandInfo, ok := exprDocWithKind(u.X, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// Keep the operator tightly coupled to the operand. Internal breaking (if
+	// any) is owned by the operand doc.
+	doc := layout.G(layout.C(
+		layout.T(u.Op.String()),
+		operandInfo.Doc,
+	))
+	return exprDocInfo{Doc: doc, NeedsContinuationIndent: operandInfo.NeedsContinuationIndent}, true
+}
+
+func starExprDoc(s *ast.StarExpr, ctx *Context, kind exprDocKind) (exprDocInfo, bool) {
+	if s == nil || ctx == nil || s.X == nil {
+		return exprDocInfo{}, false
+	}
+
+	operandText := renderNode(s.X, ctx.Fset)
+	if strings.Contains(operandText, "\n") || hasAnyComment(operandText) {
+		return exprDocInfo{}, false
+	}
+
+	operandInfo, ok := exprDocWithKind(s.X, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	doc := layout.G(layout.C(
+		layout.T("*"),
+		operandInfo.Doc,
+	))
+	return exprDocInfo{Doc: doc, NeedsContinuationIndent: operandInfo.NeedsContinuationIndent}, true
 }
 
 func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
