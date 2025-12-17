@@ -5,6 +5,7 @@ import (
 	formatstd "go/format"
 	"strings"
 
+	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/scanner"
 	"github.com/lightninglabs/llformat/width"
 )
@@ -59,7 +60,7 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 			break // All lines fit
 		}
 
-		var forbidden offsetSpanSet
+		var forbidden llast.OffsetSpanSet
 		if f.cfg.UseASTSelection {
 			forbidden = f.forbiddenSpansForASTSelection(result)
 		}
@@ -165,10 +166,10 @@ func (f *LongExprFormatter) findLongLines(src []byte) []lineInfo {
 // breakLongLine attempts to break a long line at an appropriate point.
 // Returns the modified source and whether a change was made.
 func (f *LongExprFormatter) breakLongLine(src []byte, info lineInfo) ([]byte, bool) {
-	return f.breakLongLineWithForbidden(src, info, offsetSpanSet{})
+	return f.breakLongLineWithForbidden(src, info, llast.OffsetSpanSet{})
 }
 
-func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo, forbidden offsetSpanSet) ([]byte, bool) {
+func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo, forbidden llast.OffsetSpanSet) ([]byte, bool) {
 	line := info.content
 	trimmed := strings.TrimLeft(line, " \t")
 
@@ -206,7 +207,7 @@ func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo
 	// Ensure the chosen break operator doesn't fall inside a call-arg list or
 	// composite literal. Those regions are owned by call/composite formatters
 	// and breaking there tends to cause stage fighting.
-	if forbidden.containsOffset(abs) || forbidden.containsOffset(abs+len(breakPoint.op)-1) {
+	if forbidden.Contains(abs) || forbidden.Contains(abs+len(breakPoint.op)-1) {
 		return src, false
 	}
 

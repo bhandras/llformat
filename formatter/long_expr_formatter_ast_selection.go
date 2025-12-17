@@ -1,17 +1,13 @@
 package formatter
 
 import (
-	"go/ast"
-	"go/token"
+	llast "github.com/lightninglabs/llformat/ast"
 )
 
-func (f *LongExprFormatter) forbiddenSpansForASTSelection(src []byte) offsetSpanSet {
-	return collectForbiddenLongExprSpans(nil, nil, src)
-}
-
-func collectForbiddenLongExprSpans(file *ast.File, fset *token.FileSet, src []byte) offsetSpanSet {
-	if file == nil || fset == nil {
-		return ownedSpansFromSource(src, defaultLongExprOwnedSpanOptions())
-	}
-	return ownedSpansFromAST(file, fset, src, defaultLongExprOwnedSpanOptions())
+func (f *LongExprFormatter) forbiddenSpansForASTSelection(src []byte) llast.OffsetSpanSet {
+	return llast.OwnedSpansFromSource(src, llast.OwnedSpanOptions{
+		IncludeCallArgLists:    true,
+		IncludeCompositeBodies: true,
+		IncludeFuncBodies:      true,
+	})
 }

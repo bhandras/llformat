@@ -1,4 +1,5 @@
-package formatter
+// Package ast provides AST parsing and inspection utilities for Go source code.
+package ast
 
 import (
 	"go/ast"
@@ -6,38 +7,30 @@ import (
 	"go/token"
 )
 
-type ownedSpanOptions struct {
-	IncludeCallArgLists   bool
+type OwnedSpanOptions struct {
+	IncludeCallArgLists    bool
 	IncludeCompositeBodies bool
-	IncludeFuncBodies     bool
+	IncludeFuncBodies      bool
 }
 
-func defaultLongExprOwnedSpanOptions() ownedSpanOptions {
-	return ownedSpanOptions{
-		IncludeCallArgLists:   true,
-		IncludeCompositeBodies: true,
-		IncludeFuncBodies:     true,
-	}
-}
-
-func ownedSpansFromSource(src []byte, opts ownedSpanOptions) offsetSpanSet {
+func OwnedSpansFromSource(src []byte, opts OwnedSpanOptions) OffsetSpanSet {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors)
 	if err != nil || file == nil {
 		// On parse failure, return an empty set so callers naturally fall back to
 		// legacy behavior.
-		return offsetSpanSet{}
+		return OffsetSpanSet{}
 	}
 
-	return ownedSpansFromAST(file, fset, src, opts)
+	return OwnedSpansFromAST(file, fset, src, opts)
 }
 
-func ownedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte, opts ownedSpanOptions) offsetSpanSet {
+func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte, opts OwnedSpanOptions) OffsetSpanSet {
 	if file == nil || fset == nil {
-		return offsetSpanSet{}
+		return OffsetSpanSet{}
 	}
 
-	var spans []offsetSpan
+	var spans []OffsetSpan
 	addSpan := func(startPos, endPos token.Pos) {
 		if startPos == token.NoPos || endPos == token.NoPos {
 			return
@@ -56,7 +49,7 @@ func ownedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte, opts own
 		if end > len(src) {
 			end = len(src)
 		}
-		spans = append(spans, offsetSpan{start: start, end: end})
+		spans = append(spans, OffsetSpan{Start: start, End: end})
 	}
 
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -89,6 +82,6 @@ func ownedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte, opts own
 		return true
 	})
 
-	return newOffsetSpanSet(spans)
+	return NewOffsetSpanSet(spans)
 }
 
