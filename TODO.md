@@ -33,9 +33,9 @@
 - [x] DSL stage for multiline calls with selectable styles (`legacy|packed|packed-chain`).
 - [x] DSL native blank-lines rules (with fallback for unparsable sources).
 - [x] DSL native signatures rules with a style switch (`legacy|dsl`) and fallback.
-- [ ] Expression stage ownership boundaries:
-  - [ ] Define a clear division of responsibility between “call formatting” and “expression formatting”.
-  - [ ] Ensure staged execution cannot fight/oscillate (strong idempotence guarantees).
+- [x] Expression stage ownership boundaries (legacy hardening):
+  - [x] Define a clear division of responsibility between “call formatting” and “expression formatting” via stage-owned spans.
+  - [x] Ensure staged execution cannot fight/oscillate (strong idempotence guarantees) with parse-safe + ownership registry tests.
 
 ## Signature formatting (pure DSL style improvements)
 - [x] Keep parse-safe: never insert a newline between `)` and the first return token.
@@ -51,7 +51,8 @@
 - [ ] Make call-argument formatting safe-by-design:
   - [x] `AutoDSLCallArgs` (allow only for known excluded calls).
   - [x] `layout-args` auto-enables DSL expr stage to avoid stage interference.
-  - [ ] Add a principled “never fight later call stages” mechanism (policy-driven, not allowlists).
+  - [x] Add a principled “never fight later call stages” mechanism for legacy stages (ownership registry, opt-in).
+  - [ ] Extend the same ownership mechanism to DSL stages as needed (beyond `layout-args`).
 - [ ] Improve formatting for mixed chains (selectors, indexing, slicing, calls) under a unified model.
   - [x] `layout-args` supports key/value, composites, indexing/slicing, generics, unary, parens, and type assertions in call-arg context.
 
@@ -93,6 +94,7 @@
   - [x] Add tests: AST selection avoids rewriting inside call args/composite bodies; still rewrites standalone long expressions; can still break outside forbidden spans; output remains parseable + AST-equivalent.
 - [x] Add a single “legacy hardening” preset (opt-in).
   - [x] Add pipeline knob `PipelineConfig.LegacyHardening` to bundle AST selection + parse-safe knobs.
+  - [x] Add pipeline knob `PipelineConfig.UseOwnershipRegistry` and enable under `LegacyHardening` for ownership boundaries.
   - [ ] Consider flipping it to default once golden parity is proven safe.
 - [ ] Decide default rollout strategy for AST selection knobs (when to flip default `false → true`).
   - [ ] Add broader “cursor-positioned call selection” fuzz-ish tests (no goldens).
