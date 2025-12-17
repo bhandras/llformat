@@ -78,6 +78,9 @@
   - [x] Add pipeline knob `PipelineConfig.CompactCallUseASTSelect` and stage option wiring.
   - [x] Harden legacy fallback scan: don’t mis-detect type assertions `x.(T)` as calls.
   - [x] Add parity tests: AST selection matches scan selection, and falls back on unparseable sources.
+- [x] Add parse-safe validation to legacy call stages (opt-in).
+  - [x] Add pipeline knobs `PipelineConfig.CompactCallParseSafe` and `PipelineConfig.MultiLineParseSafe`.
+  - [x] Add stage option wiring and tests (don’t rewrite invalid output; keep valid output parseable).
 - [x] Consolidate legacy “scan semantics” helpers used by AST selection.
   - [x] Shared call start logic (`legacyScanCallStartPos`).
   - [x] Shared call span extraction (`legacyCallSpansFromAST`).
@@ -88,6 +91,9 @@
   - [x] Add pipeline knob `PipelineConfig.LongExprUseASTSelect` and stage option wiring.
   - [x] Default policy: don’t rewrite inside call-arg lists/composite literals/func bodies (reduce stage fighting).
   - [x] Add tests: AST selection avoids rewriting inside call args/composite bodies; still rewrites standalone long expressions; can still break outside forbidden spans; output remains parseable + AST-equivalent.
+- [x] Add a single “legacy hardening” preset (opt-in).
+  - [x] Add pipeline knob `PipelineConfig.LegacyHardening` to bundle AST selection + parse-safe knobs.
+  - [ ] Consider flipping it to default once golden parity is proven safe.
 - [ ] Decide default rollout strategy for AST selection knobs (when to flip default `false → true`).
   - [ ] Add broader “cursor-positioned call selection” fuzz-ish tests (no goldens).
   - [ ] Add more snippets around: method values, func literals, index-list generics, and mixed selector/index/type-assert chains.

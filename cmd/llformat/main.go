@@ -18,6 +18,7 @@ func main() {
 		moveInline             bool
 		multilineExclude       string
 		useLegacy              bool
+		legacyHardening        bool
 		traceDSL               bool
 		useDSLComments         bool
 		useDSLCalls            bool
@@ -45,6 +46,7 @@ func main() {
 	flag.BoolVar(&moveInline, "wrap-inline-comments", false, "when formatting comments, hoist trailing inline comments above for wrapping")
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
 	flag.BoolVar(&useLegacy, "legacy", false, "use legacy multi-stage formatter instead of DSL")
+	flag.BoolVar(&legacyHardening, "legacy-hardening", false, "enable parse-safe + AST-guided selection in legacy stages (legacy mode only, experimental)")
 	flag.BoolVar(&traceDSL, "trace-dsl", false, "print DSL rule application trace to stderr (DSL mode only)")
 	flag.BoolVar(&useDSLComments, "dsl-comments", true, "use DSL comment formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLCalls, "dsl-calls", true, "use DSL log/printf call formatter (DSL mode only)")
@@ -97,7 +99,7 @@ func main() {
 	}
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--legacy-hardening] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
 		os.Exit(2)
 	}
 
@@ -128,6 +130,7 @@ func main() {
 		TabStop:                   tabStop,
 		MoveInlineAbove:           moveInline,
 		Excludes:                  excludes,
+		LegacyHardening:           legacyHardening && useLegacy,
 		UseDSLComments:            !useLegacy && useDSLComments,
 		UseDSLLogCalls:            !useLegacy && useDSLCalls,
 		UseDSLMultiLineCalls:      !useLegacy && useDSLMultiLine,

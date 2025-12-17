@@ -57,6 +57,14 @@ Usage:
 llformat [-w] <path-to-go-source>
 ```
 
+For debugging and migration work, the CLI also supports an experimental legacy
+hardening mode (only when `--legacy` is enabled) that turns on parse-safe +
+AST-guided selection for the legacy stages:
+
+```
+llformat --legacy --legacy-hardening [-w] <path-to-go-source>
+```
+
 ## Tests
 
 The test `logs` reads `testdata/logs/input.go`, formats in memory, and compares
