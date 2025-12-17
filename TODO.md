@@ -98,7 +98,7 @@
   - [ ] Consider flipping it to default once golden parity is proven safe.
 - [ ] Decide default rollout strategy for AST selection knobs (when to flip default `false → true`).
   - [ ] Add broader “cursor-positioned call selection” fuzz-ish tests (no goldens).
-  - [ ] Add more snippets around: method values, func literals, index-list generics, and mixed selector/index/type-assert chains.
+  - [x] Add more snippets around: func literals, index-list generics, and mixed selector/index/type-assert chains.
 
 ## Developer UX / CLI
 - [ ] Collapse flags into 2–3 user-facing stable modes (`legacy`, `dsl-parity`, `dsl-modern`) and document compatibility promises.

@@ -19,6 +19,7 @@ func main() {
 		multilineExclude       string
 		useLegacy              bool
 		legacyHardening        bool
+		mode                   string
 		traceDSL               bool
 		useDSLComments         bool
 		useDSLCalls            bool
@@ -47,6 +48,7 @@ func main() {
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
 	flag.BoolVar(&useLegacy, "legacy", false, "use legacy multi-stage formatter instead of DSL")
 	flag.BoolVar(&legacyHardening, "legacy-hardening", false, "enable parse-safe + AST-guided selection in legacy stages (legacy mode only, experimental)")
+	flag.StringVar(&mode, "mode", "", "pipeline mode: legacy|dsl-parity|dsl-modern (overrides individual DSL toggles when set)")
 	flag.BoolVar(&traceDSL, "trace-dsl", false, "print DSL rule application trace to stderr (DSL mode only)")
 	flag.BoolVar(&useDSLComments, "dsl-comments", true, "use DSL comment formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLCalls, "dsl-calls", true, "use DSL log/printf call formatter (DSL mode only)")
@@ -99,7 +101,7 @@ func main() {
 	}
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--legacy] [--legacy-hardening] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--mode MODE] [--legacy] [--legacy-hardening] [--trace-dsl] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
 		os.Exit(2)
 	}
 
@@ -123,9 +125,14 @@ func main() {
 	if useLegacy {
 		policy = ""
 	}
+	if mode != "" && mode == "legacy" {
+		useLegacy = true
+		policy = ""
+	}
 
 	// Use the unified formatting pipeline
 	pipeline := formatter.NewPipeline(formatter.PipelineConfig{
+		Mode:                    mode,
 		ColumnLimit:               colLimit,
 		TabStop:                   tabStop,
 		MoveInlineAbove:           moveInline,

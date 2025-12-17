@@ -40,6 +40,19 @@ func f() {
 	fmt.Println(strings.TrimSpace("x"))
 }
 `,
+		"dangling_generic_bracket": `package p
+
+func f() {
+	_ = g[int(1)
+}
+`,
+		"unterminated_block_comment": `package p
+
+func f() {
+	/* comment starts
+	_ = 1 + 2
+}
+`,
 	}
 
 	for name, src := range invalidSources {

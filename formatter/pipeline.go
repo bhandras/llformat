@@ -23,6 +23,16 @@ type PipelineConfig struct {
 	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
 	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
+	// Mode provides a user-facing coarse selection of pipeline behavior.
+	// It is intentionally opt-in; when empty, callers can control the pipeline
+	// via the individual toggles below.
+	//
+	// Supported values:
+	// - "legacy": legacy multi-stage pipeline (no DSL stages)
+	// - "dsl-parity": DSL stages enabled, parity-oriented defaults
+	// - "dsl-modern": DSL stages enabled, modern policy defaults
+	Mode string
+
 	// LegacyHardening enables a recommended bundle of internal hardening/migration
 	// knobs for the legacy pipeline stages. This remains opt-in to preserve
 	// golden fixtures, but provides a single toggle for users who want a more
@@ -113,6 +123,45 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = DefaultTabStop
+	}
+
+	// Apply user-facing mode bundle first (if requested). This is intentionally
+	// conservative and preserves the existing behavior when Mode is empty.
+	switch cfg.Mode {
+	case "":
+		// no-op
+	case "legacy":
+		cfg.UseDSLComments = false
+		cfg.UseDSLLogCalls = false
+		cfg.UseDSLMultiLineCalls = false
+		cfg.UseDSLExpr = false
+		cfg.UseDSLFuncSigs = false
+		cfg.UseDSLFuncSigsNative = false
+		cfg.UseDSLBlankLines = false
+		cfg.UseDSLBlankLinesNative = false
+		cfg.DSLCallPolicy = ""
+	case "dsl-parity":
+		cfg.UseDSLComments = true
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		cfg.UseDSLExpr = true
+		cfg.UseDSLFuncSigs = true
+		cfg.UseDSLBlankLines = true
+		if cfg.DSLCallPolicy == "" {
+			cfg.DSLCallPolicy = "legacy"
+		}
+	case "dsl-modern":
+		cfg.UseDSLComments = true
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		cfg.UseDSLExpr = true
+		cfg.UseDSLFuncSigs = true
+		cfg.UseDSLFuncSigsNative = true
+		cfg.UseDSLBlankLines = true
+		cfg.UseDSLBlankLinesNative = true
+		cfg.DSLCallPolicy = "modern"
+	default:
+		// Unknown mode: ignore (callers can still set individual toggles).
 	}
 
 	// Apply legacy hardening preset (if requested) before policy bundles.

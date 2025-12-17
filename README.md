@@ -57,6 +57,12 @@ Usage:
 llformat [-w] <path-to-go-source>
 ```
 
+The pipeline also supports a convenience `--mode` flag:
+
+- `--mode legacy`: legacy multi-stage pipeline
+- `--mode dsl-parity`: DSL pipeline with parity-oriented defaults
+- `--mode dsl-modern`: DSL pipeline with modern defaults
+
 For debugging and migration work, the CLI also supports an experimental legacy
 hardening mode (only when `--legacy` is enabled) that turns on parse-safe +
 AST-guided selection for the legacy stages:
