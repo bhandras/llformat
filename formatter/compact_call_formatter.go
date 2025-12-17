@@ -48,6 +48,62 @@ type Config struct {
 // CompactCallFormatter implements compact packing formatting for function calls.
 type CompactCallFormatter struct{ cfg Config }
 
+// OwnedSpans returns the spans of calls that the compact call formatter would
+// consider formatting. In the legacy pipeline, this stage typically runs
+// before expression formatting, but exposing ownership allows the pipeline to
+// enforce boundaries regardless of stage order.
+func (f *CompactCallFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
+	// For now, treat all scan-selectable calls as owned when fallback is
+	// enabled, and targeted calls as owned otherwise. This errs on the side of
+	// preventing stage fighting.
+	owned := make([]llast.OffsetSpan, 0, 64)
+
+	i := 0
+	for i < len(src) {
+		if scanner.IsStringStart(src, i) {
+			i = scanner.ScanString(src, i)
+			continue
+		}
+		if scanner.IsLineCommentStart(src, i) {
+			i = scanner.ScanLineComment(src, i)
+			continue
+		}
+		if scanner.IsBlockCommentStart(src, i) {
+			i = scanner.ScanBlockComment(src, i)
+			continue
+		}
+
+		matched := ""
+		for _, t := range f.cfg.Targets {
+			if hasPrefixAt(src, i, t) {
+				matched = t
+				break
+			}
+		}
+		if matched != "" {
+			openIdx := i + len(matched) - 1
+			endIdx := scanner.ScanBalancedParen(src, openIdx)
+			if endIdx > openIdx {
+				owned = append(owned, llast.OffsetSpan{Start: i, End: endIdx + 1})
+				i = endIdx + 1
+				continue
+			}
+		}
+
+		if f.cfg.FallbackNonTargets {
+			if start, end := findGenericCallAt(src, i); end > start {
+				owned = append(owned, llast.OffsetSpan{Start: start, End: end})
+				i = end
+				continue
+			}
+		}
+
+		i++
+	}
+
+	return llast.NewOffsetSpanSet(owned)
+}
+
 // NewCompactCallFormatter creates a new compact packing formatter with defaults.
 func NewCompactCallFormatter(cfg Config) *CompactCallFormatter {
 	if cfg.ColumnLimit <= 0 {

@@ -3,8 +3,12 @@ package formatter
 import (
 	"bytes"
 	formatstd "go/format"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 
+	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/scanner"
 	"github.com/lightninglabs/llformat/text"
 )
@@ -33,6 +37,69 @@ type MultiLineConfig struct {
 
 // MultiLineCallFormatter implements multi-line function call formatting.
 type MultiLineCallFormatter struct{ cfg MultiLineConfig }
+
+// OwnedSpans returns the spans of calls that the multiline call formatter would
+// consider formatting (subject to excludes). This is used by the pipeline
+// ownership registry to prevent other stages from rewriting inside calls that
+// this stage owns.
+func (f *MultiLineCallFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
+	if f.cfg.UseASTSelection {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors)
+		if err == nil && file != nil {
+			return f.ownedSpansFromAST(file, fset, src)
+		}
+		// Preserve legacy behavior on unparseable input.
+	}
+	return f.ownedSpansFromScan(src)
+}
+
+func (f *MultiLineCallFormatter) ownedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte) llast.OffsetSpanSet {
+	spans := legacyCallSpansFromAST(file, fset, src)
+	owned := make([]llast.OffsetSpan, 0, len(spans))
+	for _, s := range spans {
+		if s.Start < 0 || s.End <= s.Start || s.End > len(src) {
+			continue
+		}
+		if f.shouldExclude(s.FuncName) {
+			continue
+		}
+		owned = append(owned, llast.OffsetSpan{Start: s.Start, End: s.End})
+	}
+	return llast.NewOffsetSpanSet(owned)
+}
+
+func (f *MultiLineCallFormatter) ownedSpansFromScan(src []byte) llast.OffsetSpanSet {
+	var owned []llast.OffsetSpan
+
+	i := 0
+	for i < len(src) {
+		if scanner.IsStringStart(src, i) {
+			i = scanner.ScanString(src, i)
+			continue
+		}
+		if scanner.IsLineCommentStart(src, i) {
+			i = scanner.ScanLineComment(src, i)
+			continue
+		}
+		if scanner.IsBlockCommentStart(src, i) {
+			i = scanner.ScanBlockComment(src, i)
+			continue
+		}
+
+		if callInfo := f.findFunctionCallAt(src, i); callInfo != nil {
+			if !f.shouldExclude(callInfo.funcName) {
+				owned = append(owned, llast.OffsetSpan{Start: callInfo.start, End: callInfo.end})
+			}
+			i = callInfo.end
+			continue
+		}
+
+		i++
+	}
+
+	return llast.NewOffsetSpanSet(owned)
+}
 
 // DefaultMultilineExcludes returns function name substrings that the legacy
 // multiline call formatter always excludes from formatting.

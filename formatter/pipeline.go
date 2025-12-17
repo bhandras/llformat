@@ -34,6 +34,13 @@ type PipelineConfig struct {
 	// - Parse-safe validation for compact/multiline/long-expr stages
 	LegacyHardening bool
 
+	// UseOwnershipRegistry enables pipeline-level stage ownership boundaries.
+	// When enabled, the pipeline will compute owned span sets for later stages
+	// and provide them to earlier stages that support ownership-aware behavior.
+	//
+	// This remains opt-in to preserve golden fixtures.
+	UseOwnershipRegistry bool
+
 	// MultiLineUseASTSelect enables AST-based call selection for the legacy
 	// multiline call formatter. This is an internal migration knob and is
 	// intentionally opt-in to preserve golden fixtures.
@@ -117,6 +124,8 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.CompactCallParseSafe = true
 		cfg.MultiLineParseSafe = true
 		cfg.LongExprParseSafe = true
+
+		cfg.UseOwnershipRegistry = true
 	}
 
 	// Apply a policy bundle (if requested). This gives callers a single knob for
@@ -187,7 +196,6 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		CompactCallParseSafe:      cfg.CompactCallParseSafe,
 		LongExprParseSafe:         cfg.LongExprParseSafe,
 		LongExprUseASTSelect:      cfg.LongExprUseASTSelect,
-		LongExprExcludeCallExprs:  cfg.LegacyHardening,
 		MultiLineParseSafe:        cfg.MultiLineParseSafe,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
@@ -234,6 +242,19 @@ func (p *Pipeline) Format(src []byte) []byte {
 	// Execute stages in order
 	for _, stage := range p.stages {
 		if stage.Formatter != nil {
+			if p.cfg.UseOwnershipRegistry {
+				// Ownership is computed over the current snapshot and includes
+				// all stages that declare ownership. This prevents non-call
+				// stages from rewriting inside regions that call formatting
+				// stages may later reformat on subsequent runs (idempotence).
+				reg := BuildOwnershipRegistry(out, p.stages)
+				if aware, ok := stage.Formatter.(OwnershipAware); ok {
+					aware.SetOwnershipRegistry(reg)
+				}
+			} else if aware, ok := stage.Formatter.(OwnershipAware); ok {
+				// Avoid leaking a previous registry across pipeline uses.
+				aware.SetOwnershipRegistry(nil)
+			}
 			out = stage.Formatter.FormatFile(out)
 		}
 	}

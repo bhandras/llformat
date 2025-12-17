@@ -42,3 +42,23 @@ func TestOffsetSpanSet_MergesOverlapsAndAdjacency(t *testing.T) {
 	require.False(t, set.Contains(40))
 }
 
+func TestOffsetSpanSet_UnionMerges(t *testing.T) {
+	a := NewOffsetSpanSet([]OffsetSpan{
+		{Start: 10, End: 20},
+		{Start: 30, End: 40},
+	})
+	b := NewOffsetSpanSet([]OffsetSpan{
+		{Start: 18, End: 22},
+		{Start: 22, End: 25},
+	})
+
+	u := a.Union(b)
+	require.True(t, u.Contains(10))
+	require.True(t, u.Contains(21))
+	require.True(t, u.Contains(24))
+	require.False(t, u.Contains(25))
+
+	require.True(t, u.Contains(30))
+	require.True(t, u.Contains(39))
+	require.False(t, u.Contains(40))
+}

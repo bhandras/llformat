@@ -66,3 +66,17 @@ func (s OffsetSpanSet) Contains(off int) bool {
 	return s.spans[idx].contains(off)
 }
 
+// Union returns a new set that contains all spans from s and other.
+func (s OffsetSpanSet) Union(other OffsetSpanSet) OffsetSpanSet {
+	if len(s.spans) == 0 {
+		return other
+	}
+	if len(other.spans) == 0 {
+		return s
+	}
+
+	spans := make([]OffsetSpan, 0, len(s.spans)+len(other.spans))
+	spans = append(spans, s.spans...)
+	spans = append(spans, other.spans...)
+	return NewOffsetSpanSet(spans)
+}

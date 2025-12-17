@@ -39,6 +39,8 @@ type LongExprConfig struct {
 // LongExprFormatter breaks long expressions that exceed the column limit.
 type LongExprFormatter struct {
 	cfg LongExprConfig
+
+	ownership *OwnershipRegistry
 }
 
 // NewLongExprFormatter creates a new long expression formatter with defaults.
@@ -53,6 +55,10 @@ func NewLongExprFormatter(cfg LongExprConfig) *LongExprFormatter {
 		cfg.MaxIterations = 20 // enough for files with many long lines
 	}
 	return &LongExprFormatter{cfg: cfg}
+}
+
+func (f *LongExprFormatter) SetOwnershipRegistry(reg *OwnershipRegistry) {
+	f.ownership = reg
 }
 
 // FormatFile breaks long expressions in the source file.
@@ -70,7 +76,17 @@ func (f *LongExprFormatter) FormatFile(src []byte) []byte {
 
 		var forbidden llast.OffsetSpanSet
 		if f.cfg.UseASTSelection {
-			forbidden = f.forbiddenSpansForASTSelection(result)
+			// When the pipeline provides an ownership registry, prefer that as
+			// the mechanism for protecting call regions. Without it, keep the
+			// original conservative behavior of skipping all call-arg lists.
+			includeCallArgs := f.ownership == nil
+			forbidden = f.forbiddenSpansForASTSelection(result, includeCallArgs)
+			if f.ownership != nil {
+				// Union in any spans owned by later stages. This turns the
+				// stage-local AST selection mechanism into a pipeline-level
+				// ownership boundary, which helps prevent oscillation.
+				forbidden = forbidden.Union(f.ownership.AllOwned())
+			}
 		}
 
 		// Try to break a long line (skip ones we've already tried).
