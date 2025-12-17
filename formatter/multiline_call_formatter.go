@@ -24,6 +24,11 @@ type MultiLineConfig struct {
 	// SkipGofmt skips the internal gofmt pass, useful when running in a pipeline
 	// that will run gofmt at the end.
 	SkipGofmt bool
+
+	// ParseSafe enables parse-safe behavior: if the formatter's output does not
+	// successfully gofmt, the original input is returned unchanged. This avoids
+	// returning syntactically invalid Go when a heuristic rewrite goes wrong.
+	ParseSafe bool
 }
 
 // MultiLineCallFormatter implements multi-line function call formatting.
@@ -58,9 +63,24 @@ func (f *MultiLineCallFormatter) FormatFile(src []byte) []byte {
 	columnLimit = f.cfg.ColumnLimit
 	tabStop = f.cfg.TabStop
 	if f.cfg.UseASTSelection {
-		return f.formatMultiLineCallsInSourceAST(src)
+		out := f.formatMultiLineCallsInSourceAST(src)
+		if f.cfg.ParseSafe {
+			if formatted, err := formatstd.Source(out); err == nil {
+				return formatted
+			}
+			return src
+		}
+		return out
 	}
-	return f.formatMultiLineCallsInSourceScan(src)
+
+	out := f.formatMultiLineCallsInSourceScan(src)
+	if f.cfg.ParseSafe {
+		if formatted, err := formatstd.Source(out); err == nil {
+			return formatted
+		}
+		return src
+	}
+	return out
 }
 
 // formatMultiLineCallsInSourceScan scans source and reformats function calls

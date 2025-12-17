@@ -38,6 +38,11 @@ type Config struct {
 	// SkipGofmt skips the internal gofmt pass, useful when running in a pipeline
 	// that will run gofmt at the end.
 	SkipGofmt bool
+
+	// ParseSafe enables parse-safe behavior: if the formatter's output does not
+	// successfully gofmt, the original input is returned unchanged. This avoids
+	// returning syntactically invalid Go when a heuristic rewrite goes wrong.
+	ParseSafe bool
 }
 
 // CompactCallFormatter implements compact packing formatting for function calls.
@@ -90,10 +95,24 @@ func (f *CompactCallFormatter) FormatFile(src []byte) []byte {
 	}
 	fallbackNonTargets = f.cfg.FallbackNonTargets
 	skipGofmt = f.cfg.SkipGofmt
+
+	var out []byte
 	if f.cfg.UseASTSelection {
-		return formatWithTargetsAST(src, f.cfg.Targets)
+		out = formatWithTargetsAST(src, f.cfg.Targets)
+	} else {
+		out = formatWithTargetsScan(src, f.cfg.Targets)
 	}
-	return formatWithTargetsScan(src, f.cfg.Targets)
+
+	if f.cfg.ParseSafe {
+		if formatted, err := formatstd.Source(out); err == nil {
+			// Prefer the gofmt'd output to normalize the result and keep
+			// subsequent pipeline stages stable.
+			return formatted
+		}
+		return src
+	}
+
+	return out
 }
 
 // Core formatting driver given a target signature list.

@@ -33,6 +33,12 @@ type PipelineConfig struct {
 	// intentionally opt-in to preserve golden fixtures.
 	CompactCallUseASTSelect bool
 
+	// CompactCallParseSafe enables parse-safe behavior for the legacy compact
+	// call formatter stage: it will return the original input unchanged if the
+	// candidate output does not gofmt. This is an internal hardening knob and
+	// is intentionally opt-in to preserve golden fixtures.
+	CompactCallParseSafe bool
+
 	// LongExprParseSafe enables parse-safe behavior in the legacy long
 	// expression formatter: it will only accept a rewrite if gofmt succeeds on
 	// the candidate output. This is an internal hardening knob and is
@@ -43,6 +49,12 @@ type PipelineConfig struct {
 	// expression formatter stage. This is an internal migration knob and is
 	// intentionally opt-in to preserve golden fixtures.
 	LongExprUseASTSelect bool
+
+	// MultiLineParseSafe enables parse-safe behavior for the legacy multiline
+	// call formatter stage: it will return the original input unchanged if the
+	// candidate output does not gofmt. This is an internal hardening knob and
+	// is intentionally opt-in to preserve golden fixtures.
+	MultiLineParseSafe bool
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -150,8 +162,10 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		TraceDSL:                  cfg.TraceDSL,
 		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
 		CompactCallUseASTSelect:   cfg.CompactCallUseASTSelect,
+		CompactCallParseSafe:      cfg.CompactCallParseSafe,
 		LongExprParseSafe:         cfg.LongExprParseSafe,
 		LongExprUseASTSelect:      cfg.LongExprUseASTSelect,
+		MultiLineParseSafe:        cfg.MultiLineParseSafe,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
 		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,

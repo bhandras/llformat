@@ -114,8 +114,10 @@ type StageOptions struct {
 	TraceDSL                bool // Enable DSL rule tracing (DSL stages only)
 	MultiLineUseASTSelect   bool // Use AST-based selection in legacy multiline formatter
 	CompactCallUseASTSelect bool // Use AST-based selection in legacy compact call formatter
+	CompactCallParseSafe    bool // Parse-safe behavior in legacy compact call formatter
 	LongExprParseSafe       bool // Parse-safe behavior in legacy long expr formatter
 	LongExprUseASTSelect    bool // Use AST-based selection in legacy long expr formatter
+	MultiLineParseSafe      bool // Parse-safe behavior in legacy multiline call formatter
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -161,8 +163,10 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 		DSLSigsStyle:            "",
 		MultiLineUseASTSelect:   false,
 		CompactCallUseASTSelect: false,
+		CompactCallParseSafe:    false,
 		LongExprParseSafe:       false,
 		LongExprUseASTSelect:    false,
+		MultiLineParseSafe:      false,
 	})
 }
 
@@ -214,6 +218,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		TabStop:         cfg.TabStop,
 		UseASTSelection: opts.CompactCallUseASTSelect,
 		SkipGofmt:       true,
+		ParseSafe:       opts.CompactCallParseSafe,
 	})
 	if opts.UseDSLLogCalls {
 		callFormatter = NewDSLExprFormatter(DSLExprConfig{
@@ -247,6 +252,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		Excludes:        opts.Excludes,
 		UseASTSelection: opts.MultiLineUseASTSelect,
 		SkipGofmt:       true,
+		ParseSafe:       opts.MultiLineParseSafe,
 	})
 	if opts.UseDSLMultiLineCalls {
 		style := opts.DSLMultiLineStyle
