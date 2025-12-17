@@ -132,3 +132,36 @@ func f() {
 	require.Contains(t, outStr, "firstConditionThatIsVeryLong &&\n\t\tlen([]int{")
 	requireASTEquivalent(t, in, out)
 }
+
+func TestLongExprFormatter_ASTSelectionExcludeCallExprsSkipsCalleeBreaks(t *testing.T) {
+	in := []byte(`package p
+
+func f() {
+	_ = (firstVeryLongIdentifier + secondVeryLongIdentifier + thirdVeryLongIdentifier)(x)
+}
+`)
+
+	cfg := LongExprConfig{
+		ColumnLimit:     48,
+		TabStop:         8,
+		MaxIterations:   10,
+		ParseSafe:       true,
+		UseASTSelection: true,
+	}
+
+	// Without ExcludeCallExprs, the formatter is allowed to break inside the
+	// callee of `(a + b)(x)` because it's outside the call arg list.
+	without := NewLongExprFormatter(cfg).FormatFile(in)
+	require.NotEqual(t, string(in), string(without))
+	require.Contains(t, string(without), "\n\t\t")
+	require.Contains(t, string(without), "(firstVeryLongIdentifier")
+	require.Contains(t, string(without), ")(x)")
+	requireASTEquivalent(t, in, without)
+
+	// With ExcludeCallExprs enabled, the entire call expression is forbidden and
+	// should remain unchanged.
+	cfg.ExcludeCallExprs = true
+	with := NewLongExprFormatter(cfg).FormatFile(in)
+	require.Equal(t, string(in), string(with))
+	requireASTEquivalent(t, in, with)
+}

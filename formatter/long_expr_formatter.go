@@ -26,6 +26,14 @@ type LongExprConfig struct {
 	// appear inside call-argument lists and composite literals, reducing
 	// interference with call formatting stages.
 	UseASTSelection bool
+
+	// ExcludeCallExprs expands the AST-guided forbidden spans to include entire
+	// call expressions (callee + arg list). This further reduces stage fighting
+	// with call formatting stages, especially for cases like `(a + b)(x)` where
+	// the callee contains break candidates.
+	//
+	// This option is only meaningful when UseASTSelection is enabled.
+	ExcludeCallExprs bool
 }
 
 // LongExprFormatter breaks long expressions that exceed the column limit.

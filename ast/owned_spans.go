@@ -9,6 +9,7 @@ import (
 
 type OwnedSpanOptions struct {
 	IncludeCallArgLists    bool
+	IncludeCallExprs       bool
 	IncludeCompositeBodies bool
 	IncludeFuncBodies      bool
 }
@@ -55,6 +56,12 @@ func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte, opts Own
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch v := n.(type) {
 		case *ast.CallExpr:
+			if opts.IncludeCallExprs {
+				if v == nil || v.Pos() == token.NoPos || v.End() == token.NoPos {
+					return true
+				}
+				addSpan(v.Pos(), v.End())
+			}
 			if !opts.IncludeCallArgLists {
 				return true
 			}
@@ -84,4 +91,3 @@ func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte, opts Own
 
 	return NewOffsetSpanSet(spans)
 }
-

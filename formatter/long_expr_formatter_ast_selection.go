@@ -6,6 +6,7 @@ import (
 
 func (f *LongExprFormatter) forbiddenSpansForASTSelection(src []byte) llast.OffsetSpanSet {
 	return llast.OwnedSpansFromSource(src, llast.OwnedSpanOptions{
+		IncludeCallExprs:       f.cfg.ExcludeCallExprs,
 		IncludeCallArgLists:    true,
 		IncludeCompositeBodies: true,
 		IncludeFuncBodies:      true,

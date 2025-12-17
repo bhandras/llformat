@@ -187,6 +187,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		CompactCallParseSafe:      cfg.CompactCallParseSafe,
 		LongExprParseSafe:         cfg.LongExprParseSafe,
 		LongExprUseASTSelect:      cfg.LongExprUseASTSelect,
+		LongExprExcludeCallExprs:  cfg.LegacyHardening,
 		MultiLineParseSafe:        cfg.MultiLineParseSafe,
 		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
 		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,

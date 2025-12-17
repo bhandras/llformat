@@ -28,6 +28,31 @@ func f() {
 	require.True(t, spans.Contains(offArgs))
 }
 
+func TestOwnedSpansFromSource_CallExprs(t *testing.T) {
+	src := []byte(`package p
+
+func f() {
+	_ = (a + b)(c)
+}
+`)
+
+	spans := OwnedSpansFromSource(src, OwnedSpanOptions{
+		IncludeCallExprs: true,
+	})
+
+	offCalleeOp := strings.Index(string(src), "a + b")
+	require.Greater(t, offCalleeOp, 0)
+	require.True(t, spans.Contains(offCalleeOp))
+
+	offArgs := strings.Index(string(src), "(c)")
+	require.Greater(t, offArgs, 0)
+	require.True(t, spans.Contains(offArgs))
+
+	offAssign := strings.Index(string(src), "_ =")
+	require.Greater(t, offAssign, 0)
+	require.False(t, spans.Contains(offAssign))
+}
+
 func TestOwnedSpansFromSource_CompositeBodies(t *testing.T) {
 	src := []byte(`package p
 
@@ -69,4 +94,3 @@ func f() {
 	require.Greater(t, offFuncKeyword, 0)
 	require.False(t, spans.Contains(offFuncKeyword))
 }
-

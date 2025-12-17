@@ -117,6 +117,7 @@ type StageOptions struct {
 	CompactCallParseSafe    bool // Parse-safe behavior in legacy compact call formatter
 	LongExprParseSafe       bool // Parse-safe behavior in legacy long expr formatter
 	LongExprUseASTSelect    bool // Use AST-based selection in legacy long expr formatter
+	LongExprExcludeCallExprs bool // Forbid breaking inside call exprs in legacy long expr formatter
 	MultiLineParseSafe      bool // Parse-safe behavior in legacy multiline call formatter
 
 	// AllowDSLCallArgs enables limited expression formatting within call
@@ -166,6 +167,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 		CompactCallParseSafe:    false,
 		LongExprParseSafe:       false,
 		LongExprUseASTSelect:    false,
+		LongExprExcludeCallExprs: false,
 		MultiLineParseSafe:      false,
 	})
 }
@@ -231,10 +233,11 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	}
 
 	var exprFormatter Formatter = NewLongExprFormatter(LongExprConfig{
-		ColumnLimit:     cfg.ColumnLimit,
-		TabStop:         cfg.TabStop,
-		ParseSafe:       opts.LongExprParseSafe,
-		UseASTSelection: opts.LongExprUseASTSelect,
+		ColumnLimit:      cfg.ColumnLimit,
+		TabStop:          cfg.TabStop,
+		ParseSafe:        opts.LongExprParseSafe,
+		UseASTSelection:  opts.LongExprUseASTSelect,
+		ExcludeCallExprs: opts.LongExprExcludeCallExprs,
 	})
 	if opts.UseDSLExpr {
 		exprFormatter = NewDSLExprFormatter(DSLExprConfig{

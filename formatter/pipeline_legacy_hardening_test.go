@@ -31,6 +31,7 @@ func TestNewPipeline_LegacyHardeningEnablesExpectedKnobs(t *testing.T) {
 			require.True(t, ok, "expressions must use LongExprFormatter under legacy pipeline")
 			require.True(t, le.cfg.UseASTSelection)
 			require.True(t, le.cfg.ParseSafe)
+			require.True(t, le.cfg.ExcludeCallExprs)
 			sawExpr = true
 		case "multiline-calls":
 			ml, ok := s.Formatter.(*MultiLineCallFormatter)
@@ -45,4 +46,3 @@ func TestNewPipeline_LegacyHardeningEnablesExpectedKnobs(t *testing.T) {
 	require.True(t, sawExpr, "expected expressions stage")
 	require.True(t, sawMulti, "expected multiline-calls stage")
 }
-
