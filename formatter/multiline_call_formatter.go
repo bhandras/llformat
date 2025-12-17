@@ -65,8 +65,8 @@ func (f *MultiLineCallFormatter) FormatFile(src []byte) []byte {
 	if f.cfg.UseASTSelection {
 		out := f.formatMultiLineCallsInSourceAST(src)
 		if f.cfg.ParseSafe {
-			if formatted, err := formatstd.Source(out); err == nil {
-				return formatted
+			if _, err := formatstd.Source(out); err == nil {
+				return out
 			}
 			return src
 		}
@@ -75,8 +75,8 @@ func (f *MultiLineCallFormatter) FormatFile(src []byte) []byte {
 
 	out := f.formatMultiLineCallsInSourceScan(src)
 	if f.cfg.ParseSafe {
-		if formatted, err := formatstd.Source(out); err == nil {
-			return formatted
+		if _, err := formatstd.Source(out); err == nil {
+			return out
 		}
 		return src
 	}

@@ -104,10 +104,12 @@ func (f *CompactCallFormatter) FormatFile(src []byte) []byte {
 	}
 
 	if f.cfg.ParseSafe {
-		if formatted, err := formatstd.Source(out); err == nil {
-			// Prefer the gofmt'd output to normalize the result and keep
-			// subsequent pipeline stages stable.
-			return formatted
+		// Validate parseability using go/format (it parses and pretty-prints).
+		// We intentionally keep the original output (rather than the formatted
+		// result) to avoid changing stage interactions in pipelines that rely on
+		// raw source layout for selection heuristics.
+		if _, err := formatstd.Source(out); err == nil {
+			return out
 		}
 		return src
 	}
