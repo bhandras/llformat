@@ -23,6 +23,17 @@ type PipelineConfig struct {
 	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
 	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
 
+	// LegacyHardening enables a recommended bundle of internal hardening/migration
+	// knobs for the legacy pipeline stages. This remains opt-in to preserve
+	// golden fixtures, but provides a single toggle for users who want a more
+	// robust, non-oscillating formatter pipeline.
+	//
+	// When enabled, this will force-enable the following knobs:
+	// - AST-based selection for compact/multiline call stages
+	// - AST-guided selection for legacy long-expr stage
+	// - Parse-safe validation for compact/multiline/long-expr stages
+	LegacyHardening bool
+
 	// MultiLineUseASTSelect enables AST-based call selection for the legacy
 	// multiline call formatter. This is an internal migration knob and is
 	// intentionally opt-in to preserve golden fixtures.
@@ -95,6 +106,17 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = DefaultTabStop
+	}
+
+	// Apply legacy hardening preset (if requested) before policy bundles.
+	if cfg.LegacyHardening {
+		cfg.MultiLineUseASTSelect = true
+		cfg.CompactCallUseASTSelect = true
+		cfg.LongExprUseASTSelect = true
+
+		cfg.CompactCallParseSafe = true
+		cfg.MultiLineParseSafe = true
+		cfg.LongExprParseSafe = true
 	}
 
 	// Apply a policy bundle (if requested). This gives callers a single knob for
