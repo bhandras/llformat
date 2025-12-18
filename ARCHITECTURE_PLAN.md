@@ -50,11 +50,11 @@ Legend:
 
 ## C) DSL Engine Core (Determinism, Debuggability, Invariants)
 
-- [ ] **P0 Safe** Deterministic rewrite ordering tests (preorder vs deepest-first).
-- [ ] **P0 Safe** Stage-level invariants tests (parseable->parseable under parse-safe, idempotence).
-- [ ] **P1 Safe** Rewrite budget/guardrails (iteration/bytes/edit limits) for safety in `next`.
-- [ ] **P1 Safe** Improve trace output formatting (stable stage+rule+node+reason summaries).
-- [ ] **P2 Safe** Minimal reproduction harness for debugging rule interactions (non-golden).
+- [x] **P0 Safe** Deterministic rewrite ordering tests (preorder vs deepest-first).
+- [x] **P0 Safe** Stage-level invariants tests (parseable->parseable under parse-safe, idempotence).
+- [x] **P1 Safe** Rewrite budget/guardrails (iteration/bytes/edit limits) for safety in `next`.
+- [x] **P1 Safe** Improve trace output formatting (stable stage+rule+node+reason summaries).
+- [x] **P2 Safe** Minimal reproduction harness for debugging rule interactions (non-golden).
 
 ---
 

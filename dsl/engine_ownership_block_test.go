@@ -65,7 +65,14 @@ func TestEngine_BlocksEditsOverlappingForbiddenSpans(t *testing.T) {
 	engine := NewEngine([]Rule{rule})
 	engine.MaxIterations = 1
 
+	t.Run("budget_rejects_large_growth", func(t *testing.T) {
+		engine.Budget = RewriteBudget{MaxOutputBytes: len(src) - 1}
+		outBudget := engine.FormatFile(src)
+		require.Equal(t, string(src), string(outBudget))
+	})
+
 	// Sanity: without forbidden spans, edit applies.
+	engine.Budget = RewriteBudget{}
 	out := engine.FormatFile(src)
 	require.NotEqual(t, string(src), string(out))
 	require.Contains(t, string(out), "var x = 2")

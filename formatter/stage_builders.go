@@ -2,7 +2,23 @@ package formatter
 
 import (
 	llast "github.com/lightninglabs/llformat/ast"
+	"github.com/lightninglabs/llformat/dsl"
 )
+
+func dslBudgetForRuleProfile(profile string) dsl.RewriteBudget {
+	// Only "next" gets explicit safety guardrails by default; other profiles keep
+	// behavior identical unless the caller opts into budgets.
+	if normalizedRuleProfile(profile) != "next" {
+		return dsl.RewriteBudget{}
+	}
+
+	// Large enough to never trigger for normal formatting runs, but small enough
+	// to act as a safety valve against pathological rules.
+	return dsl.RewriteBudget{
+		MaxOutputBytes:   2 << 20, // 2 MiB
+		MaxBytesIncrease: 1 << 20, // 1 MiB
+	}
+}
 
 func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Comments != StageModeDSL {
@@ -23,6 +39,7 @@ func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOpti
 		MaxIterations: bundle.Comments.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
+		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
 	})
 }
 
@@ -47,6 +64,7 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts Stage
 		MaxIterations: bundle.LogCalls.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
+		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			// Align ownership boundaries with legacy call selection for now.
 			return NewCompactCallFormatter(Config{
@@ -79,6 +97,7 @@ func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageO
 		MaxIterations: bundle.Expressions.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
+		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
 	})
 }
 
@@ -104,6 +123,7 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 		MaxIterations: bundle.MultiLineCalls.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
+		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			// Use the legacy multiline stage's ownership selection (AST-based)
 			// to avoid rewriting within calls that this stage will later format.
@@ -135,6 +155,7 @@ func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 		MaxIterations: bundle.Signatures.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
+		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
 	})
 }
 
@@ -158,5 +179,6 @@ func buildBlankLineStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 		DisableLegacyBlankLinesShim: bundle.BlankLines.DisableLegacyBlankLinesShim,
 		SkipGofmt:                   true,
 		StageName:                   stageName,
+		Budget:                      dslBudgetForRuleProfile(opts.RuleProfile),
 	})
 }

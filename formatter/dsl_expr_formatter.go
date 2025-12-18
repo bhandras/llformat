@@ -35,6 +35,9 @@ type DSLExprConfig struct {
 	// declares no ownership.
 	OwnedSpansFunc func(src []byte) llast.OffsetSpanSet
 
+	// Budget provides optional safety guardrails for the DSL engine.
+	Budget dsl.RewriteBudget
+
 	// DisableLegacyBlankLinesShim controls whether DSL blank-line rules are
 	// delegated to the legacy blank-line formatter for parity. When true, DSL
 	// blank-line rules are executed directly by the DSL engine.
@@ -63,6 +66,8 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	engine.Trace = cfg.Trace
 	engine.TraceReasons = cfg.TraceReasons
 	engine.NodeOrder = cfg.NodeOrder
+	engine.Budget = cfg.Budget
+	engine.StageName = cfg.StageName
 	if cfg.MaxIterations > 0 {
 		engine.MaxIterations = cfg.MaxIterations
 	}
