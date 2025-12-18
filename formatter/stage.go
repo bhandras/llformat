@@ -177,6 +177,8 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
+	dslBundle := dslBundleForOptions(opts)
+
 	var commentFormatter Formatter = NewCommentFormatter(CommentConfig{
 		ColumnLimit:     cfg.ColumnLimit,
 		TabStop:         cfg.TabStop,
@@ -186,15 +188,13 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		commentFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:   cfg.ColumnLimit,
 			TabStop:       cfg.TabStop,
-			Rules:         dslRulesForComments(opts.CommentMoveInline),
+			Rules:         dslBundle.Comments.Rules,
 			Trace:         opts.TraceDSL,
 			TraceReasons:  opts.TraceDSLReasons,
-			MaxIterations: 1,
+			MaxIterations: dslBundle.Comments.MaxIterations,
 			SkipGofmt:     true,
 		})
 	}
-
-	exprRules := dslRulesForExpr(opts)
 
 	var callFormatter Formatter = NewCompactCallFormatter(Config{
 		ColumnLimit:     cfg.ColumnLimit,
@@ -207,7 +207,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		callFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:  cfg.ColumnLimit,
 			TabStop:      cfg.TabStop,
-			Rules:        dslRulesForLogCalls(),
+			Rules:        dslBundle.LogCalls.Rules,
 			Trace:        opts.TraceDSL,
 			TraceReasons: opts.TraceDSLReasons,
 			SkipGofmt:    true,
@@ -225,7 +225,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		exprFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:  cfg.ColumnLimit,
 			TabStop:      cfg.TabStop,
-			Rules:        exprRules,
+			Rules:        dslBundle.Expressions.Rules,
 			Trace:        opts.TraceDSL,
 			TraceReasons: opts.TraceDSLReasons,
 			SkipGofmt:    true,
@@ -241,15 +241,14 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		ParseSafe:       opts.MultiLineParseSafe,
 	})
 	if opts.UseDSLMultiLineCalls {
-		rules, nodeOrder := dslRulesForMultiLineCalls(opts)
 		multiLineFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:   cfg.ColumnLimit,
 			TabStop:       cfg.TabStop,
-			Rules:         rules,
+			Rules:         dslBundle.MultiLineCalls.Rules,
 			Trace:         opts.TraceDSL,
 			TraceReasons:  opts.TraceDSLReasons,
-			NodeOrder:     nodeOrder,
-			MaxIterations: 20,
+			NodeOrder:     dslBundle.MultiLineCalls.NodeOrder,
+			MaxIterations: dslBundle.MultiLineCalls.MaxIterations,
 			SkipGofmt:     true,
 		})
 	}
@@ -284,18 +283,13 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 						TabStop:     cfg.TabStop,
 					})
 				}
-				rules := dslRulesForSignatures(opts)
-				maxIters := 1
-				if opts.UseDSLFuncSigsNative {
-					maxIters = 100
-				}
 				return NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit:   cfg.ColumnLimit,
 					TabStop:       cfg.TabStop,
-					Rules:         rules,
+					Rules:         dslBundle.Signatures.Rules,
 					Trace:         opts.TraceDSL,
 					TraceReasons:  opts.TraceDSLReasons,
-					MaxIterations: maxIters,
+					MaxIterations: dslBundle.Signatures.MaxIterations,
 					SkipGofmt:     true,
 				})
 			}(),
@@ -311,21 +305,14 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 						BetweenInterfaceMethods: true,
 					})
 				}
-				rules := dslRulesForBlankLines(opts)
-				maxIters := 1
-				disableShim := false
-				if opts.UseDSLBlankLinesNative {
-					maxIters = 200
-					disableShim = true
-				}
 				return NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit:                 cfg.ColumnLimit,
 					TabStop:                     cfg.TabStop,
-					Rules:                       rules,
+					Rules:                       dslBundle.BlankLines.Rules,
 					Trace:                       opts.TraceDSL,
 					TraceReasons:                opts.TraceDSLReasons,
-					MaxIterations:               maxIters,
-					DisableLegacyBlankLinesShim: disableShim,
+					MaxIterations:               dslBundle.BlankLines.MaxIterations,
+					DisableLegacyBlankLinesShim: dslBundle.BlankLines.DisableLegacyBlankLinesShim,
 					SkipGofmt:                   true,
 				})
 			}(),
