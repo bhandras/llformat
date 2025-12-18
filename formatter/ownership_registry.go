@@ -44,6 +44,26 @@ func (r *OwnershipRegistry) AllOwned() llast.OffsetSpanSet {
 	return r.allOwned
 }
 
+// AllOwnedExcept returns the union of all owned spans except those owned by the
+// provided stage name.
+func (r *OwnershipRegistry) AllOwnedExcept(stageName string) llast.OffsetSpanSet {
+	if r == nil {
+		return llast.OffsetSpanSet{}
+	}
+	if stageName == "" {
+		return r.allOwned
+	}
+
+	var out llast.OffsetSpanSet
+	for _, name := range r.stageList {
+		if name == stageName {
+			continue
+		}
+		out = out.Union(r.byStage[name])
+	}
+	return out
+}
+
 // ByStage returns the span set owned by a specific stage name, if present.
 func (r *OwnershipRegistry) ByStage(stageName string) (llast.OffsetSpanSet, bool) {
 	if r == nil {
@@ -84,4 +104,3 @@ func BuildOwnershipRegistry(src []byte, stages []Stage) *OwnershipRegistry {
 	}
 	return reg
 }
-

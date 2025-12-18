@@ -8,6 +8,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	llast "github.com/lightninglabs/llformat/ast"
 )
 
 // Engine executes formatting rules.
@@ -19,6 +21,10 @@ type Engine struct {
 	Trace         bool // Enable trace logging
 	TraceReasons  bool // Include "why fired/didn't fire" reasons in trace output
 	NodeOrder     NodeOrder
+
+	// ForbiddenSpans holds the union of spans that this engine instance should
+	// not rewrite (e.g. spans owned by later pipeline stages).
+	ForbiddenSpans llast.OffsetSpanSet
 }
 
 // NewEngine creates a rule engine with default settings.
@@ -53,6 +59,7 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 			// scan/delegation rules that don't require an AST (e.g. legacy
 			// comment formatting).
 			ctx := NewContext(token.NewFileSet(), result, e.ColumnLimit, e.TabStop)
+			ctx.ForbiddenSpans = e.ForbiddenSpans
 			modified, changed := e.applyOneFileRuleWithoutAST(iter+1, ctx)
 			if !changed {
 				return result, nil
@@ -83,6 +90,7 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		}
 
 		ctx := NewContext(fset, result, e.ColumnLimit, e.TabStop)
+		ctx.ForbiddenSpans = e.ForbiddenSpans
 
 		// First pass: apply atomic markers (high priority keep_together rules)
 		e.applyAtomicMarkers(file, ctx)
@@ -193,6 +201,25 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, boo
 					1,
 					1,
 					"action=no_change",
+				)
+			}
+			continue
+		}
+
+		start, endBefore, _ := changedSpan(ctx.Source, out)
+		if ctx.editOverlapsForbidden(start, endBefore) {
+			if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+				reasonsPrinted++
+				fmt.Fprintf(os.Stderr, "dsl: iter=%d skip rule=%s prio=%d node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
+					iter,
+					rule.Name,
+					rule.Priority,
+					"File",
+					0,
+					len(ctx.Source),
+					1,
+					1,
+					"blocked_by_ownership",
 				)
 			}
 			continue
@@ -521,6 +548,11 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 		if !changedEdits {
 			return nil, false, false, "edit_action=no_edits"
 		}
+		for _, e := range edits {
+			if ctx.editOverlapsForbidden(e.Start, e.End) {
+				return nil, false, false, "blocked_by_ownership"
+			}
+		}
 		applied, err := ApplyEdits(ctx.Source, edits)
 		if err != nil {
 			return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
@@ -538,6 +570,10 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 	modified, actionChanged := rule.Action.Execute(caps, ctx)
 	if !actionChanged {
 		return nil, false, false, "action=no_change"
+	}
+	start, endBefore, _ := changedSpan(ctx.Source, modified)
+	if ctx.editOverlapsForbidden(start, endBefore) {
+		return nil, false, false, "blocked_by_ownership"
 	}
 	fset := token.NewFileSet()
 	if _, err := parser.ParseFile(fset, "", modified, parser.ParseComments); err != nil {

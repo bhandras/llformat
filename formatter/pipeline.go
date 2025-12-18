@@ -282,7 +282,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	// to own call-argument layout, do not also enable call-arg breaking in the
 	// DSL expression stage. This avoids non-idempotent "expr breaks args, then
 	// call stage repacks args" interactions.
-	if cfg.UseDSLMultiLineCalls {
+	if cfg.UseDSLMultiLineCalls && !cfg.UseOwnershipRegistry {
 		switch cfg.DSLMultiLineStyle {
 		case "layout-args", "layout-all":
 			cfg.AllowDSLCallArgs = false

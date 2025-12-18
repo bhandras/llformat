@@ -49,6 +49,28 @@ func NewOffsetSpanSet(spans []OffsetSpan) OffsetSpanSet {
 	return OffsetSpanSet{spans: merged}
 }
 
+// Overlaps reports whether any span in the set intersects the half-open interval
+// [start, end). Intervals where end <= start are treated as empty and never
+// overlap.
+func (s OffsetSpanSet) Overlaps(start, end int) bool {
+	if len(s.spans) == 0 {
+		return false
+	}
+	if end <= start {
+		return false
+	}
+
+	// Find the first span whose end is > start; if that span starts < end, the
+	// intervals overlap.
+	idx := sort.Search(len(s.spans), func(i int) bool {
+		return s.spans[i].End > start
+	})
+	if idx >= len(s.spans) {
+		return false
+	}
+	return s.spans[idx].Start < end
+}
+
 // Contains returns true if off falls inside any span in the set.
 func (s OffsetSpanSet) Contains(off int) bool {
 	if len(s.spans) == 0 {

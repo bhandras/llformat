@@ -1,6 +1,10 @@
 package formatter
 
-func buildCommentStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+import (
+	llast "github.com/lightninglabs/llformat/ast"
+)
+
+func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Comments != StageModeDSL {
 		return NewCommentFormatter(CommentConfig{
 			ColumnLimit:     cfg.ColumnLimit,
@@ -18,10 +22,11 @@ func buildCommentStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePla
 		NodeOrder:     bundle.Comments.NodeOrder,
 		MaxIterations: bundle.Comments.MaxIterations,
 		SkipGofmt:     true,
+		StageName:     stageName,
 	})
 }
 
-func buildCompactCallStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.LogCalls != StageModeDSL {
 		return NewCompactCallFormatter(Config{
 			ColumnLimit:     cfg.ColumnLimit,
@@ -41,10 +46,19 @@ func buildCompactCallStageFormatter(cfg BaseConfig, opts StageOptions, plan Stag
 		NodeOrder:     bundle.LogCalls.NodeOrder,
 		MaxIterations: bundle.LogCalls.MaxIterations,
 		SkipGofmt:     true,
+		StageName:     stageName,
+		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
+			// Align ownership boundaries with legacy call selection for now.
+			return NewCompactCallFormatter(Config{
+				ColumnLimit: cfg.ColumnLimit,
+				TabStop:     cfg.TabStop,
+				Targets:     defaultTargets(),
+			}).OwnedSpans(src)
+		},
 	})
 }
 
-func buildExpressionStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Expressions != StageModeDSL {
 		return NewLongExprFormatter(LongExprConfig{
 			ColumnLimit:      cfg.ColumnLimit,
@@ -64,10 +78,11 @@ func buildExpressionStageFormatter(cfg BaseConfig, opts StageOptions, plan Stage
 		NodeOrder:     bundle.Expressions.NodeOrder,
 		MaxIterations: bundle.Expressions.MaxIterations,
 		SkipGofmt:     true,
+		StageName:     stageName,
 	})
 }
 
-func buildMultiLineCallStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.MultiLineCalls != StageModeDSL {
 		return NewMultiLineCallFormatter(MultiLineConfig{
 			ColumnLimit:     cfg.ColumnLimit,
@@ -88,10 +103,21 @@ func buildMultiLineCallStageFormatter(cfg BaseConfig, opts StageOptions, plan St
 		NodeOrder:     bundle.MultiLineCalls.NodeOrder,
 		MaxIterations: bundle.MultiLineCalls.MaxIterations,
 		SkipGofmt:     true,
+		StageName:     stageName,
+		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
+			// Use the legacy multiline stage's ownership selection (AST-based)
+			// to avoid rewriting within calls that this stage will later format.
+			return NewMultiLineCallFormatter(MultiLineConfig{
+				ColumnLimit:     cfg.ColumnLimit,
+				TabStop:         cfg.TabStop,
+				Excludes:        opts.Excludes,
+				UseASTSelection: true,
+			}).OwnedSpans(src)
+		},
 	})
 }
 
-func buildSignatureStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Signatures != StageModeDSL {
 		return NewFuncSigFormatter(FuncSigConfig{
 			ColumnLimit: cfg.ColumnLimit,
@@ -108,10 +134,11 @@ func buildSignatureStageFormatter(cfg BaseConfig, opts StageOptions, plan StageP
 		NodeOrder:     bundle.Signatures.NodeOrder,
 		MaxIterations: bundle.Signatures.MaxIterations,
 		SkipGofmt:     true,
+		StageName:     stageName,
 	})
 }
 
-func buildBlankLineStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+func buildBlankLineStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.BlankLines != StageModeDSL {
 		return NewBlankLineFormatter(BlankLineConfig{
 			BeforeReturn:            true,
@@ -130,5 +157,6 @@ func buildBlankLineStageFormatter(cfg BaseConfig, opts StageOptions, plan StageP
 		MaxIterations:               bundle.BlankLines.MaxIterations,
 		DisableLegacyBlankLinesShim: bundle.BlankLines.DisableLegacyBlankLinesShim,
 		SkipGofmt:                   true,
+		StageName:                   stageName,
 	})
 }

@@ -3,6 +3,7 @@ package formatter
 import (
 	formatstd "go/format"
 
+	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/dsl"
 )
 
@@ -11,6 +12,9 @@ type DSLExprFormatter struct {
 	engine                *dsl.Engine
 	applyLegacyBlankLines bool
 	skipGofmt             bool
+
+	stageName    string
+	ownedSpansFn func(src []byte) llast.OffsetSpanSet
 }
 
 // DSLExprConfig holds configuration for the DSL expression formatter.
@@ -23,6 +27,13 @@ type DSLExprConfig struct {
 	NodeOrder     dsl.NodeOrder
 	MaxIterations int  // Override engine MaxIterations (0 keeps default)
 	SkipGofmt     bool // Skip gofmt (pipelines may run gofmt once at end)
+
+	StageName string
+
+	// OwnedSpansFunc optionally declares which regions of the source this stage
+	// "owns" for pipeline-level stage fighting prevention. When nil, the stage
+	// declares no ownership.
+	OwnedSpansFunc func(src []byte) llast.OffsetSpanSet
 
 	// DisableLegacyBlankLinesShim controls whether DSL blank-line rules are
 	// delegated to the legacy blank-line formatter for parity. When true, DSL
@@ -60,7 +71,21 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 		engine:                engine,
 		applyLegacyBlankLines: applyLegacyBlankLines,
 		skipGofmt:             cfg.SkipGofmt,
+		stageName:             cfg.StageName,
+		ownedSpansFn:          cfg.OwnedSpansFunc,
 	}
+}
+
+func (f *DSLExprFormatter) SetOwnershipRegistry(reg *OwnershipRegistry) {
+	policy := NewOwnershipPolicy(reg, f.stageName)
+	f.engine.ForbiddenSpans = policy.ForbiddenSpans()
+}
+
+func (f *DSLExprFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
+	if f == nil || f.ownedSpansFn == nil {
+		return llast.OffsetSpanSet{}
+	}
+	return f.ownedSpansFn(src)
 }
 
 // FormatFile formats the source file using DSL rules.

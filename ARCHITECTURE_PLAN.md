@@ -41,10 +41,10 @@ Legend:
 
 ## B) Ownership / Non-Interference (Stage Contracts)
 
-- [ ] **P0 Safe** Formalize ownership boundaries as a policy object (owned spans per stage).
-- [ ] **P0 Safe** Add generic “skip edits if overlaps owned spans” support in DSL engine.
-- [ ] **P1 Safe** Trace reasons when rules are blocked by ownership.
-- [ ] **P1 Opt-In** Add tests that prove call-arg layout ownership prevents expr-stage fighting.
+- [x] **P0 Safe** Formalize ownership boundaries as a policy object (owned spans per stage).
+- [x] **P0 Safe** Add generic “skip edits if overlaps owned spans” support in DSL engine.
+- [x] **P1 Safe** Trace reasons when rules are blocked by ownership.
+- [x] **P1 Opt-In** Add tests that prove call-arg layout ownership prevents expr-stage fighting.
 
 ---
 

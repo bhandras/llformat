@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"strings"
 
+	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/scanner"
 )
 
@@ -69,6 +70,11 @@ type Context struct {
 	ColumnLimit int
 	TabStop     int
 
+	// ForbiddenSpans holds the union of spans that this engine instance should
+	// not rewrite. It is populated by the outer pipeline when ownership
+	// boundaries are enabled.
+	ForbiddenSpans llast.OffsetSpanSet
+
 	// atomicNodes tracks nodes that should not be broken.
 	atomicNodes map[ast.Node]bool
 
@@ -100,6 +106,16 @@ func NewContext(fset *token.FileSet, source []byte, columnLimit, tabStop int) *C
 		TabStop:     tabStop,
 		atomicNodes: make(map[ast.Node]bool),
 	}
+}
+
+func (ctx *Context) editOverlapsForbidden(start, end int) bool {
+	if ctx == nil {
+		return false
+	}
+	if end == start {
+		return ctx.ForbiddenSpans.Contains(start)
+	}
+	return ctx.ForbiddenSpans.Overlaps(start, end)
 }
 
 // MarkAtomic marks a node as atomic (should not be broken).

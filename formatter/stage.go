@@ -181,12 +181,12 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	dslBundle := ResolveDSLBundle(opts)
 	stagePlan := stagePlanFromOptions(opts)
 
-	commentFormatter := buildCommentStageFormatter(cfg, opts, stagePlan, dslBundle)
-	callFormatter := buildCompactCallStageFormatter(cfg, opts, stagePlan, dslBundle)
-	exprFormatter := buildExpressionStageFormatter(cfg, opts, stagePlan, dslBundle)
-	multiLineFormatter := buildMultiLineCallStageFormatter(cfg, opts, stagePlan, dslBundle)
-	signatureFormatter := buildSignatureStageFormatter(cfg, opts, stagePlan, dslBundle)
-	blankLineFormatter := buildBlankLineStageFormatter(cfg, opts, stagePlan, dslBundle)
+	commentFormatter := buildCommentStageFormatter("comments", cfg, opts, stagePlan, dslBundle)
+	callFormatter := buildCompactCallStageFormatter("compact-calls", cfg, opts, stagePlan, dslBundle)
+	exprFormatter := buildExpressionStageFormatter("expressions", cfg, opts, stagePlan, dslBundle)
+	multiLineFormatter := buildMultiLineCallStageFormatter("multiline-calls", cfg, opts, stagePlan, dslBundle)
+	signatureFormatter := buildSignatureStageFormatter("signatures", cfg, opts, stagePlan, dslBundle)
+	blankLineFormatter := buildBlankLineStageFormatter("blank-lines", cfg, opts, stagePlan, dslBundle)
 
 	return []Stage{
 		{
