@@ -146,16 +146,18 @@ func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
-		ColumnLimit:   cfg.ColumnLimit,
-		TabStop:       cfg.TabStop,
-		Rules:         bundle.Signatures.Rules,
-		Trace:         opts.TraceDSL,
-		TraceReasons:  opts.TraceDSLReasons,
-		NodeOrder:     bundle.Signatures.NodeOrder,
-		MaxIterations: bundle.Signatures.MaxIterations,
-		SkipGofmt:     true,
-		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
+		ColumnLimit:       cfg.ColumnLimit,
+		TabStop:           cfg.TabStop,
+		Rules:             bundle.Signatures.Rules,
+		Trace:             opts.TraceDSL,
+		TraceReasons:      opts.TraceDSLReasons,
+		NodeOrder:         bundle.Signatures.NodeOrder,
+		MaxIterations:     bundle.Signatures.MaxIterations,
+		AutoMaxIterations: bundle.Signatures.AutoMaxIterations,
+		DetectCycles:      bundle.Signatures.DetectCycles,
+		SkipGofmt:         true,
+		StageName:         stageName,
+		Budget:            dslBudgetForRuleProfile(opts.RuleProfile),
 	})
 }
 

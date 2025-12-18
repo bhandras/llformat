@@ -25,8 +25,14 @@ type DSLExprConfig struct {
 	Trace         bool       // Enable DSL rule tracing to stderr
 	TraceReasons  bool       // Include "why fired/didn't fire" reasons in DSL tracing
 	NodeOrder     dsl.NodeOrder
-	MaxIterations int  // Override engine MaxIterations (0 keeps default)
-	SkipGofmt     bool // Skip gofmt (pipelines may run gofmt once at end)
+	MaxIterations int // Override engine MaxIterations (0 keeps default)
+	// AutoMaxIterations enables an AST-informed iteration cap (node-count based)
+	// rather than a fixed constant. This is intended for stages that legitimately
+	// need many iterations (e.g. signature formatting across many declarations)
+	// while remaining protected against cycles.
+	AutoMaxIterations bool
+	DetectCycles      bool
+	SkipGofmt         bool // Skip gofmt (pipelines may run gofmt once at end)
 
 	StageName string
 
@@ -68,7 +74,14 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	engine.NodeOrder = cfg.NodeOrder
 	engine.Budget = cfg.Budget
 	engine.StageName = cfg.StageName
-	if cfg.MaxIterations > 0 {
+	engine.AutoMaxIterations = cfg.AutoMaxIterations
+	engine.DetectCycles = cfg.DetectCycles
+	if cfg.AutoMaxIterations {
+		// When auto iteration is enabled we intentionally disable the fixed
+		// iteration cap so the engine can derive an appropriate limit from the
+		// AST. Safety is enforced by budgets + cycle detection.
+		engine.MaxIterations = 0
+	} else if cfg.MaxIterations > 0 {
 		engine.MaxIterations = cfg.MaxIterations
 	}
 

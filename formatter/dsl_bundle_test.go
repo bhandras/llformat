@@ -61,9 +61,31 @@ func TestDSLBundle_SignaturesSpecControlsIterations(t *testing.T) {
 
 	legacy := ResolveDSLBundle(StageOptions{UseDSLFuncSigsNative: false})
 	require.Equal(t, 1, legacy.Signatures.MaxIterations)
+	require.False(t, legacy.Signatures.AutoMaxIterations)
+	require.False(t, legacy.Signatures.DetectCycles)
 
 	native := ResolveDSLBundle(StageOptions{UseDSLFuncSigsNative: true})
-	require.Equal(t, 100, native.Signatures.MaxIterations)
+	require.Equal(t, 0, native.Signatures.MaxIterations)
+	require.True(t, native.Signatures.AutoMaxIterations)
+	require.True(t, native.Signatures.DetectCycles)
 	require.NotEmpty(t, native.Signatures.Rules)
 	require.Equal(t, "legacy_func_sig_fallback", native.Signatures.Rules[len(native.Signatures.Rules)-1].Name)
+}
+
+func TestDSLBundle_SignaturesFallbackIsParseFailureOnly(t *testing.T) {
+	t.Parallel()
+
+	native := ResolveDSLBundle(StageOptions{UseDSLFuncSigsNative: true})
+	require.NotEmpty(t, native.Signatures.Rules)
+
+	last := native.Signatures.Rules[len(native.Signatures.Rules)-1]
+	require.Equal(t, "legacy_func_sig_fallback", last.Name)
+
+	np, ok := last.Pattern.(*dsl.NodePattern)
+	require.True(t, ok)
+	require.Equal(t, "File", np.Type)
+
+	cond, ok := last.When.(*dsl.IsParseableCond)
+	require.True(t, ok)
+	require.False(t, cond.Want)
 }

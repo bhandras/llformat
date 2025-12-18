@@ -2076,6 +2076,12 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 				if err != nil {
 					return nil, false
 				}
+				if changed {
+					fset := token.NewFileSet()
+					if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+						return nil, false
+					}
+				}
 				return out, changed
 			}
 		}
@@ -2083,6 +2089,10 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	out, err := ApplySingleEdit(ctx.Source, lineStart, afterBrace, []byte(formatted))
 	if err != nil {
+		return nil, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
 		return nil, false
 	}
 	return out, true
@@ -2831,6 +2841,43 @@ func splitTopLevelSimple(s string) []string {
 			continue
 		}
 
+		// Skip over comments while splitting. This is important for signatures
+		// that include parameter comments like `/* ... , ... */` where commas
+		// should not be treated as separators.
+		if c == '/' && i+1 < len(s) {
+			next := s[i+1]
+			if next == '/' {
+				// Line comment: consume to end of line.
+				current.WriteByte(c)
+				current.WriteByte(next)
+				i += 2
+				for i < len(s) && s[i] != '\n' {
+					current.WriteByte(s[i])
+					i++
+				}
+				if i < len(s) && s[i] == '\n' {
+					current.WriteByte('\n')
+				}
+				continue
+			}
+			if next == '*' {
+				// Block comment: consume to closing */ (or end of string).
+				current.WriteByte(c)
+				current.WriteByte(next)
+				i += 2
+				for i < len(s) {
+					current.WriteByte(s[i])
+					if s[i] == '*' && i+1 < len(s) && s[i+1] == '/' {
+						current.WriteByte('/')
+						i++
+						break
+					}
+					i++
+				}
+				continue
+			}
+		}
+
 		if c == '(' || c == '[' || c == '{' {
 			depth++
 		} else if c == ')' || c == ']' || c == '}' {
@@ -2971,10 +3018,36 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) ([]byt
 	// Find the start of the line
 	ls := lineStart(ctx.Source, fieldStart)
 
-	// Find end of line after the method
+	// Find end of line after the method.
 	le := lineEnd(ctx.Source, fieldEnd)
-	out, err := ApplySingleEdit(ctx.Source, ls, le, []byte(formatted))
+
+	// Preserve any trailing comment on the same line. Field.End() usually stops
+	// at the type expression, so replacing the whole line without re-attaching
+	// the suffix would drop comments.
+	suffix := ""
+	if fieldEnd >= 0 && le > fieldEnd && le <= len(ctx.Source) {
+		lineSuffix := string(ctx.Source[fieldEnd:le]) // includes newline
+		trimmed := strings.TrimLeft(lineSuffix, " \t")
+		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") {
+			// Normalize to a single space before the comment.
+			newline := ""
+			if strings.HasSuffix(lineSuffix, "\n") {
+				newline = "\n"
+			}
+			suffix = " " + strings.TrimRight(trimmed, "\n") + newline
+		} else {
+			// Keep whitespace/newline as-is.
+			suffix = lineSuffix
+		}
+	}
+
+	formattedWithSuffix := strings.TrimRight(formatted, "\n") + suffix
+	out, err := ApplySingleEdit(ctx.Source, ls, le, []byte(formattedWithSuffix))
 	if err != nil {
+		return nil, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
 		return nil, false
 	}
 	return out, true

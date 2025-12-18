@@ -9,6 +9,8 @@ type DSLStageSpec struct {
 	Rules                       []dsl.Rule
 	NodeOrder                   dsl.NodeOrder
 	MaxIterations               int
+	AutoMaxIterations           bool
+	DetectCycles                bool
 	DisableLegacyBlankLinesShim bool
 }
 
@@ -66,6 +68,12 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			Rules:         dslRulesForSignatures(opts),
 			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: dslMaxItersForSignatures(opts),
+			// Signature formatting applies at most one rewrite per iteration, so
+			// files with many long signatures legitimately require >100 iterations.
+			// Use an AST-informed auto limit with cycle detection instead of a
+			// fixed cap.
+			AutoMaxIterations: opts.UseDSLFuncSigsNative,
+			DetectCycles:      opts.UseDSLFuncSigsNative,
 		},
 		BlankLines: DSLStageSpec{
 			Rules:                       blankLineRules,
@@ -80,7 +88,11 @@ func dslMaxItersForSignatures(opts StageOptions) int {
 	if !opts.UseDSLFuncSigsNative {
 		return 1
 	}
-	return 100
+	// When native signatures are enabled, iteration count is set automatically
+	// based on the number of candidate nodes (FuncDecl, interface methods, etc).
+	// The fixed cap is intentionally disabled here; safety is enforced via
+	// rewrite budgets + cycle detection.
+	return 0
 }
 
 func dslMaxItersForBlankLines(opts StageOptions) int {

@@ -79,9 +79,9 @@ Legend:
 
 ## F) Signatures DSL-ization
 
-- [ ] **P0 Safe** Ensure legacy fallback remains and is gated (unparseable-only fallback).
-- [ ] **P1 Opt-In** Expand native signature coverage and reduce fallback reliance.
-- [ ] **P1 Safe** Replace “max iters = 100” with early-stop and better convergence checks.
+- [x] **P0 Safe** Ensure legacy fallback remains and is gated (unparseable-only fallback).
+- [x] **P1 Opt-In** Expand native signature coverage and reduce fallback reliance.
+- [x] **P1 Safe** Replace “max iters = 100” with early-stop and better convergence checks.
 
 ---
 

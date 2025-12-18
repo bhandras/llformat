@@ -5,7 +5,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"hash/maphash"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -14,13 +16,15 @@ import (
 
 // Engine executes formatting rules.
 type Engine struct {
-	Rules         []Rule
-	ColumnLimit   int
-	TabStop       int
-	MaxIterations int
-	Trace         bool // Enable trace logging
-	TraceReasons  bool // Include "why fired/didn't fire" reasons in trace output
-	NodeOrder     NodeOrder
+	Rules             []Rule
+	ColumnLimit       int
+	TabStop           int
+	MaxIterations     int
+	Trace             bool // Enable trace logging
+	TraceReasons      bool // Include "why fired/didn't fire" reasons in trace output
+	NodeOrder         NodeOrder
+	AutoMaxIterations bool // Derive MaxIterations from the AST when true
+	DetectCycles      bool // Stop if the engine repeats a previous output
 
 	// ForbiddenSpans holds the union of spans that this engine instance should
 	// not rewrite (e.g. spans owned by later pipeline stages).
@@ -71,7 +75,24 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 	result := src
 	initialLen := len(src)
 
-	for iter := 0; iter < e.MaxIterations; iter++ {
+	maxIters := e.MaxIterations
+	if e.AutoMaxIterations {
+		maxIters = e.estimateMaxIterations(result)
+	}
+	if maxIters <= 0 {
+		// Defensive fallback: never run an unbounded loop.
+		maxIters = 1
+	}
+
+	var seed maphash.Seed
+	var seen map[uint64]struct{}
+	if e.DetectCycles {
+		seed = maphash.MakeSeed()
+		seen = make(map[uint64]struct{}, 8)
+		seen[e.hashBytes(seed, result)] = struct{}{}
+	}
+
+	for iter := 0; iter < maxIters; iter++ {
 		// Parse current source
 		fset := token.NewFileSet()
 		file, err := parser.ParseFile(fset, "", result, parser.ParseComments)
@@ -108,6 +129,17 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 			}
 
 			result = modified
+
+			if e.DetectCycles {
+				h := e.hashBytes(seed, result)
+				if _, ok := seen[h]; ok {
+					if e.TraceReasons && !e.Trace {
+						fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d reason=%s\n", e.StageName, iter+1, "cycle_detected")
+					}
+					break
+				}
+				seen[h] = struct{}{}
+			}
 			continue
 		}
 
@@ -188,9 +220,94 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		// gofmt once at the end. Running gofmt here would reformat unrelated
 		// code and violate llformat's "only touch targeted regions" goal.
 		result = modified
+
+		if e.DetectCycles {
+			h := e.hashBytes(seed, result)
+			if _, ok := seen[h]; ok {
+				if e.TraceReasons && !e.Trace {
+					fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d reason=%s\n", e.StageName, iter+1, "cycle_detected")
+				}
+				break
+			}
+			seen[h] = struct{}{}
+		}
 	}
 
 	return result, nil
+}
+
+func (e *Engine) hashBytes(seed maphash.Seed, b []byte) uint64 {
+	var h maphash.Hash
+	h.SetSeed(seed)
+	h.Write(b)
+	return h.Sum64()
+}
+
+func (e *Engine) estimateMaxIterations(src []byte) int {
+	// If the file isn't parseable, auto-iteration can't estimate safely. The
+	// caller may still have file-level fallback rules, so allow a single pass.
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil || file == nil {
+		return 1
+	}
+
+	nodeTypes := e.ruleNodeTypes()
+	if len(nodeTypes) == 0 {
+		return 1
+	}
+
+	candidates := 0
+	ast.Inspect(file, func(n ast.Node) bool {
+		if n == nil {
+			return true
+		}
+		rt := reflect.TypeOf(n)
+		if rt == nil {
+			return true
+		}
+		if rt.Kind() == reflect.Ptr {
+			rt = rt.Elem()
+		}
+		if rt == nil {
+			return true
+		}
+		if _, ok := nodeTypes[rt.Name()]; ok {
+			candidates++
+		}
+		return true
+	})
+
+	// Apply at most one transforming rewrite per iteration. In the common case,
+	// each iteration fixes one candidate node, so a small multiplier is enough.
+	// Clamp to keep pathological files from running too long by accident.
+	const (
+		minIters = 20
+		maxIters = 5000
+	)
+	estimate := candidates*2 + 20
+	if estimate < minIters {
+		estimate = minIters
+	}
+	if estimate > maxIters {
+		estimate = maxIters
+	}
+	return estimate
+}
+
+func (e *Engine) ruleNodeTypes() map[string]struct{} {
+	out := make(map[string]struct{}, len(e.Rules))
+	for _, r := range e.Rules {
+		np, ok := r.Pattern.(*NodePattern)
+		if !ok || np == nil {
+			continue
+		}
+		if np.Type == "" {
+			continue
+		}
+		out[np.Type] = struct{}{}
+	}
+	return out
 }
 
 func (e *Engine) withinBudget(initialLen int, candidate []byte) bool {
