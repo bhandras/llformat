@@ -111,5 +111,5 @@ Legend:
 
 ## J) Deprecation + Cleanup
 
-- [ ] **P1 Safe** Remove dead plumbing once StagePlan/profile are authoritative.
-- [ ] **P1 Safe** Shrink `StageOptions` by grouping knobs (Legacy/DSL/Style).
+- [x] **P1 Safe** Remove dead plumbing once StagePlan/profile are authoritative.
+- [x] **P1 Safe** Shrink `StageOptions` by grouping knobs (Legacy/DSL/Style).

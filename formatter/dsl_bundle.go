@@ -41,11 +41,11 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 	multiLineRules, multiLineNodeOrder := dslRulesForMultiLineCalls(opts)
 
 	blankLineRules := dslRulesForBlankLines(opts)
-	disableBlankLinesShim := opts.UseDSLBlankLinesNative
+	disableBlankLinesShim := opts.DSL.UseBlankLinesNative
 
 	return DSLBundle{
 		Comments: DSLStageSpec{
-			Rules:         dslRulesForComments(opts.CommentMoveInline),
+			Rules:         dslRulesForComments(opts.Style.CommentMoveInline),
 			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: 1,
 		},
@@ -72,8 +72,8 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			// files with many long signatures legitimately require >100 iterations.
 			// Use an AST-informed auto limit with cycle detection instead of a
 			// fixed cap.
-			AutoMaxIterations: opts.UseDSLFuncSigsNative,
-			DetectCycles:      opts.UseDSLFuncSigsNative,
+			AutoMaxIterations: opts.DSL.UseFuncSigsNative,
+			DetectCycles:      opts.DSL.UseFuncSigsNative,
 		},
 		BlankLines: DSLStageSpec{
 			Rules:                       blankLineRules,
@@ -85,7 +85,7 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 }
 
 func dslMaxItersForSignatures(opts StageOptions) int {
-	if !opts.UseDSLFuncSigsNative {
+	if !opts.DSL.UseFuncSigsNative {
 		return 1
 	}
 	// When native signatures are enabled, iteration count is set automatically
@@ -96,7 +96,7 @@ func dslMaxItersForSignatures(opts StageOptions) int {
 }
 
 func dslMaxItersForBlankLines(opts StageOptions) int {
-	if !opts.UseDSLBlankLinesNative {
+	if !opts.DSL.UseBlankLinesNative {
 		return 1
 	}
 	// Blank line insertion is handled in a single batch rewrite; keep the

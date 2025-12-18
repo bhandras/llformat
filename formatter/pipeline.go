@@ -327,28 +327,36 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
-		CommentMoveInline:         cfg.MoveInlineAbove,
-		Excludes:                  cfg.Excludes,
-		RuleProfile:               cfg.RuleProfile,
-		StagePlan:                 &stagePlan,
-		DSLMultiLineStyle:         cfg.DSLMultiLineStyle,
-		UseDSLFuncSigsNative:      cfg.UseDSLFuncSigsNative,
-		DSLSigsStyle:              cfg.DSLSigsStyle,
-		UseDSLBlankLinesNative:    cfg.UseDSLBlankLinesNative,
-		TraceDSL:                  cfg.TraceDSL,
-		TraceDSLReasons:           cfg.TraceDSLReasons,
-		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
-		CompactCallUseASTSelect:   cfg.CompactCallUseASTSelect,
-		CompactCallParseSafe:      cfg.CompactCallParseSafe,
-		LongExprParseSafe:         cfg.LongExprParseSafe,
-		LongExprUseASTSelect:      cfg.LongExprUseASTSelect,
-		MultiLineParseSafe:        cfg.MultiLineParseSafe,
-		AllowDSLCallArgs:          cfg.AllowDSLCallArgs,
-		AutoDSLCallArgs:           cfg.AutoDSLCallArgs,
-		DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,
-		DSLExprArithmeticStyle:    cfg.DSLExprArithmeticStyle,
-		DSLExprCaseClauseStyle:    cfg.DSLExprCaseClauseStyle,
-		DSLExprSelectorChainStyle: cfg.DSLExprSelectorChainStyle,
+		Selection: StageSelectionOptions{
+			RuleProfile: cfg.RuleProfile,
+			StagePlan:   &stagePlan,
+		},
+		Style: StageStyleOptions{
+			CommentMoveInline:         cfg.MoveInlineAbove,
+			Excludes:                  cfg.Excludes,
+			DSLMultiLineStyle:         cfg.DSLMultiLineStyle,
+			DSLSigsStyle:              cfg.DSLSigsStyle,
+			DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,
+			DSLExprArithmeticStyle:    cfg.DSLExprArithmeticStyle,
+			DSLExprCaseClauseStyle:    cfg.DSLExprCaseClauseStyle,
+			DSLExprSelectorChainStyle: cfg.DSLExprSelectorChainStyle,
+		},
+		DSL: DSLStageOptions{
+			Trace:               cfg.TraceDSL,
+			TraceReasons:        cfg.TraceDSLReasons,
+			UseFuncSigsNative:   cfg.UseDSLFuncSigsNative,
+			UseBlankLinesNative: cfg.UseDSLBlankLinesNative,
+			AllowCallArgs:       cfg.AllowDSLCallArgs,
+			AutoCallArgs:        cfg.AutoDSLCallArgs,
+		},
+		Legacy: LegacyStageOptions{
+			MultiLineUseASTSelect:   cfg.MultiLineUseASTSelect,
+			CompactCallUseASTSelect: cfg.CompactCallUseASTSelect,
+			CompactCallParseSafe:    cfg.CompactCallParseSafe,
+			LongExprParseSafe:       cfg.LongExprParseSafe,
+			LongExprUseASTSelect:    cfg.LongExprUseASTSelect,
+			MultiLineParseSafe:      cfg.MultiLineParseSafe,
+		},
 	})
 
 	return &Pipeline{

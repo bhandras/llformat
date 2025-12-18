@@ -10,19 +10,25 @@ import (
 func TestDSLBundle_MultiLineSpecFollowsRuleProfileDefaults(t *testing.T) {
 	t.Parallel()
 
-	parity := ResolveDSLBundle(StageOptions{RuleProfile: "parity"})
+	parity := ResolveDSLBundle(StageOptions{
+		Selection: StageSelectionOptions{RuleProfile: "parity"},
+	})
 	require.NotEmpty(t, parity.MultiLineCalls.Rules)
 	require.Equal(t, "legacy_multiline_scan", parity.MultiLineCalls.Rules[0].Name)
 	require.Equal(t, dsl.NodeOrderPreorder, parity.MultiLineCalls.NodeOrder)
 	require.Equal(t, 20, parity.MultiLineCalls.MaxIterations)
 
-	modern := ResolveDSLBundle(StageOptions{RuleProfile: "modern"})
+	modern := ResolveDSLBundle(StageOptions{
+		Selection: StageSelectionOptions{RuleProfile: "modern"},
+	})
 	require.Len(t, modern.MultiLineCalls.Rules, 2)
 	require.Equal(t, "long_method_chain", modern.MultiLineCalls.Rules[0].Name)
 	require.Equal(t, "long_call_expr", modern.MultiLineCalls.Rules[1].Name)
 	require.Equal(t, dsl.NodeOrderPreorder, modern.MultiLineCalls.NodeOrder)
 
-	next := ResolveDSLBundle(StageOptions{RuleProfile: "next"})
+	next := ResolveDSLBundle(StageOptions{
+		Selection: StageSelectionOptions{RuleProfile: "next"},
+	})
 	require.Len(t, next.MultiLineCalls.Rules, 2)
 	require.Equal(t, "long_method_chain", next.MultiLineCalls.Rules[0].Name)
 	require.Equal(t, "long_call_expr", next.MultiLineCalls.Rules[1].Name)
@@ -33,7 +39,7 @@ func TestDSLBundle_BlankLinesSpecControlsShimAndIterations(t *testing.T) {
 	t.Parallel()
 
 	legacyFallback := ResolveDSLBundle(StageOptions{
-		UseDSLBlankLinesNative: false,
+		DSL: DSLStageOptions{UseBlankLinesNative: false},
 	})
 	require.False(t, legacyFallback.BlankLines.DisableLegacyBlankLinesShim)
 	require.Equal(t, 1, legacyFallback.BlankLines.MaxIterations)
@@ -41,7 +47,7 @@ func TestDSLBundle_BlankLinesSpecControlsShimAndIterations(t *testing.T) {
 	require.Equal(t, "legacy_blank_lines_format", legacyFallback.BlankLines.Rules[0].Name)
 
 	native := ResolveDSLBundle(StageOptions{
-		UseDSLBlankLinesNative: true,
+		DSL: DSLStageOptions{UseBlankLinesNative: true},
 	})
 	require.True(t, native.BlankLines.DisableLegacyBlankLinesShim)
 	require.Equal(t, 20, native.BlankLines.MaxIterations)
@@ -61,8 +67,8 @@ func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
 	t.Parallel()
 
 	next := ResolveDSLBundle(StageOptions{
-		RuleProfile:            "next",
-		UseDSLBlankLinesNative: true,
+		Selection: StageSelectionOptions{RuleProfile: "next"},
+		DSL:       DSLStageOptions{UseBlankLinesNative: true},
 	})
 	names := make([]string, 0, len(next.BlankLines.Rules))
 	for _, r := range next.BlankLines.Rules {
@@ -71,8 +77,8 @@ func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
 	require.Contains(t, names, "blank_before_if_err_return")
 
 	parity := ResolveDSLBundle(StageOptions{
-		RuleProfile:            "parity",
-		UseDSLBlankLinesNative: true,
+		Selection: StageSelectionOptions{RuleProfile: "parity"},
+		DSL:       DSLStageOptions{UseBlankLinesNative: true},
 	})
 	parityNames := make([]string, 0, len(parity.BlankLines.Rules))
 	for _, r := range parity.BlankLines.Rules {
@@ -84,12 +90,16 @@ func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
 func TestDSLBundle_SignaturesSpecControlsIterations(t *testing.T) {
 	t.Parallel()
 
-	legacy := ResolveDSLBundle(StageOptions{UseDSLFuncSigsNative: false})
+	legacy := ResolveDSLBundle(StageOptions{
+		DSL: DSLStageOptions{UseFuncSigsNative: false},
+	})
 	require.Equal(t, 1, legacy.Signatures.MaxIterations)
 	require.False(t, legacy.Signatures.AutoMaxIterations)
 	require.False(t, legacy.Signatures.DetectCycles)
 
-	native := ResolveDSLBundle(StageOptions{UseDSLFuncSigsNative: true})
+	native := ResolveDSLBundle(StageOptions{
+		DSL: DSLStageOptions{UseFuncSigsNative: true},
+	})
 	require.Equal(t, 0, native.Signatures.MaxIterations)
 	require.True(t, native.Signatures.AutoMaxIterations)
 	require.True(t, native.Signatures.DetectCycles)
@@ -100,7 +110,9 @@ func TestDSLBundle_SignaturesSpecControlsIterations(t *testing.T) {
 func TestDSLBundle_SignaturesFallbackIsParseFailureOnly(t *testing.T) {
 	t.Parallel()
 
-	native := ResolveDSLBundle(StageOptions{UseDSLFuncSigsNative: true})
+	native := ResolveDSLBundle(StageOptions{
+		DSL: DSLStageOptions{UseFuncSigsNative: true},
+	})
 	require.NotEmpty(t, native.Signatures.Rules)
 
 	last := native.Signatures.Rules[len(native.Signatures.Rules)-1]

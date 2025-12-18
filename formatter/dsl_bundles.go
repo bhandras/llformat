@@ -22,27 +22,27 @@ func dslRulesForLogCalls() []dsl.Rule {
 }
 
 func dslRulesForExpr(opts StageOptions) []dsl.Rule {
-	profile := normalizedRuleProfile(opts.RuleProfile)
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 
 	exprRules := dsl.LongExprRules()
-	if profile != "parity" || opts.AllowDSLCallArgs || opts.AutoDSLCallArgs || opts.DSLExprLogicalStyle != "" || opts.DSLExprArithmeticStyle != "" || opts.DSLExprCaseClauseStyle != "" || opts.DSLExprSelectorChainStyle != "" {
+	if profile != "parity" || opts.DSL.AllowCallArgs || opts.DSL.AutoCallArgs || opts.Style.DSLExprLogicalStyle != "" || opts.Style.DSLExprArithmeticStyle != "" || opts.Style.DSLExprCaseClauseStyle != "" || opts.Style.DSLExprSelectorChainStyle != "" {
 		callArgsPolicy := dsl.CallArgsPolicyOff
-		if opts.AutoDSLCallArgs {
+		if opts.DSL.AutoCallArgs {
 			callArgsPolicy = dsl.CallArgsPolicyAuto
 		}
-		if opts.AllowDSLCallArgs {
+		if opts.DSL.AllowCallArgs {
 			callArgsPolicy = dsl.CallArgsPolicyForce
 		}
 
-		allowlist := opts.Excludes
-		if opts.AutoDSLCallArgs {
-			allowlist = append(append([]string{}, DefaultMultilineExcludes()...), opts.Excludes...)
+		allowlist := opts.Style.Excludes
+		if opts.DSL.AutoCallArgs {
+			allowlist = append(append([]string{}, DefaultMultilineExcludes()...), opts.Style.Excludes...)
 		}
 
-		logicalStyle := opts.DSLExprLogicalStyle
-		arithStyle := opts.DSLExprArithmeticStyle
-		caseClauseStyle := opts.DSLExprCaseClauseStyle
-		selectorChainStyle := opts.DSLExprSelectorChainStyle
+		logicalStyle := opts.Style.DSLExprLogicalStyle
+		arithStyle := opts.Style.DSLExprArithmeticStyle
+		caseClauseStyle := opts.Style.DSLExprCaseClauseStyle
+		selectorChainStyle := opts.Style.DSLExprSelectorChainStyle
 		if profile == "modern" || profile == "next" {
 			if logicalStyle == "" {
 				logicalStyle = "layout"
@@ -71,9 +71,9 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 }
 
 func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder dsl.NodeOrder) {
-	style := opts.DSLMultiLineStyle
+	style := opts.Style.DSLMultiLineStyle
 	if style == "" {
-		switch normalizedRuleProfile(opts.RuleProfile) {
+		switch normalizedRuleProfile(opts.Selection.RuleProfile) {
 		case "modern":
 			style = "packed-chain-layout"
 		case "next":
@@ -96,23 +96,23 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 	switch style {
 	case "legacy", "legacy-scan", "scan":
 		rules = dsl.LegacyMultiLineScanRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
 			FormatOneMultiLineCallInSource,
 		)
 	case "packed":
 		rules = dsl.PackedMultiLineOnlyRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
 			FormatCallPackedMultiLine,
 		)
 	case "packed-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
 			FormatCallPackedMultiLine,
 		)
 	case "layout-args":
 		// Try layout-based argument breaking, fall back to packed multiline.
 		rules = dsl.MultiLineCallRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Excludes, CallArgsStyle: "layout"},
+			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes, CallArgsStyle: "layout"},
 			FormatCallPackedMultiLine,
 		)
 	case "layout-args-groups-pairs":
@@ -120,7 +120,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		// back to packed multiline when the layout formatter can't safely run.
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{
-				Excludes:         opts.Excludes,
+				Excludes:         opts.Style.Excludes,
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 			},
@@ -128,14 +128,14 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		)
 	case "packed-chain-layout", "layout-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Excludes, MethodChainStyle: "layout"},
+			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes, MethodChainStyle: "layout"},
 			FormatCallPackedMultiLine,
 		)
 	case "layout-all":
 		// Layout-based method-chain breaking + layout-based call-arg breaking.
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{
-				Excludes:         opts.Excludes,
+				Excludes:         opts.Style.Excludes,
 				MethodChainStyle: "layout",
 				CallArgsStyle:    "layout",
 			},
@@ -144,7 +144,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 	case "layout-all-groups-pairs":
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{
-				Excludes:         opts.Excludes,
+				Excludes:         opts.Style.Excludes,
 				MethodChainStyle: "layout",
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
@@ -154,7 +154,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 	default:
 		// Unknown style: fall back to legacy parity mode.
 		rules = dsl.LegacyMultiLineScanRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Excludes},
+			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
 			FormatOneMultiLineCallInSource,
 		)
 	}
@@ -165,11 +165,11 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 	// Signature rule selection is intentionally kept consistent with the legacy
 	// stage so golden fixtures remain authoritative.
-	if !opts.UseDSLFuncSigsNative {
+	if !opts.DSL.UseFuncSigsNative {
 		return dsl.LegacyFuncSigRules(FormatFuncSigsInSource)
 	}
 
-	style := opts.DSLSigsStyle
+	style := opts.Style.DSLSigsStyle
 	if style == "" {
 		style = "legacy"
 	}
@@ -197,14 +197,14 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 }
 
 func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
-	if !opts.UseDSLBlankLinesNative {
+	if !opts.DSL.UseBlankLinesNative {
 		return dsl.LegacyBlankLinesRules(FormatBlankLinesInSource)
 	}
 
 	// Native DSL blank line rules, with a legacy fallback for unparsable sources
 	// (and as a last resort).
 	blankOpts := dsl.BlankLineOptions{
-		ExtraIfErrReturn: normalizedRuleProfile(opts.RuleProfile) == "next",
+		ExtraIfErrReturn: normalizedRuleProfile(opts.Selection.RuleProfile) == "next",
 	}
 	rules := append([]dsl.Rule{}, dsl.BlankLineRulesWithOptions(blankOpts)...)
 	rules = append(rules, dsl.LegacyBlankLinesFallbackRules(FormatBlankLinesInSource)...)

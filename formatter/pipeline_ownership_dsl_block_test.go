@@ -32,8 +32,12 @@ func f() {
 	// Force the DSL expression stage to break long logical chains inside call
 	// arguments.
 	exprRules := dslRulesForExpr(StageOptions{
-		AllowDSLCallArgs:    true,
-		DSLExprLogicalStyle: "layout",
+		DSL: DSLStageOptions{
+			AllowCallArgs: true,
+		},
+		Style: StageStyleOptions{
+			DSLExprLogicalStyle: "layout",
+		},
 	})
 	expr := NewDSLExprFormatter(DSLExprConfig{
 		ColumnLimit:   48,

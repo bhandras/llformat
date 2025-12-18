@@ -97,82 +97,60 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 
 // StageOptions contains options for configuring the stage pipeline.
 type StageOptions struct {
-	CommentMoveInline        bool
-	Excludes                 []string
-	RuleProfile              string
-	StagePlan                *StagePlan
-	UseDSLComments           bool // Use DSL-based comment stage (delegates to legacy)
-	UseDSLLogCalls           bool // Use DSL-based log/printf call stage
-	UseDSLMultiLineCalls     bool // Use DSL-based multiline call stage
-	DSLMultiLineStyle        string
-	UseDSLExpr               bool // Use DSL-based expression stage
-	UseDSLFuncSigs           bool // Use DSL-based signature stage (delegates to legacy)
-	UseDSLBlankLines         bool // Use DSL-based blank line stage (pure DSL)
-	UseDSLBlankLinesNative   bool // Use native DSL blank-line rules (fallback to legacy)
-	UseDSLFuncSigsNative     bool // Use native DSL signature rules (fallback to legacy)
-	DSLSigsStyle             string
-	TraceDSL                 bool // Enable DSL rule tracing (DSL stages only)
-	TraceDSLReasons          bool // Include "why fired/didn't fire" reasons (DSL stages only)
-	MultiLineUseASTSelect    bool // Use AST-based selection in legacy multiline formatter
-	CompactCallUseASTSelect  bool // Use AST-based selection in legacy compact call formatter
-	CompactCallParseSafe     bool // Parse-safe behavior in legacy compact call formatter
-	LongExprParseSafe        bool // Parse-safe behavior in legacy long expr formatter
-	LongExprUseASTSelect     bool // Use AST-based selection in legacy long expr formatter
-	LongExprExcludeCallExprs bool // Forbid breaking inside call exprs in legacy long expr formatter
-	MultiLineParseSafe       bool // Parse-safe behavior in legacy multiline call formatter
+	Selection StageSelectionOptions
+	Style     StageStyleOptions
+	DSL       DSLStageOptions
+	Legacy    LegacyStageOptions
+}
 
-	// AllowDSLCallArgs enables limited expression formatting within call
-	// arguments when using the DSL expression stage.
-	// This is intentionally opt-in because it can interact with call formatting.
-	AllowDSLCallArgs bool
+type StageSelectionOptions struct {
+	RuleProfile string
+	StagePlan   *StagePlan
+}
 
-	// AutoDSLCallArgs enables limited expression formatting within call arguments
-	// only for calls excluded from multiline formatting.
-	AutoDSLCallArgs bool
+type StageStyleOptions struct {
+	CommentMoveInline bool
+	Excludes          []string
 
-	// DSLExprLogicalStyle controls long &&/|| chain formatting inside the DSL
-	// expression stage. Empty means legacy behavior.
-	DSLExprLogicalStyle string
+	DSLMultiLineStyle string
+	DSLSigsStyle      string
 
-	// DSLExprArithmeticStyle controls long arithmetic chain formatting inside
-	// the DSL expression stage. Empty means legacy behavior.
-	DSLExprArithmeticStyle string
-
-	// DSLExprCaseClauseStyle controls long `case A, B, ...:` list formatting
-	// inside the DSL expression stage. Empty means legacy behavior.
-	DSLExprCaseClauseStyle string
-
-	// DSLExprSelectorChainStyle controls long selector chain formatting
-	// inside the DSL expression stage. Empty means legacy behavior.
+	DSLExprLogicalStyle       string
+	DSLExprArithmeticStyle    string
+	DSLExprCaseClauseStyle    string
 	DSLExprSelectorChainStyle string
+}
+
+type DSLStageOptions struct {
+	Trace        bool
+	TraceReasons bool
+
+	UseBlankLinesNative bool
+	UseFuncSigsNative   bool
+
+	AllowCallArgs bool
+	AutoCallArgs  bool
+}
+
+type LegacyStageOptions struct {
+	MultiLineUseASTSelect    bool
+	CompactCallUseASTSelect  bool
+	CompactCallParseSafe     bool
+	LongExprParseSafe        bool
+	LongExprUseASTSelect     bool
+	LongExprExcludeCallExprs bool
+	MultiLineParseSafe       bool
 }
 
 // DefaultStages returns the standard llformat stage configuration.
 // This creates stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
 	return DefaultStagesWithOptions(cfg, StageOptions{
-		CommentMoveInline:        commentMoveInline,
-		Excludes:                 excludes,
-		RuleProfile:              "parity",
-		UseDSLComments:           false,
-		UseDSLLogCalls:           false,
-		UseDSLMultiLineCalls:     false,
-		DSLMultiLineStyle:        "",
-		UseDSLExpr:               false,
-		UseDSLFuncSigs:           false,
-		UseDSLBlankLines:         false,
-		UseDSLBlankLinesNative:   false,
-		UseDSLFuncSigsNative:     false,
-		DSLSigsStyle:             "",
-		TraceDSL:                 false,
-		TraceDSLReasons:          false,
-		MultiLineUseASTSelect:    false,
-		CompactCallUseASTSelect:  false,
-		CompactCallParseSafe:     false,
-		LongExprParseSafe:        false,
-		LongExprUseASTSelect:     false,
-		LongExprExcludeCallExprs: false,
-		MultiLineParseSafe:       false,
+		Selection: StageSelectionOptions{RuleProfile: "parity"},
+		Style: StageStyleOptions{
+			CommentMoveInline: commentMoveInline,
+			Excludes:          excludes,
+		},
 	})
 }
 

@@ -25,7 +25,7 @@ func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOpti
 		return NewCommentFormatter(CommentConfig{
 			ColumnLimit:     cfg.ColumnLimit,
 			TabStop:         cfg.TabStop,
-			MoveInlineAbove: opts.CommentMoveInline,
+			MoveInlineAbove: opts.Style.CommentMoveInline,
 		})
 	}
 
@@ -33,13 +33,13 @@ func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOpti
 		ColumnLimit:   cfg.ColumnLimit,
 		TabStop:       cfg.TabStop,
 		Rules:         bundle.Comments.Rules,
-		Trace:         opts.TraceDSL,
-		TraceReasons:  opts.TraceDSLReasons,
+		Trace:         opts.DSL.Trace,
+		TraceReasons:  opts.DSL.TraceReasons,
 		NodeOrder:     bundle.Comments.NodeOrder,
 		MaxIterations: bundle.Comments.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
+		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 	})
 }
 
@@ -48,9 +48,9 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts Stage
 		return NewCompactCallFormatter(Config{
 			ColumnLimit:     cfg.ColumnLimit,
 			TabStop:         cfg.TabStop,
-			UseASTSelection: opts.CompactCallUseASTSelect,
+			UseASTSelection: opts.Legacy.CompactCallUseASTSelect,
 			SkipGofmt:       true,
-			ParseSafe:       opts.CompactCallParseSafe,
+			ParseSafe:       opts.Legacy.CompactCallParseSafe,
 		})
 	}
 
@@ -58,13 +58,13 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts Stage
 		ColumnLimit:   cfg.ColumnLimit,
 		TabStop:       cfg.TabStop,
 		Rules:         bundle.LogCalls.Rules,
-		Trace:         opts.TraceDSL,
-		TraceReasons:  opts.TraceDSLReasons,
+		Trace:         opts.DSL.Trace,
+		TraceReasons:  opts.DSL.TraceReasons,
 		NodeOrder:     bundle.LogCalls.NodeOrder,
 		MaxIterations: bundle.LogCalls.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
+		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			// Align ownership boundaries with legacy call selection for now.
 			return NewCompactCallFormatter(Config{
@@ -81,9 +81,9 @@ func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageO
 		return NewLongExprFormatter(LongExprConfig{
 			ColumnLimit:      cfg.ColumnLimit,
 			TabStop:          cfg.TabStop,
-			ParseSafe:        opts.LongExprParseSafe,
-			UseASTSelection:  opts.LongExprUseASTSelect,
-			ExcludeCallExprs: opts.LongExprExcludeCallExprs,
+			ParseSafe:        opts.Legacy.LongExprParseSafe,
+			UseASTSelection:  opts.Legacy.LongExprUseASTSelect,
+			ExcludeCallExprs: opts.Legacy.LongExprExcludeCallExprs,
 		})
 	}
 
@@ -91,13 +91,13 @@ func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageO
 		ColumnLimit:   cfg.ColumnLimit,
 		TabStop:       cfg.TabStop,
 		Rules:         bundle.Expressions.Rules,
-		Trace:         opts.TraceDSL,
-		TraceReasons:  opts.TraceDSLReasons,
+		Trace:         opts.DSL.Trace,
+		TraceReasons:  opts.DSL.TraceReasons,
 		NodeOrder:     bundle.Expressions.NodeOrder,
 		MaxIterations: bundle.Expressions.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
+		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 	})
 }
 
@@ -106,10 +106,10 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 		return NewMultiLineCallFormatter(MultiLineConfig{
 			ColumnLimit:     cfg.ColumnLimit,
 			TabStop:         cfg.TabStop,
-			Excludes:        opts.Excludes,
-			UseASTSelection: opts.MultiLineUseASTSelect,
+			Excludes:        opts.Style.Excludes,
+			UseASTSelection: opts.Legacy.MultiLineUseASTSelect,
 			SkipGofmt:       true,
-			ParseSafe:       opts.MultiLineParseSafe,
+			ParseSafe:       opts.Legacy.MultiLineParseSafe,
 		})
 	}
 
@@ -117,20 +117,20 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 		ColumnLimit:   cfg.ColumnLimit,
 		TabStop:       cfg.TabStop,
 		Rules:         bundle.MultiLineCalls.Rules,
-		Trace:         opts.TraceDSL,
-		TraceReasons:  opts.TraceDSLReasons,
+		Trace:         opts.DSL.Trace,
+		TraceReasons:  opts.DSL.TraceReasons,
 		NodeOrder:     bundle.MultiLineCalls.NodeOrder,
 		MaxIterations: bundle.MultiLineCalls.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.RuleProfile),
+		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			// Use the legacy multiline stage's ownership selection (AST-based)
 			// to avoid rewriting within calls that this stage will later format.
 			return NewMultiLineCallFormatter(MultiLineConfig{
 				ColumnLimit:     cfg.ColumnLimit,
 				TabStop:         cfg.TabStop,
-				Excludes:        opts.Excludes,
+				Excludes:        opts.Style.Excludes,
 				UseASTSelection: true,
 			}).OwnedSpans(src)
 		},
@@ -149,15 +149,15 @@ func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 		ColumnLimit:       cfg.ColumnLimit,
 		TabStop:           cfg.TabStop,
 		Rules:             bundle.Signatures.Rules,
-		Trace:             opts.TraceDSL,
-		TraceReasons:      opts.TraceDSLReasons,
+		Trace:             opts.DSL.Trace,
+		TraceReasons:      opts.DSL.TraceReasons,
 		NodeOrder:         bundle.Signatures.NodeOrder,
 		MaxIterations:     bundle.Signatures.MaxIterations,
 		AutoMaxIterations: bundle.Signatures.AutoMaxIterations,
 		DetectCycles:      bundle.Signatures.DetectCycles,
 		SkipGofmt:         true,
 		StageName:         stageName,
-		Budget:            dslBudgetForRuleProfile(opts.RuleProfile),
+		Budget:            dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 	})
 }
 
@@ -174,13 +174,13 @@ func buildBlankLineStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 		ColumnLimit:                 cfg.ColumnLimit,
 		TabStop:                     cfg.TabStop,
 		Rules:                       bundle.BlankLines.Rules,
-		Trace:                       opts.TraceDSL,
-		TraceReasons:                opts.TraceDSLReasons,
+		Trace:                       opts.DSL.Trace,
+		TraceReasons:                opts.DSL.TraceReasons,
 		NodeOrder:                   bundle.BlankLines.NodeOrder,
 		MaxIterations:               bundle.BlankLines.MaxIterations,
 		DisableLegacyBlankLinesShim: bundle.BlankLines.DisableLegacyBlankLinesShim,
 		SkipGofmt:                   true,
 		StageName:                   stageName,
-		Budget:                      dslBudgetForRuleProfile(opts.RuleProfile),
+		Budget:                      dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 	})
 }

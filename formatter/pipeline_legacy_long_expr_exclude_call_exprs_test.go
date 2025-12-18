@@ -17,8 +17,10 @@ func f() {
 	base := NewBaseConfig(48, 8)
 
 	stagesWithout := DefaultStagesWithOptions(base, StageOptions{
-		LongExprParseSafe:    true,
-		LongExprUseASTSelect: true,
+		Legacy: LegacyStageOptions{
+			LongExprParseSafe:    true,
+			LongExprUseASTSelect: true,
+		},
 		// Intentionally not setting LongExprExcludeCallExprs.
 	})
 	outWithout := NewPipelineWithStages(PipelineConfig{ColumnLimit: 48, TabStop: 8}, stagesWithout).Format(in)
@@ -26,12 +28,13 @@ func f() {
 	requireASTEquivalent(t, in, outWithout)
 
 	stagesWith := DefaultStagesWithOptions(base, StageOptions{
-		LongExprParseSafe:        true,
-		LongExprUseASTSelect:     true,
-		LongExprExcludeCallExprs: true,
+		Legacy: LegacyStageOptions{
+			LongExprParseSafe:        true,
+			LongExprUseASTSelect:     true,
+			LongExprExcludeCallExprs: true,
+		},
 	})
 	outWith := NewPipelineWithStages(PipelineConfig{ColumnLimit: 48, TabStop: 8}, stagesWith).Format(in)
 	require.Equal(t, string(in), string(outWith), "expected pipeline to leave call expr callee unchanged when excluded")
 	requireASTEquivalent(t, in, outWith)
 }
-

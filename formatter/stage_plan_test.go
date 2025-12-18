@@ -9,7 +9,9 @@ import (
 func TestStagePlanFromOptions_ProfileModernDefaultsToDSL(t *testing.T) {
 	t.Parallel()
 
-	plan := stagePlanFromOptions(StageOptions{RuleProfile: "modern"})
+	plan := stagePlanFromOptions(StageOptions{
+		Selection: StageSelectionOptions{RuleProfile: "modern"},
+	})
 	require.Equal(t, StageModeDSL, plan.Comments)
 	require.Equal(t, StageModeDSL, plan.LogCalls)
 	require.Equal(t, StageModeDSL, plan.Expressions)
@@ -21,7 +23,9 @@ func TestStagePlanFromOptions_ProfileModernDefaultsToDSL(t *testing.T) {
 func TestStagePlanFromOptions_ProfileParityDefaultsToLegacy(t *testing.T) {
 	t.Parallel()
 
-	plan := stagePlanFromOptions(StageOptions{RuleProfile: "parity"})
+	plan := stagePlanFromOptions(StageOptions{
+		Selection: StageSelectionOptions{RuleProfile: "parity"},
+	})
 	require.Equal(t, StageModeLegacy, plan.Comments)
 	require.Equal(t, StageModeLegacy, plan.LogCalls)
 	require.Equal(t, StageModeLegacy, plan.Expressions)

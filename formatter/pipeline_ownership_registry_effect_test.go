@@ -16,14 +16,18 @@ func f() {
 
 	base := NewBaseConfig(48, 8)
 	stages := DefaultStagesWithOptions(base, StageOptions{
-		// Ensure the legacy long-expr stage is in AST selection + parse-safe mode.
-		LongExprParseSafe:    true,
-		LongExprUseASTSelect: true,
+		Legacy: LegacyStageOptions{
+			// Ensure the legacy long-expr stage is in AST selection + parse-safe mode.
+			LongExprParseSafe:    true,
+			LongExprUseASTSelect: true,
+		},
 
-		// Ensure the legacy multiline call stage will not claim ownership of
-		// this call (so the expr stage can safely format inside it under the
-		// ownership registry model).
-		Excludes: []string{"outerFunctionNameThatIsVeryLong"},
+		Style: StageStyleOptions{
+			// Ensure the legacy multiline call stage will not claim ownership of
+			// this call (so the expr stage can safely format inside it under the
+			// ownership registry model).
+			Excludes: []string{"outerFunctionNameThatIsVeryLong"},
+		},
 	})
 
 	// Without ownership registry, AST selection stays conservative and skips all
@@ -45,4 +49,3 @@ func f() {
 	require.Contains(t, string(outRegistry), "\n\t\tsecondConditionThatIsVeryLong")
 	requireASTEquivalent(t, in, outRegistry)
 }
-

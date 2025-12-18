@@ -10,16 +10,24 @@ import (
 func TestDSLBundlesMultiLineStyleControlsNodeOrder(t *testing.T) {
 	t.Parallel()
 
-	_, nodeOrder := dslRulesForMultiLineCalls(StageOptions{DSLMultiLineStyle: "legacy"})
+	_, nodeOrder := dslRulesForMultiLineCalls(StageOptions{
+		Style: StageStyleOptions{DSLMultiLineStyle: "legacy"},
+	})
 	require.Equal(t, dsl.NodeOrderPreorder, nodeOrder)
 
-	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{DSLMultiLineStyle: "layout-args"})
+	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
+		Style: StageStyleOptions{DSLMultiLineStyle: "layout-args"},
+	})
 	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
 
-	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{DSLMultiLineStyle: "layout-all"})
+	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
+		Style: StageStyleOptions{DSLMultiLineStyle: "layout-all"},
+	})
 	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
 
-	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{DSLMultiLineStyle: "layout-args-groups-pairs"})
+	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
+		Style: StageStyleOptions{DSLMultiLineStyle: "layout-args-groups-pairs"},
+	})
 	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
 }
 
@@ -27,14 +35,14 @@ func TestDSLBundlesMultiLineStyleDefaultsFromRuleProfile(t *testing.T) {
 	t.Parallel()
 
 	rules, nodeOrder := dslRulesForMultiLineCalls(StageOptions{
-		RuleProfile: "parity",
+		Selection: StageSelectionOptions{RuleProfile: "parity"},
 	})
 	require.Equal(t, dsl.NodeOrderPreorder, nodeOrder)
 	require.NotEmpty(t, rules)
 	require.Equal(t, "legacy_multiline_scan", rules[0].Name)
 
 	rules, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
-		RuleProfile: "modern",
+		Selection: StageSelectionOptions{RuleProfile: "modern"},
 	})
 	require.Equal(t, dsl.NodeOrderPreorder, nodeOrder)
 	require.Len(t, rules, 2)
@@ -42,7 +50,7 @@ func TestDSLBundlesMultiLineStyleDefaultsFromRuleProfile(t *testing.T) {
 	require.Equal(t, "long_call_expr", rules[1].Name)
 
 	rules, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
-		RuleProfile: "next",
+		Selection: StageSelectionOptions{RuleProfile: "next"},
 	})
 	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
 	require.Len(t, rules, 2)
@@ -54,8 +62,8 @@ func TestDSLBundlesSignaturesNativeAlwaysIncludesLegacyFallback(t *testing.T) {
 	t.Parallel()
 
 	rules := dslRulesForSignatures(StageOptions{
-		UseDSLFuncSigsNative: true,
-		DSLSigsStyle:         "dsl",
+		DSL:   DSLStageOptions{UseFuncSigsNative: true},
+		Style: StageStyleOptions{DSLSigsStyle: "dsl"},
 	})
 	require.NotEmpty(t, rules)
 	require.Equal(t, "legacy_func_sig_fallback", rules[len(rules)-1].Name)
@@ -65,13 +73,13 @@ func TestDSLBundlesBlankLinesNativeAlwaysIncludesLegacyFallback(t *testing.T) {
 	t.Parallel()
 
 	rules := dslRulesForBlankLines(StageOptions{
-		UseDSLBlankLinesNative: true,
+		DSL: DSLStageOptions{UseBlankLinesNative: true},
 	})
 	require.NotEmpty(t, rules)
 	require.Equal(t, "legacy_blank_lines_fallback", rules[len(rules)-1].Name)
 
 	legacyRules := dslRulesForBlankLines(StageOptions{
-		UseDSLBlankLinesNative: false,
+		DSL: DSLStageOptions{UseBlankLinesNative: false},
 	})
 	require.Len(t, legacyRules, 1)
 	require.Equal(t, "legacy_blank_lines_format", legacyRules[0].Name)

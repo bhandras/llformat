@@ -43,32 +43,27 @@ func stagePlanForRuleProfile(profile string) (StagePlan, bool) {
 }
 
 func stagePlanFromOptions(opts StageOptions) StagePlan {
-	if opts.StagePlan != nil {
-		return *opts.StagePlan
+	if opts.Selection.StagePlan != nil {
+		return *opts.Selection.StagePlan
 	}
 
-	// If callers opt into a non-parity profile without specifying stage toggles,
-	// treat the profile as the stage selector. This keeps legacy parity as the
-	// default while allowing "modern"/"next" to be selected more ergonomically.
-	if !opts.UseDSLComments &&
-		!opts.UseDSLLogCalls &&
-		!opts.UseDSLMultiLineCalls &&
-		!opts.UseDSLExpr &&
-		!opts.UseDSLFuncSigs &&
-		!opts.UseDSLBlankLines &&
-		normalizedRuleProfile(opts.RuleProfile) != "parity" {
-		if plan, ok := stagePlanForRuleProfile(opts.RuleProfile); ok {
+	// Default behavior for DefaultStagesWithOptions (and most internal callers):
+	// if no explicit StagePlan is provided, treat RuleProfile as a stage selector
+	// only for non-parity profiles.
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
+	if profile != "parity" {
+		if plan, ok := stagePlanForRuleProfile(profile); ok {
 			return plan
 		}
 	}
 
 	return StagePlan{
-		Comments:       stageModeFromBool(opts.UseDSLComments),
-		LogCalls:       stageModeFromBool(opts.UseDSLLogCalls),
-		Expressions:    stageModeFromBool(opts.UseDSLExpr),
-		MultiLineCalls: stageModeFromBool(opts.UseDSLMultiLineCalls),
-		Signatures:     stageModeFromBool(opts.UseDSLFuncSigs),
-		BlankLines:     stageModeFromBool(opts.UseDSLBlankLines),
+		Comments:       StageModeLegacy,
+		LogCalls:       StageModeLegacy,
+		Expressions:    StageModeLegacy,
+		MultiLineCalls: StageModeLegacy,
+		Signatures:     StageModeLegacy,
+		BlankLines:     StageModeLegacy,
 	}
 }
 

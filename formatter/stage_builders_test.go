@@ -29,51 +29,51 @@ func TestStageBuilders_ChooseLegacyVsDSLTypes(t *testing.T) {
 		BlankLines:     StageModeDSL,
 	}
 
-	f := buildCommentStageFormatter("comments", cfg, StageOptions{UseDSLComments: false}, legacyPlan, legacyBundle)
+	f := buildCommentStageFormatter("comments", cfg, StageOptions{}, legacyPlan, legacyBundle)
 	_, ok := f.(*CommentFormatter)
 	require.True(t, ok)
 
-	f = buildCommentStageFormatter("comments", cfg, StageOptions{UseDSLComments: true}, dslPlan, legacyBundle)
+	f = buildCommentStageFormatter("comments", cfg, StageOptions{}, dslPlan, legacyBundle)
 	_, ok = f.(*DSLExprFormatter)
 	require.True(t, ok)
 
-	f = buildCompactCallStageFormatter("compact-calls", cfg, StageOptions{UseDSLLogCalls: false}, legacyPlan, legacyBundle)
+	f = buildCompactCallStageFormatter("compact-calls", cfg, StageOptions{}, legacyPlan, legacyBundle)
 	_, ok = f.(*CompactCallFormatter)
 	require.True(t, ok)
 
-	f = buildCompactCallStageFormatter("compact-calls", cfg, StageOptions{UseDSLLogCalls: true}, dslPlan, legacyBundle)
+	f = buildCompactCallStageFormatter("compact-calls", cfg, StageOptions{}, dslPlan, legacyBundle)
 	_, ok = f.(*DSLExprFormatter)
 	require.True(t, ok)
 
-	f = buildExpressionStageFormatter("expressions", cfg, StageOptions{UseDSLExpr: false}, legacyPlan, legacyBundle)
+	f = buildExpressionStageFormatter("expressions", cfg, StageOptions{}, legacyPlan, legacyBundle)
 	_, ok = f.(*LongExprFormatter)
 	require.True(t, ok)
 
-	f = buildExpressionStageFormatter("expressions", cfg, StageOptions{UseDSLExpr: true}, dslPlan, legacyBundle)
+	f = buildExpressionStageFormatter("expressions", cfg, StageOptions{}, dslPlan, legacyBundle)
 	_, ok = f.(*DSLExprFormatter)
 	require.True(t, ok)
 
-	f = buildMultiLineCallStageFormatter("multiline-calls", cfg, StageOptions{UseDSLMultiLineCalls: false}, legacyPlan, legacyBundle)
+	f = buildMultiLineCallStageFormatter("multiline-calls", cfg, StageOptions{}, legacyPlan, legacyBundle)
 	_, ok = f.(*MultiLineCallFormatter)
 	require.True(t, ok)
 
-	f = buildMultiLineCallStageFormatter("multiline-calls", cfg, StageOptions{UseDSLMultiLineCalls: true}, dslPlan, legacyBundle)
+	f = buildMultiLineCallStageFormatter("multiline-calls", cfg, StageOptions{}, dslPlan, legacyBundle)
 	_, ok = f.(*DSLExprFormatter)
 	require.True(t, ok)
 
-	f = buildSignatureStageFormatter("signatures", cfg, StageOptions{UseDSLFuncSigs: false}, legacyPlan, legacyBundle)
+	f = buildSignatureStageFormatter("signatures", cfg, StageOptions{}, legacyPlan, legacyBundle)
 	_, ok = f.(*FuncSigFormatter)
 	require.True(t, ok)
 
-	f = buildSignatureStageFormatter("signatures", cfg, StageOptions{UseDSLFuncSigs: true}, dslPlan, legacyBundle)
+	f = buildSignatureStageFormatter("signatures", cfg, StageOptions{}, dslPlan, legacyBundle)
 	_, ok = f.(*DSLExprFormatter)
 	require.True(t, ok)
 
-	f = buildBlankLineStageFormatter("blank-lines", cfg, StageOptions{UseDSLBlankLines: false}, legacyPlan, legacyBundle)
+	f = buildBlankLineStageFormatter("blank-lines", cfg, StageOptions{}, legacyPlan, legacyBundle)
 	_, ok = f.(*BlankLineFormatter)
 	require.True(t, ok)
 
-	f = buildBlankLineStageFormatter("blank-lines", cfg, StageOptions{UseDSLBlankLines: true}, dslPlan, legacyBundle)
+	f = buildBlankLineStageFormatter("blank-lines", cfg, StageOptions{}, dslPlan, legacyBundle)
 	_, ok = f.(*DSLExprFormatter)
 	require.True(t, ok)
 }
@@ -82,20 +82,15 @@ func TestStagePlanFromOptions_UsesExplicitStagePlanWhenProvided(t *testing.T) {
 	t.Parallel()
 
 	opts := StageOptions{
-		// These would normally enable DSL via the legacy toggles.
-		UseDSLComments:       true,
-		UseDSLLogCalls:       true,
-		UseDSLExpr:           true,
-		UseDSLMultiLineCalls: true,
-		UseDSLFuncSigs:       true,
-		UseDSLBlankLines:     true,
-		StagePlan: &StagePlan{
-			Comments:       StageModeLegacy,
-			LogCalls:       StageModeLegacy,
-			Expressions:    StageModeLegacy,
-			MultiLineCalls: StageModeLegacy,
-			Signatures:     StageModeLegacy,
-			BlankLines:     StageModeLegacy,
+		Selection: StageSelectionOptions{
+			StagePlan: &StagePlan{
+				Comments:       StageModeLegacy,
+				LogCalls:       StageModeLegacy,
+				Expressions:    StageModeLegacy,
+				MultiLineCalls: StageModeLegacy,
+				Signatures:     StageModeLegacy,
+				BlankLines:     StageModeLegacy,
+			},
 		},
 	}
 
