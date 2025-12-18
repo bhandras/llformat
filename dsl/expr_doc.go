@@ -591,13 +591,13 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (
 	leftInfo, leftOK := exprDocWithKind(bin.X, ctx, kind)
 	left := layout.T(renderNode(bin.X, ctx.Fset))
 	if leftOK {
-		left = leftInfo.Doc
+		left = indentExprDocIfNeeded(leftInfo)
 	}
 
 	rightInfo, rightOK := exprDocWithKind(bin.Y, ctx, kind)
 	right := layout.T(renderNode(bin.Y, ctx.Fset))
 	if rightOK {
-		right = rightInfo.Doc
+		right = indentExprDocIfNeeded(rightInfo)
 	}
 
 	return layout.G(layout.C(
@@ -641,12 +641,12 @@ func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind
 
 	leftDoc := layout.T(leftText)
 	if info, ok := exprDocWithKind(bin.X, ctx, kind); ok {
-		leftDoc = info.Doc
+		leftDoc = indentExprDocIfNeeded(info)
 	}
 
 	rightDoc := layout.T(rightText)
 	if info, ok := exprDocWithKind(bin.Y, ctx, kind); ok {
-		rightDoc = info.Doc
+		rightDoc = indentExprDocIfNeeded(info)
 	}
 
 	// flat:  left == right
@@ -687,7 +687,7 @@ func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context, kind exprDo
 		// chains can break within the binary expression.
 		if kind == exprDocKindCallArg {
 			if info, ok := exprDocWithKind(term, ctx, kind); ok {
-				docs = append(docs, info.Doc)
+				docs = append(docs, indentExprDocIfNeeded(info))
 				continue
 			}
 		}

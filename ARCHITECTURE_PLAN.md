@@ -69,11 +69,11 @@ Legend:
 
 ## E) Expression Formatting (“A” Goal: Tight, Correct Splitting)
 
-- [ ] **P0 Opt-In** Build expression layout docs for major expression families (logical/arithmetic/selector/case/string).
-- [ ] **P0 Safe** Preserve default “no call-arg edits” unless explicitly enabled/allowlisted.
-- [ ] **P1 Opt-In** Improve call-arg expression formatting only for excluded callees (auto allowlist).
-- [ ] **P1 Opt-In** Paren-aware breaking improvements and close-paren placement stability.
-- [ ] **P2 Opt-In** Extend coverage for remaining expression kinds (as needed).
+- [x] **P0 Opt-In** Build expression layout docs for major expression families (logical/arithmetic/selector/case/string).
+- [x] **P0 Safe** Preserve default “no call-arg edits” unless explicitly enabled/allowlisted.
+- [x] **P1 Opt-In** Improve call-arg expression formatting only for excluded callees (auto allowlist).
+- [x] **P1 Opt-In** Paren-aware breaking improvements and close-paren placement stability.
+- [x] **P2 Opt-In** Extend coverage for remaining expression kinds (as needed).
 
 ---
 

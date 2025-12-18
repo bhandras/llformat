@@ -270,20 +270,34 @@ func callExprFuncName(call *ast.CallExpr) string {
 	if call == nil {
 		return ""
 	}
-	switch fun := call.Fun.(type) {
+	return callExprFuncNameFromExpr(call.Fun)
+}
+
+func callExprFuncNameFromExpr(fun ast.Expr) string {
+	if fun == nil {
+		return ""
+	}
+
+	switch v := fun.(type) {
 	case *ast.Ident:
-		return fun.Name
+		return v.Name
 	case *ast.SelectorExpr:
 		// Try to build the same representation as the legacy call scanners
 		// (including selectors like "pkg.Func").
-		prefix := selectorPrefix(fun.X)
+		prefix := selectorPrefix(v.X)
 		if prefix == "" {
-			return fun.Sel.Name
+			return v.Sel.Name
 		}
-		return prefix + "." + fun.Sel.Name
+		return prefix + "." + v.Sel.Name
+	case *ast.IndexExpr:
+		// Generic instantiation: f[T](...) is represented as CallExpr{Fun: IndexExpr}.
+		return callExprFuncNameFromExpr(v.X)
+	case *ast.IndexListExpr:
+		// Generic instantiation: f[T, U](...) is represented as CallExpr{Fun: IndexListExpr}.
+		return callExprFuncNameFromExpr(v.X)
 	default:
-		// Unknown callee shape (e.g. type conversions / indexing). These are not
-		// addressable via multiline exclusion lists anyway.
+		// Unknown callee shape (e.g. type conversions / other expressions). Return
+		// empty to indicate "not allowlist-addressable".
 		return ""
 	}
 }
