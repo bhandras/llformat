@@ -1412,3 +1412,116 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 
 	return true
 }
+
+// IsIfErrReturnNeedingBlankCond checks if an `if err != nil { return ... }`
+// statement should be preceded by a blank line for readability.
+//
+// This is intentionally opt-in and should only be enabled under explicit
+// profiles (e.g. "next").
+type IsIfErrReturnNeedingBlankCond struct {
+	Target string
+}
+
+func isIdentName(expr ast.Expr, name string) bool {
+	id, ok := expr.(*ast.Ident)
+	return ok && id != nil && id.Name == name
+}
+
+func isErrNotNilCond(expr ast.Expr) bool {
+	be, ok := expr.(*ast.BinaryExpr)
+	if !ok || be == nil {
+		return false
+	}
+	if be.Op != token.NEQ {
+		return false
+	}
+	return (isIdentName(be.X, "err") && isIdentName(be.Y, "nil")) ||
+		(isIdentName(be.X, "nil") && isIdentName(be.Y, "err"))
+}
+
+func ifBodyIsSingleReturn(body *ast.BlockStmt) bool {
+	if body == nil || len(body.List) != 1 {
+		return false
+	}
+	_, ok := body.List[0].(*ast.ReturnStmt)
+	return ok
+}
+
+// Eval implements Condition for IsIfErrReturnNeedingBlankCond.
+func (c *IsIfErrReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+
+	ifs, ok := node.(*ast.IfStmt)
+	if !ok || ifs == nil {
+		return false
+	}
+
+	// Only apply to a very specific pattern.
+	if ifs.Else != nil {
+		return false
+	}
+	if !isErrNotNilCond(ifs.Cond) {
+		return false
+	}
+	if !ifBodyIsSingleReturn(ifs.Body) {
+		return false
+	}
+
+	// Require a preceding statement in the containing block; we don't want to
+	// insert a blank line at the start of a block.
+	parent := ctx.Parent(node)
+	block, ok := parent.(*ast.BlockStmt)
+	if !ok || block == nil {
+		return false
+	}
+	hasPrev := false
+	for i, stmt := range block.List {
+		if stmt == node {
+			hasPrev = i > 0
+			break
+		}
+	}
+	if !hasPrev {
+		return false
+	}
+
+	pos := ctx.Fset.Position(node.Pos())
+	nodeStart := pos.Offset
+	if nodeStart <= 0 || nodeStart > len(ctx.Source) {
+		return false
+	}
+
+	// Find the start of this line.
+	lineStart := nodeStart
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+
+	// Look at the previous line.
+	if lineStart == 0 {
+		return false
+	}
+
+	prevLineEnd := lineStart - 1
+	prevLineStart := prevLineEnd
+	for prevLineStart > 0 && ctx.Source[prevLineStart-1] != '\n' {
+		prevLineStart--
+	}
+
+	prevLine := string(ctx.Source[prevLineStart:prevLineEnd])
+	trimmed := trimWhitespace(prevLine)
+	if trimmed == "" {
+		return false
+	}
+	if len(trimmed) > 0 {
+		lastChar := trimmed[len(trimmed)-1]
+		if lastChar == '{' || lastChar == ':' {
+			return false
+		}
+	}
+
+	return true
+}

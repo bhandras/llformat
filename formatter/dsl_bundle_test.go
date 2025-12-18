@@ -57,6 +57,30 @@ func TestDSLBundle_BlankLinesSpecControlsShimAndIterations(t *testing.T) {
 	require.Equal(t, "legacy_blank_lines_fallback", native.BlankLines.Rules[len(native.BlankLines.Rules)-1].Name)
 }
 
+func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
+	t.Parallel()
+
+	next := ResolveDSLBundle(StageOptions{
+		RuleProfile:            "next",
+		UseDSLBlankLinesNative: true,
+	})
+	names := make([]string, 0, len(next.BlankLines.Rules))
+	for _, r := range next.BlankLines.Rules {
+		names = append(names, r.Name)
+	}
+	require.Contains(t, names, "blank_before_if_err_return")
+
+	parity := ResolveDSLBundle(StageOptions{
+		RuleProfile:            "parity",
+		UseDSLBlankLinesNative: true,
+	})
+	parityNames := make([]string, 0, len(parity.BlankLines.Rules))
+	for _, r := range parity.BlankLines.Rules {
+		parityNames = append(parityNames, r.Name)
+	}
+	require.NotContains(t, parityNames, "blank_before_if_err_return")
+}
+
 func TestDSLBundle_SignaturesSpecControlsIterations(t *testing.T) {
 	t.Parallel()
 

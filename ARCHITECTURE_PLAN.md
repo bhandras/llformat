@@ -89,7 +89,7 @@ Legend:
 
 - [x] **P0 Safe** Keep shim default for parity; native remains opt-in.
 - [x] **P1 Safe** Reduce iterations / improve idempotence for native blank-line rules.
-- [ ] **P2 Opt-In** Add additional blank-line rules only under explicit profile.
+- [x] **P2 Opt-In** Add additional blank-line rules only under explicit profile.
 
 ---
 

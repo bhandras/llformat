@@ -203,7 +203,10 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 
 	// Native DSL blank line rules, with a legacy fallback for unparsable sources
 	// (and as a last resort).
-	rules := append([]dsl.Rule{}, dsl.BlankLineRules()...)
+	blankOpts := dsl.BlankLineOptions{
+		ExtraIfErrReturn: normalizedRuleProfile(opts.RuleProfile) == "next",
+	}
+	rules := append([]dsl.Rule{}, dsl.BlankLineRulesWithOptions(blankOpts)...)
 	rules = append(rules, dsl.LegacyBlankLinesFallbackRules(FormatBlankLinesInSource)...)
 	return rules
 }

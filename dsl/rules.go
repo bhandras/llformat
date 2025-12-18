@@ -550,7 +550,21 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 // BlankLineRules returns rules for inserting blank lines.
 // These are separate from expression formatting rules.
 func BlankLineRules() []Rule {
-	return []Rule{
+	return BlankLineRulesWithOptions(BlankLineOptions{})
+}
+
+type BlankLineOptions struct {
+	// ExtraIfErrReturn inserts a blank line before:
+	//
+	//   if err != nil { return ... }
+	//
+	// This is intentionally opt-in because it is opinionated and may interact
+	// with users' desired grouping/spacing style.
+	ExtraIfErrReturn bool
+}
+
+func BlankLineRulesWithOptions(opts BlankLineOptions) []Rule {
+	rules := []Rule{
 		// Batch blank-line insertion to avoid hundreds of iterations on files with
 		// many cases/returns/methods.
 		{
@@ -558,7 +572,7 @@ func BlankLineRules() []Rule {
 			Pattern:  &NodePattern{Type: "File"},
 			When:     &IsParseableCond{Want: true},
 			Priority: 20,
-			Action:   &BlankLinesBatchAction{},
+			Action:   &BlankLinesBatchAction{Options: opts},
 		},
 
 		// Rule: Blank line before case clause (if preceded by another case)
@@ -597,6 +611,20 @@ func BlankLineRules() []Rule {
 			Action:   &InsertBlankBeforeAction{Target: "node"},
 		},
 	}
+
+	if opts.ExtraIfErrReturn {
+		rules = append(rules,
+			Rule{
+				Name:     "blank_before_if_err_return",
+				Pattern:  &NodePattern{Type: "IfStmt"},
+				When:     &IsIfErrReturnNeedingBlankCond{Target: "node"},
+				Priority: 9,
+				Action:   &InsertBlankBeforeAction{Target: "node"},
+			},
+		)
+	}
+
+	return rules
 }
 
 // ComparisonOps returns the list of comparison operators.

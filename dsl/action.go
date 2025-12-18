@@ -3224,7 +3224,9 @@ type InsertBlankBeforeAction struct {
 // determinism, which makes per-node blank-line rules expensive for files with
 // many cases/returns/methods. This action keeps the logic in the DSL while
 // avoiding hundreds of iterations.
-type BlankLinesBatchAction struct{}
+type BlankLinesBatchAction struct {
+	Options BlankLineOptions
+}
 
 func (a *BlankLinesBatchAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	node := resolveTarget(caps, "node")
@@ -3241,6 +3243,7 @@ func (a *BlankLinesBatchAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 		&IsInterfaceMethodCond{Target: "node"},
 		&HasPrecedingInterfaceFieldCond{Target: "node"},
 	}}
+	ifErrReturnCond := &IsIfErrReturnNeedingBlankCond{Target: "node"}
 
 	insertOffsets := make(map[int]struct{})
 	var b EditBuilder
@@ -3284,6 +3287,13 @@ func (a *BlankLinesBatchAction) Execute(caps Captures, ctx *Context) ([]byte, bo
 			caps := Captures{"node": n}
 			if ifaceMethodCond.Eval(caps, ctx) {
 				maybeInsertBlankBefore(n)
+			}
+		case *ast.IfStmt:
+			if a.Options.ExtraIfErrReturn {
+				caps := Captures{"node": n}
+				if ifErrReturnCond.Eval(caps, ctx) {
+					maybeInsertBlankBefore(n)
+				}
 			}
 		}
 		return true
