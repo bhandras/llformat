@@ -102,4 +102,5 @@
 
 ## Developer UX / CLI
 - [ ] Collapse flags into 2–3 user-facing stable modes (`legacy`, `dsl-parity`, `dsl-modern`) and document compatibility promises.
-- [ ] Improve `--trace-dsl` output to include “why a rule fired/did not fire”.
+  - [x] Add `--mode` (including opt-in `next`) to reduce flag surface area.
+- [x] Improve `--trace-dsl` output to include “why a rule fired/did not fire”.

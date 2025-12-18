@@ -62,6 +62,12 @@ The pipeline also supports a convenience `--mode` flag:
 - `--mode legacy`: legacy multi-stage pipeline
 - `--mode dsl-parity`: DSL pipeline with parity-oriented defaults
 - `--mode dsl-modern`: DSL pipeline with modern defaults
+- `--mode next`: DSL pipeline with aggressive defaults (experimental)
+
+For debugging, you can enable DSL tracing:
+
+- `--trace-dsl`: prints a line for each applied DSL rule to stderr
+- `--trace-dsl-reasons`: includes additional “why fired / didn’t fire” lines
 
 For debugging and migration work, the CLI also supports an experimental legacy
 hardening mode (only when `--legacy` is enabled) that turns on parse-safe +

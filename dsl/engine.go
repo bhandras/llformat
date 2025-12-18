@@ -17,6 +17,7 @@ type Engine struct {
 	TabStop       int
 	MaxIterations int
 	Trace         bool // Enable trace logging
+	TraceReasons  bool // Include "why fired/didn't fire" reasons in trace output
 	NodeOrder     NodeOrder
 }
 
@@ -52,7 +53,7 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 			// scan/delegation rules that don't require an AST (e.g. legacy
 			// comment formatting).
 			ctx := NewContext(token.NewFileSet(), result, e.ColumnLimit, e.TabStop)
-			modified, changed := e.applyOneFileRuleWithoutAST(ctx)
+			modified, changed := e.applyOneFileRuleWithoutAST(iter+1, ctx)
 			if !changed {
 				return result, nil
 			}
@@ -87,9 +88,29 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		e.applyAtomicMarkers(file, ctx)
 
 		// Second pass: try to apply one transforming rule
-		modified, changed := e.applyOneRule(file, ctx)
+		modified, changed := e.applyOneRule(iter+1, file, ctx)
 		if !changed {
 			break
+		}
+
+		if e.TraceReasons && !e.Trace {
+			start, endBefore, endAfter := changedSpan(ctx.Source, modified)
+			line, col := offsetToLineCol(ctx.Source, start)
+			fmt.Fprintf(os.Stderr, "dsl: iter=%d applied rule=%s prio=%d node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d snippet=%q\n",
+				iter+1,
+				ctx.LastAppliedRule,
+				ctx.LastAppliedRulePriority,
+				ctx.LastAppliedNodeType,
+				ctx.LastAppliedNodeStart,
+				ctx.LastAppliedNodeEnd,
+				start,
+				endBefore,
+				start,
+				endAfter,
+				line,
+				col,
+				snippetForRange(ctx.Source, start, endBefore),
+			)
 		}
 
 		if e.Trace {
@@ -121,7 +142,10 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 	return result, nil
 }
 
-func (e *Engine) applyOneFileRuleWithoutAST(ctx *Context) ([]byte, bool) {
+func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, bool) {
+	const maxReasonsPerIter = 30
+	reasonsPrinted := 0
+
 	for _, rule := range e.Rules {
 		np, ok := rule.Pattern.(*NodePattern)
 		if !ok || np.Type != "File" {
@@ -138,11 +162,39 @@ func (e *Engine) applyOneFileRuleWithoutAST(ctx *Context) ([]byte, bool) {
 
 		caps := Captures{"node": nil}
 		if !rule.When.Eval(caps, ctx) {
+			if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+				reasonsPrinted++
+				fmt.Fprintf(os.Stderr, "dsl: iter=%d skip rule=%s prio=%d node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
+					iter,
+					rule.Name,
+					rule.Priority,
+					"File",
+					0,
+					len(ctx.Source),
+					1,
+					1,
+					"when=false",
+				)
+			}
 			continue
 		}
 
 		out, changed := rule.Action.Execute(caps, ctx)
 		if !changed || out == nil {
+			if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+				reasonsPrinted++
+				fmt.Fprintf(os.Stderr, "dsl: iter=%d skip rule=%s prio=%d node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
+					iter,
+					rule.Name,
+					rule.Priority,
+					"File",
+					0,
+					len(ctx.Source),
+					1,
+					1,
+					"action=no_change",
+				)
+			}
 			continue
 		}
 
@@ -271,9 +323,12 @@ func (e *Engine) applyAtomicMarkers(file *ast.File, ctx *Context) {
 }
 
 // applyOneRule finds and applies the first matching transforming rule.
-func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
+func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte, bool) {
 	var result []byte
 	changed := false
+
+	const maxReasonsPerIter = 60
+	reasonsPrinted := 0
 
 	// Build parent map and collect nodes
 	parentMap := make(map[ast.Node]ast.Node)
@@ -348,11 +403,45 @@ func (e *Engine) applyOneRule(file *ast.File, ctx *Context) ([]byte, bool) {
 
 			// Evaluate condition
 			if !rule.When.Eval(caps, ctx) {
+				if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+					reasonsPrinted++
+					start, end := nodeSpanOffsets(ctx, n)
+					line, col := offsetToLineCol(ctx.Source, start)
+					fmt.Fprintf(os.Stderr, "dsl: iter=%d skip rule=%s prio=%d node=%T nodeSpan=[%d:%d] @%d:%d reason=%s snippet=%q\n",
+						iter,
+						rule.Name,
+						rule.Priority,
+						n,
+						start,
+						end,
+						line,
+						col,
+						"when=false",
+						snippetForRange(ctx.Source, start, end),
+					)
+				}
 				continue
 			}
 
-			modified, actionChanged, ok := e.executeAction(rule, caps, ctx)
+			modified, actionChanged, ok, reason := e.executeAction(rule, caps, ctx)
 			if !ok {
+				if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+					reasonsPrinted++
+					start, end := nodeSpanOffsets(ctx, n)
+					line, col := offsetToLineCol(ctx.Source, start)
+					fmt.Fprintf(os.Stderr, "dsl: iter=%d skip rule=%s prio=%d node=%T nodeSpan=[%d:%d] @%d:%d reason=%s snippet=%q\n",
+						iter,
+						rule.Name,
+						rule.Priority,
+						n,
+						start,
+						end,
+						line,
+						col,
+						reason,
+						snippetForRange(ctx.Source, start, end),
+					)
+				}
 				continue
 			}
 			if actionChanged {
@@ -398,7 +487,7 @@ func nodeSpanOffsets(ctx *Context, n ast.Node) (start, end int) {
 	return start, end
 }
 
-func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified []byte, changed bool, ok bool) {
+func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified []byte, changed bool, ok bool, reason string) {
 	n, _ := caps["node"]
 	if ctx != nil && n != nil {
 		pos := ctx.Fset.Position(n.Pos()).Offset
@@ -426,32 +515,35 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 	// Prefer edit-based actions when available.
 	if editAction, okCast := rule.Action.(EditAction); okCast {
 		edits, changedEdits, err := editAction.ExecuteEdits(caps, ctx)
-		if err != nil || !changedEdits {
-			return nil, false, false
+		if err != nil {
+			return nil, false, false, "edit_action_error=" + err.Error()
+		}
+		if !changedEdits {
+			return nil, false, false, "edit_action=no_edits"
 		}
 		applied, err := ApplyEdits(ctx.Source, edits)
 		if err != nil {
-			return nil, false, false
+			return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
 		}
 		// Never accept a transformation that produces syntactically invalid Go.
 		// This ensures the DSL engine won't “brick” a file even if a rule is
 		// imperfect or interacts badly with semicolon insertion.
 		fset := token.NewFileSet()
 		if _, err := parser.ParseFile(fset, "", applied, parser.ParseComments); err != nil {
-			return nil, false, false
+			return nil, false, false, "edit_action=parse_failed=" + err.Error()
 		}
-		return applied, true, true
+		return applied, true, true, ""
 	}
 
 	modified, actionChanged := rule.Action.Execute(caps, ctx)
 	if !actionChanged {
-		return nil, false, false
+		return nil, false, false, "action=no_change"
 	}
 	fset := token.NewFileSet()
 	if _, err := parser.ParseFile(fset, "", modified, parser.ParseComments); err != nil {
-		return nil, false, false
+		return nil, false, false, "action=parse_failed=" + err.Error()
 	}
-	return modified, true, true
+	return modified, true, true, ""
 }
 
 // FormatFile is a convenience method that reads, formats, and returns source.

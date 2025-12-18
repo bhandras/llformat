@@ -975,19 +975,28 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 		argDocs = append(argDocs, layout.T(argText))
 	}
 
-	argsGroup := layout.G(layout.C(
-		layout.SL(), // break after "(" in break mode
+	// Note: we intentionally force the top-level argument list into "break mode"
+	// (one argument per line) rather than allowing partial flattening. Without a
+	// "break parent" mechanism, nested groups can break while the surrounding
+	// argument list stays flat, yielding awkward output like:
+	//
+	//   f(a, x ||\n\t...)
+	//
+	// For long calls this is both less readable and can lead to non-idempotent
+	// behavior where subsequent runs repack/unpack adjacent args.
+	argsGroup := layout.C(
+		layout.SL(), // newline after "("
 		layout.C(argDocs...),
-		layout.IB(layout.T(","), layout.T("")), // trailing comma when broken
-	))
+		layout.T(","), // trailing comma for multiline calls
+	)
 
-	doc := layout.G(layout.C(
+	doc := layout.C(
 		layout.T(funText),
 		layout.T("("),
-		layout.N("\t", argsGroup), // gofmt-like: indent args by one tab on breaks
+		layout.N("\t", argsGroup), // gofmt-like: indent args by one tab
 		layout.SL(),               // newline + base indent before ")"
 		layout.T(")"),
-	))
+	)
 
 	formatted := layout.RenderAt(doc, ctx.ColumnLimit, ctx.TabStop, indent, startCol)
 	if formatted == "" || formatted == original {

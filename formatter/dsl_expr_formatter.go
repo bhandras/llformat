@@ -19,6 +19,7 @@ type DSLExprConfig struct {
 	TabStop       int
 	Rules         []dsl.Rule // Custom rules (if nil, uses defaults)
 	Trace         bool       // Enable DSL rule tracing to stderr
+	TraceReasons  bool       // Include "why fired/didn't fire" reasons in DSL tracing
 	NodeOrder     dsl.NodeOrder
 	MaxIterations int  // Override engine MaxIterations (0 keeps default)
 	SkipGofmt     bool // Skip gofmt (pipelines may run gofmt once at end)
@@ -49,6 +50,7 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 		engine.TabStop = cfg.TabStop
 	}
 	engine.Trace = cfg.Trace
+	engine.TraceReasons = cfg.TraceReasons
 	engine.NodeOrder = cfg.NodeOrder
 	if cfg.MaxIterations > 0 {
 		engine.MaxIterations = cfg.MaxIterations

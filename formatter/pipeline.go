@@ -22,6 +22,7 @@ type PipelineConfig struct {
 	UseDSLBlankLines       bool     // Use DSL-based blank line formatter
 	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
 	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
+	TraceDSLReasons        bool     // Include "why fired/didn't fire" reasons in DSL tracing
 
 	// Mode provides a user-facing coarse selection of pipeline behavior.
 	// It is intentionally opt-in; when empty, callers can control the pipeline
@@ -160,6 +161,25 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLBlankLines = true
 		cfg.UseDSLBlankLinesNative = true
 		cfg.DSLCallPolicy = "modern"
+	case "next":
+		// "next" is a convenience alias for the most aggressive DSL-first
+		// pipeline configuration. It is intentionally opt-in so it can evolve
+		// without breaking golden fixtures.
+		cfg.UseDSLComments = true
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		cfg.UseDSLExpr = true
+		cfg.UseDSLFuncSigs = true
+		cfg.UseDSLFuncSigsNative = true
+		cfg.UseDSLBlankLines = true
+		cfg.UseDSLBlankLinesNative = true
+
+		// Enable the modern policy defaults, then override to the most
+		// layout-driven multi-line style.
+		cfg.DSLCallPolicy = "modern"
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "layout-all"
+		}
 	default:
 		// Unknown mode: ignore (callers can still set individual toggles).
 	}
@@ -225,6 +245,17 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		}
 	}
 
+	// Keep DSL stages from fighting: when the DSL multiline stage is configured
+	// to own call-argument layout, do not also enable call-arg breaking in the
+	// DSL expression stage. This avoids non-idempotent "expr breaks args, then
+	// call stage repacks args" interactions.
+	if cfg.UseDSLMultiLineCalls {
+		switch cfg.DSLMultiLineStyle {
+		case "layout-args", "layout-all":
+			cfg.AllowDSLCallArgs = false
+		}
+	}
+
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline:         cfg.MoveInlineAbove,
@@ -240,6 +271,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		UseDSLBlankLines:          cfg.UseDSLBlankLines,
 		UseDSLBlankLinesNative:    cfg.UseDSLBlankLinesNative,
 		TraceDSL:                  cfg.TraceDSL,
+		TraceDSLReasons:           cfg.TraceDSLReasons,
 		MultiLineUseASTSelect:     cfg.MultiLineUseASTSelect,
 		CompactCallUseASTSelect:   cfg.CompactCallUseASTSelect,
 		CompactCallParseSafe:      cfg.CompactCallParseSafe,
