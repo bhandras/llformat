@@ -87,8 +87,8 @@ Legend:
 
 ## G) Blank Lines DSL-ization
 
-- [ ] **P0 Safe** Keep shim default for parity; native remains opt-in.
-- [ ] **P1 Safe** Reduce iterations / improve idempotence for native blank-line rules.
+- [x] **P0 Safe** Keep shim default for parity; native remains opt-in.
+- [x] **P1 Safe** Reduce iterations / improve idempotence for native blank-line rules.
 - [ ] **P2 Opt-In** Add additional blank-line rules only under explicit profile.
 
 ---

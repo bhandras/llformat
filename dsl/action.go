@@ -3217,6 +3217,175 @@ type InsertBlankBeforeAction struct {
 	Target string
 }
 
+// BlankLinesBatchAction inserts all blank lines required by the blank-line DSL
+// policy in a single deterministic rewrite.
+//
+// The default DSL engine applies at most one transforming rule per iteration for
+// determinism, which makes per-node blank-line rules expensive for files with
+// many cases/returns/methods. This action keeps the logic in the DSL while
+// avoiding hundreds of iterations.
+type BlankLinesBatchAction struct{}
+
+func (a *BlankLinesBatchAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, "node")
+	file, ok := node.(*ast.File)
+	if !ok || file == nil {
+		return nil, false
+	}
+
+	// Evaluate the same conditions used by the per-node rules so batch and
+	// per-node behavior stays aligned.
+	caseCond := &HasPrecedingSiblingCond{Target: "node"}
+	returnCond := &IsReturnNeedingBlankCond{Target: "node"}
+	ifaceMethodCond := &AndCond{Conds: []Condition{
+		&IsInterfaceMethodCond{Target: "node"},
+		&HasPrecedingInterfaceFieldCond{Target: "node"},
+	}}
+
+	insertOffsets := make(map[int]struct{})
+	var b EditBuilder
+
+	maybeInsertBlankBefore := func(n ast.Node) {
+		if n == nil {
+			return
+		}
+		start := ctx.Fset.Position(n.Pos()).Offset
+		if start <= 0 || start >= len(ctx.Source) {
+			return
+		}
+		ls := lineStart(ctx.Source, start)
+		ls = leadingCommentBlockLineStart(ctx.Source, ls)
+		if ls <= 0 {
+			return
+		}
+		if hasBlankLineBeforeLineStart(ctx.Source, ls) {
+			return
+		}
+		if _, ok := insertOffsets[ls]; ok {
+			return
+		}
+		insertOffsets[ls] = struct{}{}
+		b.Insert(ls, []byte("\n"))
+	}
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.CaseClause:
+			caps := Captures{"node": n}
+			if caseCond.Eval(caps, ctx) {
+				maybeInsertBlankBefore(n)
+			}
+		case *ast.ReturnStmt:
+			caps := Captures{"node": n}
+			if returnCond.Eval(caps, ctx) {
+				maybeInsertBlankBefore(n)
+			}
+		case *ast.Field:
+			caps := Captures{"node": n}
+			if ifaceMethodCond.Eval(caps, ctx) {
+				maybeInsertBlankBefore(n)
+			}
+		}
+		return true
+	})
+
+	out, changed, err := b.Apply(ctx.Source)
+	if err != nil || !changed {
+		return nil, false
+	}
+
+	// Defensive parse check: inserting whitespace should never break parsing, but
+	// keep the DSL engine parse-safe by refusing edits that would.
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+func isWhitespaceOnlyLine(b []byte) bool {
+	for _, c := range b {
+		if c != ' ' && c != '\t' && c != '\r' {
+			return false
+		}
+	}
+	return true
+}
+
+func leadingCommentBlockLineStart(src []byte, targetLineStart int) int {
+	// If the line above the target is a comment-only line, we treat it as a
+	// leading comment block and insert the blank line above the comment rather
+	// than between the comment and the node.
+	//
+	// This is intentionally heuristic: we only capture comment blocks that begin
+	// at line start (after indentation), so we avoid hoisting trailing comments.
+	start := targetLineStart
+	inBlockComment := false
+
+	for start > 0 {
+		prevLineEnd := start - 1 // points at '\n' of the previous line (or last byte)
+		prevStart := lineStart(src, prevLineEnd)
+		if prevStart < 0 || prevStart >= start {
+			break
+		}
+
+		line := src[prevStart:prevLineEnd]
+		if isWhitespaceOnlyLine(line) {
+			break
+		}
+
+		trimmed := bytes.TrimLeft(line, " \t")
+		if len(trimmed) == 0 {
+			break
+		}
+
+		if inBlockComment {
+			start = prevStart
+			if bytes.HasPrefix(trimmed, []byte("/*")) {
+				inBlockComment = false
+			}
+			continue
+		}
+
+		if bytes.HasPrefix(trimmed, []byte("//")) {
+			start = prevStart
+			continue
+		}
+
+		if bytes.HasPrefix(trimmed, []byte("/*")) {
+			start = prevStart
+			if !bytes.Contains(trimmed, []byte("*/")) {
+				inBlockComment = true
+			}
+			continue
+		}
+
+		// Handle the common "*/" or " * ..." endings of a leading block comment.
+		if bytes.Contains(trimmed, []byte("*/")) && (bytes.HasPrefix(trimmed, []byte("*/")) || bytes.HasPrefix(trimmed, []byte("*"))) {
+			start = prevStart
+			inBlockComment = true
+			continue
+		}
+
+		break
+	}
+
+	return start
+}
+
+func hasBlankLineBeforeLineStart(src []byte, targetLineStart int) bool {
+	if targetLineStart <= 0 {
+		return true // start-of-file: treat as "already separated"
+	}
+	prevLineEnd := targetLineStart - 1
+	prevStart := lineStart(src, prevLineEnd)
+	if prevStart < 0 {
+		return true
+	}
+	prevLine := src[prevStart:prevLineEnd]
+	return isWhitespaceOnlyLine(prevLine)
+}
+
 // Execute implements Action for InsertBlankBeforeAction.
 func (a *InsertBlankBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	node := resolveTarget(caps, a.Target)
@@ -3229,23 +3398,11 @@ func (a *InsertBlankBeforeAction) Execute(caps Captures, ctx *Context) ([]byte, 
 
 	// Find the start of the line
 	ls := lineStart(ctx.Source, nodeStart)
+	ls = leadingCommentBlockLineStart(ctx.Source, ls)
 
 	// Check if there's already a blank line before this line
-	if ls >= 2 {
-		// Look for two consecutive newlines before lineStart
-		checkPos := ls - 1
-		// Skip the newline at lineStart-1
-		if checkPos > 0 && ctx.Source[checkPos] == '\n' {
-			checkPos--
-		}
-		// Skip any trailing whitespace on the previous line
-		for checkPos > 0 && (ctx.Source[checkPos] == ' ' || ctx.Source[checkPos] == '\t') {
-			checkPos--
-		}
-		// If we hit another newline, there's already a blank line
-		if checkPos >= 0 && ctx.Source[checkPos] == '\n' {
-			return nil, false
-		}
+	if hasBlankLineBeforeLineStart(ctx.Source, ls) {
+		return nil, false
 	}
 
 	// Insert blank line before the current line

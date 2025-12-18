@@ -99,5 +99,7 @@ func dslMaxItersForBlankLines(opts StageOptions) int {
 	if !opts.UseDSLBlankLinesNative {
 		return 1
 	}
-	return 200
+	// Blank line insertion is handled in a single batch rewrite; keep the
+	// iteration cap low to avoid pathological loops.
+	return 20
 }

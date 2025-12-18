@@ -44,12 +44,13 @@ func TestDSLBundle_BlankLinesSpecControlsShimAndIterations(t *testing.T) {
 		UseDSLBlankLinesNative: true,
 	})
 	require.True(t, native.BlankLines.DisableLegacyBlankLinesShim)
-	require.Equal(t, 200, native.BlankLines.MaxIterations)
+	require.Equal(t, 20, native.BlankLines.MaxIterations)
 	require.NotEmpty(t, native.BlankLines.Rules)
 	names := make([]string, 0, len(native.BlankLines.Rules))
 	for _, r := range native.BlankLines.Rules {
 		names = append(names, r.Name)
 	}
+	require.Contains(t, names, "blank_lines_batch")
 	require.Contains(t, names, "blank_before_case")
 	require.Contains(t, names, "blank_before_return")
 	require.Contains(t, names, "blank_between_interface_methods")

@@ -140,7 +140,7 @@ func (f *DSLExprFormatter) FormatFile(src []byte) []byte {
 func hasDSLBlankLineRules(rules []dsl.Rule) bool {
 	for _, r := range rules {
 		switch r.Name {
-		case "blank_before_case", "blank_before_return", "blank_between_interface_methods":
+		case "blank_lines_batch", "blank_before_case", "blank_before_return", "blank_between_interface_methods":
 			return true
 		}
 	}
@@ -151,7 +151,7 @@ func filterDSLBlankLineRules(rules []dsl.Rule) []dsl.Rule {
 	filtered := make([]dsl.Rule, 0, len(rules))
 	for _, r := range rules {
 		switch r.Name {
-		case "blank_before_case", "blank_before_return", "blank_between_interface_methods":
+		case "blank_lines_batch", "blank_before_case", "blank_before_return", "blank_between_interface_methods":
 			continue
 		default:
 			filtered = append(filtered, r)

@@ -551,6 +551,16 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 // These are separate from expression formatting rules.
 func BlankLineRules() []Rule {
 	return []Rule{
+		// Batch blank-line insertion to avoid hundreds of iterations on files with
+		// many cases/returns/methods.
+		{
+			Name:     "blank_lines_batch",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &IsParseableCond{Want: true},
+			Priority: 20,
+			Action:   &BlankLinesBatchAction{},
+		},
+
 		// Rule: Blank line before case clause (if preceded by another case)
 		{
 			Name:    "blank_before_case",
