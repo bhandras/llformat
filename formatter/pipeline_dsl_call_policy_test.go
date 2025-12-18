@@ -93,6 +93,34 @@ var a, b, c, d int
 	require.True(t, strings.Contains(out, "_ = call(a, // keep") || strings.Contains(out, "_ = call(\n\t\ta, // keep"))
 }
 
+func TestDSLCallPolicyPackedDoesNotRewriteInlineBlockCommentArgs(t *testing.T) {
+	const in = `package p
+
+func f() {
+	// Packed call formatting is AST-based and should avoid rewriting calls when
+	// it would drop inline comments.
+	_ = call(a /* keep */, b, c, d, e, f2, g)
+}
+
+func call(a, b, c, d, e, f2, g int) int { return 0 }
+var a, b, c, d, e, f2, g int
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:   20,
+		TabStop:       8,
+		DSLCallPolicy: "packed",
+	})
+
+	out := string(p.Format([]byte(in)))
+	require.Contains(t, out, "/* keep */")
+	// Ensure we didn't re-render the call without preserving the comment.
+	require.True(t,
+		strings.Contains(out, "_ = call(a /* keep */, b, c, d, e, f2, g)") ||
+			strings.Contains(out, "_ = call(\n\t\ta /* keep */"),
+	)
+}
+
 func TestDSLCallPolicyModernEnablesAutoCallArgsForExcludedCalls(t *testing.T) {
 	const in = `package p
 

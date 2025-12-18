@@ -656,6 +656,14 @@ type MultiLineCallOptions struct {
 	// Supported: ""/"legacy" (existing packed/legacy formatters) and "layout"
 	// (layout engine).
 	CallArgsStyle string
+
+	// CallArgsGrouping optionally enables an explicit grouping heuristic for
+	// call argument lists when CallArgsStyle == "layout".
+	//
+	// Supported values:
+	// - "" (default): one argument per line (forced break)
+	// - "pairs": group args as (a, b) pairs when possible
+	CallArgsGrouping string
 }
 
 // MultiLineCallRulesWithOptions returns MultiLineCallRules with explicit options.
@@ -670,6 +678,9 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 		&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
 		&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
 		&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+		// Avoid rewriting calls that contain inline comments; AST-based rendering
+		// would drop them.
+		&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
 	}
 	// When layout is enabled, avoid independently rewriting receiver calls inside
 	// method chains. Those are better handled by the outer method chain / call
@@ -695,6 +706,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&IsMethodChainCond{Target: "node", MinCalls: 2},
 					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+					&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
 				},
 			},
 			Priority: 60,
@@ -724,7 +736,10 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 			switch opts.CallArgsStyle {
 			case "layout":
 				return &TryElseAction{
-					Try:  &BreakCallArgsLayoutAction{Target: "node"},
+					Try: &BreakCallArgsLayoutAction{
+						Target:   "node",
+						Grouping: opts.CallArgsGrouping,
+					},
 					Else: action,
 				}
 			default:
@@ -763,6 +778,7 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
 					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
 					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+					&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
 				},
 			},
 			Priority: 50,

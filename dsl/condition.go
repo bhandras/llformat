@@ -422,6 +422,22 @@ func (c *HasLineCommentCond) Eval(caps Captures, ctx *Context) bool {
 	return hasLineComment(string(ctx.NodeSource(node)))
 }
 
+// HasAnyCommentCond checks whether the target node's source includes any
+// comment token (line or block) outside of string literals. This is used to
+// conservatively avoid AST-based rewrites that would drop comments inside spans.
+type HasAnyCommentCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasAnyCommentCond.
+func (c *HasAnyCommentCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+	return hasAnyComment(string(ctx.NodeSource(node)))
+}
+
 // LineWidthCond checks if a node's line width exceeds a threshold.
 type LineWidthCond struct {
 	Target string // Capture name (without $) or "node" for matched node
@@ -513,7 +529,8 @@ func (c *CollapsedWidthCond) Eval(caps Captures, ctx *Context) bool {
 
 // IsChainedCallReceiverCond checks whether a CallExpr is used as the receiver
 // of another call in a method-chain-like expression, i.e. it appears as:
-//   <call>().Method(...)
+//
+//	<call>().Method(...)
 //
 // This is useful to prevent “double ownership” where both the receiver call and
 // the full method chain are rewritten independently, causing oscillation.

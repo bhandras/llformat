@@ -229,6 +229,38 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	switch cfg.DSLCallPolicy {
 	case "", "legacy":
 		// No override.
+	case "packed", "calls-packed":
+		// Call-focused policy: enable DSL call stages with packed multiline call
+		// formatting, leaving non-call stages under explicit control.
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "packed"
+		}
+	case "packed-chain", "calls-packed-chain":
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "packed-chain"
+		}
+	case "layout-args", "calls-layout-args":
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "layout-args"
+		}
+	case "layout-all", "calls-layout-all":
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "layout-all"
+		}
+	case "layout-args-groups-pairs", "calls-layout-args-groups-pairs":
+		cfg.UseDSLLogCalls = true
+		cfg.UseDSLMultiLineCalls = true
+		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
+			cfg.DSLMultiLineStyle = "layout-args-groups-pairs"
+		}
 	case "modern":
 		if cfg.RuleProfile == "" {
 			cfg.RuleProfile = "modern"
@@ -273,7 +305,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	// expression stage is call-args-safe by default (CallArgsPolicyOff).
 	if cfg.UseDSLMultiLineCalls && !cfg.UseDSLExpr {
 		switch cfg.DSLMultiLineStyle {
-		case "layout-args", "layout-all":
+		case "layout-args", "layout-all", "layout-args-groups-pairs", "layout-all-groups-pairs":
 			cfg.UseDSLExpr = true
 		}
 	}
@@ -284,7 +316,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	// call stage repacks args" interactions.
 	if cfg.UseDSLMultiLineCalls && !cfg.UseOwnershipRegistry {
 		switch cfg.DSLMultiLineStyle {
-		case "layout-args", "layout-all":
+		case "layout-args", "layout-all", "layout-args-groups-pairs", "layout-all-groups-pairs":
 			cfg.AllowDSLCallArgs = false
 		}
 	}

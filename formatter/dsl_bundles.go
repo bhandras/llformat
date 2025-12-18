@@ -89,7 +89,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 	// where the inner call is broken after the outer call has already decided
 	// how to pack its arguments).
 	switch style {
-	case "layout-args", "layout-all":
+	case "layout-args", "layout-all", "layout-args-groups-pairs", "layout-all-groups-pairs":
 		nodeOrder = dsl.NodeOrderDeepestFirst
 	}
 
@@ -115,6 +115,17 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{Excludes: opts.Excludes, CallArgsStyle: "layout"},
 			FormatCallPackedMultiLine,
 		)
+	case "layout-args-groups-pairs":
+		// Layout-based argument breaking with explicit pair grouping, falling
+		// back to packed multiline when the layout formatter can't safely run.
+		rules = dsl.MultiLineCallRulesWithOptions(
+			dsl.MultiLineCallOptions{
+				Excludes:         opts.Excludes,
+				CallArgsStyle:    "layout",
+				CallArgsGrouping: "pairs",
+			},
+			FormatCallPackedMultiLine,
+		)
 	case "packed-chain-layout", "layout-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{Excludes: opts.Excludes, MethodChainStyle: "layout"},
@@ -127,6 +138,16 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				Excludes:         opts.Excludes,
 				MethodChainStyle: "layout",
 				CallArgsStyle:    "layout",
+			},
+			FormatCallPackedMultiLine,
+		)
+	case "layout-all-groups-pairs":
+		rules = dsl.MultiLineCallRulesWithOptions(
+			dsl.MultiLineCallOptions{
+				Excludes:         opts.Excludes,
+				MethodChainStyle: "layout",
+				CallArgsStyle:    "layout",
+				CallArgsGrouping: "pairs",
 			},
 			FormatCallPackedMultiLine,
 		)

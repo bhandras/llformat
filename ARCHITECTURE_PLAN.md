@@ -60,10 +60,10 @@ Legend:
 
 ## D) Call Formatting DSL-ization (Calls / Chains / Args)
 
-- [ ] **P0 Opt-In** Consolidate call policy as explicit bundle/profile config (packed/layout/all).
-- [ ] **P1 Opt-In** Expand layout-args coverage (nested calls, composites, generics, index/slice/type assertions).
-- [ ] **P1 Opt-In** Enforce “no inline-comment arg rewrites” consistently (rule-level guard).
-- [ ] **P2 Opt-In** Optional arg grouping heuristics as explicit DSL constructs.
+- [x] **P0 Opt-In** Consolidate call policy as explicit bundle/profile config (packed/layout/all).
+- [x] **P1 Opt-In** Expand layout-args coverage (nested calls, composites, generics, index/slice/type assertions).
+- [x] **P1 Opt-In** Enforce “no inline-comment arg rewrites” consistently (rule-level guard).
+- [x] **P2 Opt-In** Optional arg grouping heuristics as explicit DSL constructs.
 
 ---
 

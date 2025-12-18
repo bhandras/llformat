@@ -476,6 +476,13 @@ type BreakMethodChainLayoutAction struct {
 // args).
 type BreakCallArgsLayoutAction struct {
 	Target string
+
+	// Grouping optionally controls how the call argument list is grouped.
+	//
+	// Supported values:
+	// - "" (default): one argument per line (forced break)
+	// - "pairs": group args as (a, b) pairs when possible
+	Grouping string
 }
 
 // BreakBinaryExprLayoutAction tries to break a binary expression using the
@@ -939,40 +946,19 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 	indent := ctx.IndentAt(call)
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	funText := renderNode(call.Fun, ctx.Fset)
-
-	var argDocs []layout.Doc
-	for i, arg := range call.Args {
-		argText := renderNode(arg, ctx.Fset)
-		if hasAnyComment(argText) {
-			return nil, false
+	funDoc := layout.T(renderNode(call.Fun, ctx.Fset))
+	// Prefer structured docs for the callee too (useful for generic instantiation
+	// expressions like `f[T, U]`), but keep it tightly coupled to the `(` to
+	// avoid semicolon-insertion hazards (`f\n(` is not valid Go).
+	if call.Fun != nil {
+		if info, ok := exprDocWithKind(call.Fun, ctx, exprDocKindCallArg); ok {
+			funDoc = info.Doc
 		}
+	}
 
-		// Use a structured doc for known expression forms so nested long
-		// expressions (e.g. method chains, selector chains, same-op binary chains)
-		// can be laid out consistently within argument lists.
-		if expr, okCast := arg.(ast.Expr); okCast {
-			if info, okDoc := exprDocWithKind(expr, ctx, exprDocKindCallArg); okDoc {
-				argDoc := info.Doc
-				if info.NeedsContinuationIndent {
-					argDoc = layout.N("\t", argDoc)
-				}
-				if i > 0 {
-					argDocs = append(argDocs, layout.T(","), layout.L())
-				}
-				argDocs = append(argDocs, argDoc)
-				continue
-			}
-		}
-
-		if strings.Contains(argText, "\n") {
-			return nil, false
-		}
-
-		if i > 0 {
-			argDocs = append(argDocs, layout.T(","), layout.L())
-		}
-		argDocs = append(argDocs, layout.T(argText))
+	argDocs, ok := buildCallArgsDocs(call.Args, a.Grouping, ctx)
+	if !ok {
+		return nil, false
 	}
 
 	// Note: we intentionally force the top-level argument list into "break mode"
@@ -994,7 +980,7 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 	))
 
 	doc := layout.G(layout.C(
-		layout.T(funText),
+		funDoc,
 		layout.T("("),
 		layout.N("\t", argsGroup), // gofmt-like: indent args by one tab on breaks
 		layout.SL(),               // newline + base indent before ")"
@@ -1011,6 +997,87 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 		return nil, false
 	}
 	return out, true
+}
+
+func buildCallArgsDocs(args []ast.Expr, grouping string, ctx *Context) ([]layout.Doc, bool) {
+	if len(args) == 0 {
+		return nil, false
+	}
+
+	switch grouping {
+	case "pairs":
+		// Group args as (a, b) pairs when possible. This is useful for call sites
+		// that conceptually operate on tuples of arguments.
+		var docs []layout.Doc
+		for i := 0; i < len(args); {
+			if i > 0 {
+				// Separate groups as if they were single args.
+				docs = append(docs, layout.T(","), layout.L())
+			}
+
+			left, ok := callArgDoc(args[i], ctx)
+			if !ok {
+				return nil, false
+			}
+
+			if i+1 >= len(args) {
+				docs = append(docs, left)
+				i++
+				continue
+			}
+
+			right, ok := callArgDoc(args[i+1], ctx)
+			if !ok {
+				return nil, false
+			}
+
+			// Within a group, keep the pair flat when possible but allow the
+			// second element to wrap if it doesn't fit.
+			group := layout.G(layout.C(left, layout.T(","), layout.SL(), right))
+			docs = append(docs, group)
+			i += 2
+		}
+		return docs, true
+	default:
+		// Default: one argument per line (forced break).
+		var docs []layout.Doc
+		for i, arg := range args {
+			argDoc, ok := callArgDoc(arg, ctx)
+			if !ok {
+				return nil, false
+			}
+			if i > 0 {
+				docs = append(docs, layout.T(","), layout.L())
+			}
+			docs = append(docs, argDoc)
+		}
+		return docs, true
+	}
+}
+
+func callArgDoc(arg ast.Expr, ctx *Context) (layout.Doc, bool) {
+	if arg == nil || ctx == nil {
+		return nil, false
+	}
+
+	argText := renderNode(arg, ctx.Fset)
+	// Be conservative for now: if AST printing produced multiline text, we
+	// intentionally do not try to re-indent it inside an argument list.
+	if strings.Contains(argText, "\n") {
+		return nil, false
+	}
+
+	// Use a structured doc for known expression forms so nested long expressions
+	// can be laid out consistently within argument lists.
+	if info, ok := exprDocWithKind(arg, ctx, exprDocKindCallArg); ok {
+		argDoc := info.Doc
+		if info.NeedsContinuationIndent {
+			argDoc = layout.N("\t", argDoc)
+		}
+		return argDoc, true
+	}
+
+	return layout.T(argText), true
 }
 
 // Execute implements Action for BreakBinaryExprLayoutAction.
@@ -1680,7 +1747,7 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	wsIndent := ctx.IndentAt(call)
 
 	// Skip calls that contain inline comments - reformatting would lose them
-	if hasLineComment(string(original)) {
+	if hasAnyComment(string(original)) {
 		return nil, false
 	}
 
@@ -1756,7 +1823,7 @@ func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]
 	wsIndent := ctx.IndentAt(call)
 
 	// Skip calls that contain inline comments - AST rendering would drop them.
-	if hasLineComment(string(original)) {
+	if hasAnyComment(string(original)) {
 		return nil, false
 	}
 
@@ -3205,7 +3272,7 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte, b
 
 	// Skip method chains that contain inline comments. Reformatting via AST
 	// rendering would drop these comments.
-	if hasLineComment(originalCall) {
+	if hasAnyComment(originalCall) {
 		return nil, false
 	}
 

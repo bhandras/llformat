@@ -18,6 +18,9 @@ func TestDSLBundlesMultiLineStyleControlsNodeOrder(t *testing.T) {
 
 	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{DSLMultiLineStyle: "layout-all"})
 	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
+
+	_, nodeOrder = dslRulesForMultiLineCalls(StageOptions{DSLMultiLineStyle: "layout-args-groups-pairs"})
+	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
 }
 
 func TestDSLBundlesMultiLineStyleDefaultsFromRuleProfile(t *testing.T) {
