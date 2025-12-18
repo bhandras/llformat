@@ -824,8 +824,7 @@ func buildSplitQuoted(text string, startCol int, contIndent string, width int) s
 			}
 			seg := rest[:idx]
 			out.WriteString(quoteGoString(seg))
-			out.WriteByte('+')
-			out.WriteByte('\n')
+			out.WriteString(" +\n")
 			out.WriteString(stringContIndent)
 			rest = rest[idx:]
 			curStart = contStart
@@ -839,8 +838,7 @@ func buildSplitQuoted(text string, startCol int, contIndent string, width int) s
 			break
 		}
 		out.WriteString(quoteGoString(seg))
-		out.WriteByte('+')
-		out.WriteByte('\n')
+		out.WriteString(" +\n")
 		out.WriteString(stringContIndent)
 		rest = rest[cut+1:]
 		curStart = contStart

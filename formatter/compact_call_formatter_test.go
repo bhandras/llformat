@@ -64,3 +64,17 @@ func TestBuildSplitQuoted_DoesNotEmitDanglingPlusWhenIndentTooDeep(t *testing.T)
 	require.NotEqual(t, '+', trimmed[len(trimmed)-1], "split output must not end with '+'")
 	require.NotContains(t, out, "+\n\t\t\t,", "must not end with a dangling '+', then comma on the next line")
 }
+
+func TestBuildSplitQuoted_UsesGofmtCompatibleSpacingAroundPlus(t *testing.T) {
+	t.Run("space_split", func(t *testing.T) {
+		out := buildSplitQuoted("this is a very long string that should split on spaces", 0, "\t", 36)
+		require.Contains(t, out, "\" +\n\t\t\"")
+		require.NotContains(t, out, "\"+\n", "must not emit a quote immediately followed by '+' and newline")
+	})
+
+	t.Run("hard_split_no_spaces", func(t *testing.T) {
+		out := buildSplitQuoted("this_is_a_very_long_string_with_no_spaces_so_it_must_hard_split", 0, "\t", 36)
+		require.Contains(t, out, "\" +\n\t\t\"")
+		require.NotContains(t, out, "\"+\n", "must not emit a quote immediately followed by '+' and newline")
+	})
+}
