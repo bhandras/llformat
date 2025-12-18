@@ -40,6 +40,17 @@ type Group struct{ Doc Doc }
 
 func (Group) isDoc() {}
 
+// ForceBreak is a doc node that prevents its containing Group from rendering in
+// flat mode. It is a minimal "break parent" building block: by making fitsAt
+// fail, any Group that contains a ForceBreak will choose break mode.
+//
+// This is intentionally low-level; higher-level actions can insert ForceBreak
+// in cases where partial flattening would be undesirable (e.g. call-arg lists
+// where a nested arg requires line breaks).
+type ForceBreak struct{}
+
+func (ForceBreak) isDoc() {}
+
 type Nest struct {
 	Indent string
 	Doc    Doc
@@ -83,6 +94,7 @@ func (IndentByCols) isDoc() {}
 func T(s string) Doc { return Text(s) }
 func L() Doc         { return Line{} }
 func SL() Doc        { return SoftLine{} }
+func FB() Doc        { return ForceBreak{} }
 func G(d Doc) Doc    { return Group{Doc: d} }
 func N(indent string, d Doc) Doc {
 	return Nest{Indent: indent, Doc: d}

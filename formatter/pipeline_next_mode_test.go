@@ -61,4 +61,11 @@ func f(a, b, c, d, e, f2, g2 bool, x int) {
 	out2 := p.Format(out1)
 	require.Equal(t, string(out1), string(out2))
 	requireASTEquivalent(t, []byte(in), out1)
+
+	// next-mode should use the DSL layout-based call-arg formatter, which is
+	// expected to emit a multiline arg list with one argument per line.
+	outStr := string(out1)
+	require.Contains(t, outStr, "outerVeryLongFunctionNameForNextModeTesting(\n\t\tg(\n")
+	require.Contains(t, outStr, "),\n\t\t(a && b && c && d) ||\n")
+	require.Contains(t, outStr, "),\n\t\tx,\n\t)")
 }

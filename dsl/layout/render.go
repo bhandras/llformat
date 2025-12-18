@@ -62,6 +62,8 @@ func RenderAt(doc Doc, colLimit int, tabStop int, indent string, startCol int) s
 				out.WriteString(f.indent)
 				col = visualWidth(f.indent, tabStop, 0)
 			}
+		case ForceBreak:
+			// No output; acts only as a fit-check barrier.
 		case Concat:
 			// Push in reverse so we render in order.
 			for i := len(d) - 1; i >= 0; i-- {
@@ -129,6 +131,8 @@ func fitsAt(doc Doc, remaining int, tabStop int, startCol int) bool {
 			}
 		case SoftLine:
 			// Flat soft line is empty.
+		case ForceBreak:
+			return false
 		case Concat:
 			for i := len(d) - 1; i >= 0; i-- {
 				stack = append(stack, frame{doc: d[i], indent: "", mode: modeFlat})

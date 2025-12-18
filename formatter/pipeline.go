@@ -109,6 +109,18 @@ type PipelineConfig struct {
 	// DSLExprSelectorChainStyle controls long selector chain formatting inside
 	// the DSL expression stage. Empty means legacy behavior.
 	DSLExprSelectorChainStyle string
+
+	// RuleProfile is an internal taxonomy label that describes which behavioral
+	// profile is in effect. This is intended as a bridge toward cohesive
+	// rule-set based configuration (parity/modern/next) without changing golden
+	// fixtures.
+	//
+	// Supported values:
+	// - "" (unspecified): inferred from Mode / DSLCallPolicy
+	// - "parity": golden-parity behavior (default)
+	// - "modern": opt-in improvements (stable-ish)
+	// - "next": aggressive opt-in experiments
+	RuleProfile string
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -142,6 +154,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLBlankLinesNative = false
 		cfg.DSLCallPolicy = ""
 	case "dsl-parity":
+		if cfg.RuleProfile == "" {
+			cfg.RuleProfile = "parity"
+		}
 		cfg.UseDSLComments = true
 		cfg.UseDSLLogCalls = true
 		cfg.UseDSLMultiLineCalls = true
@@ -152,6 +167,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			cfg.DSLCallPolicy = "legacy"
 		}
 	case "dsl-modern":
+		if cfg.RuleProfile == "" {
+			cfg.RuleProfile = "modern"
+		}
 		cfg.UseDSLComments = true
 		cfg.UseDSLLogCalls = true
 		cfg.UseDSLMultiLineCalls = true
@@ -162,6 +180,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLBlankLinesNative = true
 		cfg.DSLCallPolicy = "modern"
 	case "next":
+		if cfg.RuleProfile == "" {
+			cfg.RuleProfile = "next"
+		}
 		// "next" is a convenience alias for the most aggressive DSL-first
 		// pipeline configuration. It is intentionally opt-in so it can evolve
 		// without breaking golden fixtures.
@@ -204,6 +225,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	case "", "legacy":
 		// No override.
 	case "modern":
+		if cfg.RuleProfile == "" {
+			cfg.RuleProfile = "modern"
+		}
 		cfg.UseDSLComments = true
 		cfg.UseDSLLogCalls = true
 		cfg.UseDSLMultiLineCalls = true
@@ -232,6 +256,10 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLBlankLines = true
 	default:
 		// Unknown policy: ignore (callers can still set individual toggles).
+	}
+
+	if cfg.RuleProfile == "" {
+		cfg.RuleProfile = "parity"
 	}
 
 	// Stage ownership: when multiline formatting is explicitly configured to
