@@ -1,7 +1,7 @@
 package formatter
 
-func buildCommentStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBundle) Formatter {
-	if !opts.UseDSLComments {
+func buildCommentStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+	if plan.Comments != StageModeDSL {
 		return NewCommentFormatter(CommentConfig{
 			ColumnLimit:     cfg.ColumnLimit,
 			TabStop:         cfg.TabStop,
@@ -20,8 +20,8 @@ func buildCommentStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBun
 	})
 }
 
-func buildCompactCallStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBundle) Formatter {
-	if !opts.UseDSLLogCalls {
+func buildCompactCallStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+	if plan.LogCalls != StageModeDSL {
 		return NewCompactCallFormatter(Config{
 			ColumnLimit:     cfg.ColumnLimit,
 			TabStop:         cfg.TabStop,
@@ -41,8 +41,8 @@ func buildCompactCallStageFormatter(cfg BaseConfig, opts StageOptions, bundle DS
 	})
 }
 
-func buildExpressionStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBundle) Formatter {
-	if !opts.UseDSLExpr {
+func buildExpressionStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+	if plan.Expressions != StageModeDSL {
 		return NewLongExprFormatter(LongExprConfig{
 			ColumnLimit:      cfg.ColumnLimit,
 			TabStop:          cfg.TabStop,
@@ -62,8 +62,8 @@ func buildExpressionStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSL
 	})
 }
 
-func buildMultiLineCallStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBundle) Formatter {
-	if !opts.UseDSLMultiLineCalls {
+func buildMultiLineCallStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+	if plan.MultiLineCalls != StageModeDSL {
 		return NewMultiLineCallFormatter(MultiLineConfig{
 			ColumnLimit:     cfg.ColumnLimit,
 			TabStop:         cfg.TabStop,
@@ -86,8 +86,8 @@ func buildMultiLineCallStageFormatter(cfg BaseConfig, opts StageOptions, bundle 
 	})
 }
 
-func buildSignatureStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBundle) Formatter {
-	if !opts.UseDSLFuncSigs {
+func buildSignatureStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+	if plan.Signatures != StageModeDSL {
 		return NewFuncSigFormatter(FuncSigConfig{
 			ColumnLimit: cfg.ColumnLimit,
 			TabStop:     cfg.TabStop,
@@ -105,8 +105,8 @@ func buildSignatureStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLB
 	})
 }
 
-func buildBlankLineStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLBundle) Formatter {
-	if !opts.UseDSLBlankLines {
+func buildBlankLineStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
+	if plan.BlankLines != StageModeDSL {
 		return NewBlankLineFormatter(BlankLineConfig{
 			BeforeReturn:            true,
 			BetweenCases:            true,
@@ -125,4 +125,3 @@ func buildBlankLineStageFormatter(cfg BaseConfig, opts StageOptions, bundle DSLB
 		SkipGofmt:                   true,
 	})
 }
-

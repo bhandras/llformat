@@ -100,6 +100,7 @@ type StageOptions struct {
 	CommentMoveInline        bool
 	Excludes                 []string
 	RuleProfile              string
+	StagePlan                *StagePlan
 	UseDSLComments           bool // Use DSL-based comment stage (delegates to legacy)
 	UseDSLLogCalls           bool // Use DSL-based log/printf call stage
 	UseDSLMultiLineCalls     bool // Use DSL-based multiline call stage
@@ -178,13 +179,14 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	dslBundle := dslBundleForOptions(opts)
+	stagePlan := stagePlanFromOptions(opts)
 
-	commentFormatter := buildCommentStageFormatter(cfg, opts, dslBundle)
-	callFormatter := buildCompactCallStageFormatter(cfg, opts, dslBundle)
-	exprFormatter := buildExpressionStageFormatter(cfg, opts, dslBundle)
-	multiLineFormatter := buildMultiLineCallStageFormatter(cfg, opts, dslBundle)
-	signatureFormatter := buildSignatureStageFormatter(cfg, opts, dslBundle)
-	blankLineFormatter := buildBlankLineStageFormatter(cfg, opts, dslBundle)
+	commentFormatter := buildCommentStageFormatter(cfg, opts, stagePlan, dslBundle)
+	callFormatter := buildCompactCallStageFormatter(cfg, opts, stagePlan, dslBundle)
+	exprFormatter := buildExpressionStageFormatter(cfg, opts, stagePlan, dslBundle)
+	multiLineFormatter := buildMultiLineCallStageFormatter(cfg, opts, stagePlan, dslBundle)
+	signatureFormatter := buildSignatureStageFormatter(cfg, opts, stagePlan, dslBundle)
+	blankLineFormatter := buildBlankLineStageFormatter(cfg, opts, stagePlan, dslBundle)
 
 	return []Stage{
 		{

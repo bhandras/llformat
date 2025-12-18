@@ -285,10 +285,19 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
+	stagePlan := &StagePlan{
+		Comments:       stageModeFromBool(cfg.UseDSLComments),
+		LogCalls:       stageModeFromBool(cfg.UseDSLLogCalls),
+		Expressions:    stageModeFromBool(cfg.UseDSLExpr),
+		MultiLineCalls: stageModeFromBool(cfg.UseDSLMultiLineCalls),
+		Signatures:     stageModeFromBool(cfg.UseDSLFuncSigs),
+		BlankLines:     stageModeFromBool(cfg.UseDSLBlankLines),
+	}
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline:         cfg.MoveInlineAbove,
 		Excludes:                  cfg.Excludes,
 		RuleProfile:               cfg.RuleProfile,
+		StagePlan:                 stagePlan,
 		UseDSLComments:            cfg.UseDSLComments,
 		UseDSLLogCalls:            cfg.UseDSLLogCalls,
 		UseDSLMultiLineCalls:      cfg.UseDSLMultiLineCalls,
