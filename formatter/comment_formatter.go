@@ -95,6 +95,12 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 			}
 			if j < len(lines) && isStandaloneBlockEnd(lines[j]) {
 				block := lines[i : j+1]
+				// Preserve directive-like blocks verbatim (e.g. cgo directives).
+				if isDirectiveBlockComment(block) {
+					out = append(out, block...)
+					i = j + 1
+					continue
+				}
 				out = append(out, reflowBlockComment(block, indent)...)
 				i = j + 1
 				continue
@@ -228,6 +234,36 @@ func isStandaloneBlockStart(s string) bool {
 func isStandaloneBlockEnd(s string) bool {
 	_, rest := splitIndent(s)
 	return strings.HasPrefix(strings.TrimSpace(rest), "*/")
+}
+
+func blockCommentLineText(ln string) string {
+	// Normalize a block comment interior line to its "payload" text for directive
+	// checks: trim indentation and an optional leading `*` prefix.
+	_, rest := splitIndent(ln)
+	rest = strings.TrimLeft(rest, " ")
+	if strings.HasPrefix(rest, "*") {
+		rest = strings.TrimPrefix(rest, "*")
+		rest = strings.TrimLeft(rest, " ")
+	}
+	return strings.TrimSpace(rest)
+}
+
+// isDirectiveBlockComment reports whether a standalone block comment should be
+// preserved verbatim because it likely contains tool directives (e.g. cgo).
+func isDirectiveBlockComment(block []string) bool {
+	for _, ln := range block {
+		text := blockCommentLineText(ln)
+		if text == "" {
+			continue
+		}
+
+		// cgo directives must be preserved exactly. Reflowing or adding `*`-style
+		// formatting can break cgo parsing.
+		if strings.HasPrefix(text, "#cgo") || strings.HasPrefix(text, "#include") || strings.HasPrefix(text, "#pragma") {
+			return true
+		}
+	}
+	return false
 }
 
 func trimLineCommentText(s string) (indent, text string, empty bool) {

@@ -95,8 +95,8 @@ Legend:
 
 ## H) Comment Strategy
 
-- [ ] **P0 Safe** Expand directive preservation tests for more directive variants.
-- [ ] **P1 Opt-In** Decide long-term comment approach: legacy oracle vs minimal comment DSL.
+- [x] **P0 Safe** Expand directive preservation tests for more directive variants.
+- [x] **P1 Opt-In** Decide long-term comment approach: legacy oracle vs minimal comment DSL.
 - [ ] **P2 Risky** Full comment typesetting engine (only if proven necessary).
 
 ---
