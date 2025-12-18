@@ -310,20 +310,20 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int, indent 
 			formatted += "\n" + indent + "}" + afterClose
 		}
 	} else {
-	// Check if we need to add a blank line after the opening brace
-	// (only if signature became multi-line)
-	isMultiLine := strings.Count(formatted, "\n") > 0
-	if isMultiLine {
-		// Check if next non-empty line is not already blank
-		nextLineIdx := startIdx + linesConsumed
-		if nextLineIdx < len(lines) {
-			nextLine := strings.TrimSpace(string(lines[nextLineIdx]))
-			if nextLine != "" && nextLine != "}" {
-				// Add blank line after the signature
-				formatted += "\n"
+		// Check if we need to add a blank line after the opening brace
+		// (only if signature became multi-line)
+		isMultiLine := strings.Count(formatted, "\n") > 0
+		if isMultiLine {
+			// Check if next non-empty line is not already blank
+			nextLineIdx := startIdx + linesConsumed
+			if nextLineIdx < len(lines) {
+				nextLine := strings.TrimSpace(string(lines[nextLineIdx]))
+				if nextLine != "" && nextLine != "}" {
+					// Add blank line after the signature
+					formatted += "\n"
+				}
 			}
 		}
-	}
 	}
 
 	// Add trailing newline if not the last line
@@ -857,60 +857,58 @@ func (f *FuncSigFormatter) formatInterfaceMethod(lines [][]byte, startIdx int, i
 	var sigBuilder strings.Builder
 	linesConsumed := 0
 	parenDepth := 0
-	inString := false
-	escaped := false
-	complete := false
+	bracketDepth := 0
+	braceDepth := 0
 
 	for idx := startIdx; idx < len(lines); idx++ {
 		line := string(lines[idx])
 		linesConsumed++
 
-		for i := 0; i < len(line); i++ {
-			c := line[i]
-
-			if escaped {
-				escaped = false
-				continue
-			}
-			if c == '\\' && inString {
-				escaped = true
-				continue
-			}
-			if c == '"' || c == '`' || c == '\'' {
-				inString = !inString
-				continue
-			}
-			if inString {
-				continue
-			}
-
-			if c == '(' {
-				parenDepth++
-			} else if c == ')' {
-				parenDepth--
-				// Check if we're done (paren depth back to 0 and this is the return parens)
-				if parenDepth == 0 {
-					// Look ahead to see if there's more after this
-					rest := strings.TrimSpace(line[i+1:])
-					if rest == "" || rest[0] == '}' {
-						// End of method signature
-						sigBuilder.WriteString(strings.TrimSpace(line))
-						complete = true
-						break
-					}
-				}
-			}
-		}
-
-		if complete {
-			break
-		}
-
-		// Add this line to signature (normalize whitespace)
+		// Add this line to signature (normalize whitespace). Interface method
+		// declarations can legally span multiple lines only while a delimiter
+		// (paren/bracket/brace) is unbalanced at the end of the line.
 		if sigBuilder.Len() > 0 {
 			sigBuilder.WriteByte(' ')
 		}
 		sigBuilder.WriteString(strings.TrimSpace(line))
+
+		b := []byte(line)
+		i := 0
+		for i < len(b) {
+			switch {
+			case scanner.IsStringStart(b, i):
+				i = scanner.ScanString(b, i)
+				continue
+			case scanner.IsLineCommentStart(b, i):
+				// Line comment: ignore the rest for delimiter tracking.
+				i = len(b)
+				continue
+			case scanner.IsBlockCommentStart(b, i):
+				// Block comment: skip the whole comment for delimiter tracking.
+				i = scanner.ScanBlockComment(b, i)
+				continue
+			}
+
+			switch b[i] {
+			case '(':
+				parenDepth++
+			case ')':
+				parenDepth--
+			case '[':
+				bracketDepth++
+			case ']':
+				bracketDepth--
+			case '{':
+				braceDepth++
+			case '}':
+				braceDepth--
+			}
+			i++
+		}
+
+		if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 {
+			break
+		}
 	}
 
 	sig := sigBuilder.String()
@@ -926,11 +924,35 @@ func (f *FuncSigFormatter) formatInterfaceMethod(lines [][]byte, startIdx int, i
 	return formatted, linesConsumed
 }
 
+func splitTrailingLineComment(s string) (before, comment string) {
+	b := []byte(s)
+	for i := 0; i < len(b); {
+		switch {
+		case scanner.IsStringStart(b, i):
+			i = scanner.ScanString(b, i)
+			continue
+		case scanner.IsLineCommentStart(b, i):
+			return strings.TrimRight(string(b[:i]), " \t"), string(b[i:])
+		case scanner.IsBlockCommentStart(b, i):
+			i = scanner.ScanBlockComment(b, i)
+			continue
+		}
+		i++
+	}
+	return s, ""
+}
+
 // breakInterfaceMethod breaks an interface method to fit within column limit.
 func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
+	sig, trailingComment := splitTrailingLineComment(sig)
+	commentSuffix := ""
+	if trailingComment != "" {
+		commentSuffix = " " + strings.TrimLeft(trailingComment, " \t")
+	}
+
 	// Check if it already fits
-	if width.VisualLenWithTab(indent+sig, f.cfg.TabStop) <= f.cfg.ColumnLimit {
-		return indent + sig
+	if width.VisualLenWithTab(indent+sig+commentSuffix, f.cfg.TabStop) <= f.cfg.ColumnLimit {
+		return indent + sig + commentSuffix
 	}
 
 	var result strings.Builder
@@ -939,7 +961,7 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 	// Parse: MethodName(params) [(returns)]
 	parenIdx := strings.Index(sig, "(")
 	if parenIdx == -1 {
-		return indent + sig
+		return indent + sig + commentSuffix
 	}
 
 	methodName := sig[:parenIdx]
@@ -948,7 +970,7 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 	// Find matching close paren for params
 	paramEnd := f.findMatchingParen(rest, 0)
 	if paramEnd == -1 {
-		return indent + sig
+		return indent + sig + commentSuffix
 	}
 
 	params := rest[1:paramEnd]
@@ -1089,7 +1111,7 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 		}
 	}
 
-	return result.String()
+	return result.String() + commentSuffix
 }
 
 // FormatFuncSignature formats a function signature (the line starting with "func"
