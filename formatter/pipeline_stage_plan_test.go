@@ -52,3 +52,27 @@ func TestPipelineStagePlan_DSLParityModeUsesDSLFormatters(t *testing.T) {
 	}
 }
 
+func TestPipelineStagePlanOverrideWins(t *testing.T) {
+	t.Parallel()
+
+	override := &StagePlan{
+		Comments:       StageModeLegacy,
+		LogCalls:       StageModeLegacy,
+		Expressions:    StageModeLegacy,
+		MultiLineCalls: StageModeLegacy,
+		Signatures:     StageModeLegacy,
+		BlankLines:     StageModeLegacy,
+	}
+
+	p := NewPipeline(PipelineConfig{
+		Mode:              "dsl-parity",
+		StagePlanOverride: override,
+	})
+	stages := p.Stages()
+	require.NotEmpty(t, stages)
+
+	for _, s := range stages {
+		_, ok := s.Formatter.(*DSLExprFormatter)
+		require.False(t, ok, "stage=%s", s.Name)
+	}
+}

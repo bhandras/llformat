@@ -121,6 +121,11 @@ type PipelineConfig struct {
 	// - "modern": opt-in improvements (stable-ish)
 	// - "next": aggressive opt-in experiments
 	RuleProfile string
+
+	// StagePlanOverride forces an explicit stage selection for the pipeline.
+	// When set, it overrides Mode/DSLCallPolicy-derived StagePlan selection.
+	// This is intended for controlled experiments and debugging.
+	StagePlanOverride *StagePlan
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -321,6 +326,10 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 }
 
 func stagePlanFromPipelineConfig(cfg PipelineConfig) StagePlan {
+	if cfg.StagePlanOverride != nil {
+		return *cfg.StagePlanOverride
+	}
+
 	// Prefer the user-facing mode/policy selection as the source of truth for
 	// stage enablement. If neither are specified, fall back to explicit per-stage
 	// toggles for backward compatibility.

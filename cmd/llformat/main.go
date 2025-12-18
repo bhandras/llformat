@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/lightninglabs/llformat/formatter"
@@ -39,6 +40,7 @@ func main() {
 		useDSLBlankLinesNative bool
 		allowDSLCallArgs       bool
 		autoDSLCallArgs        bool
+		printPlan              bool
 	)
 
 	flag.BoolVar(&write, "w", false, "write result to (source) file instead of stdout")
@@ -69,6 +71,7 @@ func main() {
 	flag.BoolVar(&useDSLBlankLinesNative, "dsl-blank-lines-native", false, "use native DSL blank line rules (fallback to legacy; DSL mode only, experimental)")
 	flag.BoolVar(&allowDSLCallArgs, "dsl-allow-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments (DSL mode only, experimental)")
 	flag.BoolVar(&autoDSLCallArgs, "dsl-auto-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments only for calls excluded from multiline formatting (DSL mode only, experimental)")
+	flag.BoolVar(&printPlan, "print-plan", false, "print resolved pipeline plan and exit")
 	flag.Parse()
 
 	// Policy bundle is applied in the pipeline, but for CLI ergonomics we also
@@ -102,18 +105,6 @@ func main() {
 		}
 	}
 
-	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--mode MODE] [--legacy] [--legacy-hardening] [--trace-dsl] [--trace-dsl-reasons] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] <path>")
-		os.Exit(2)
-	}
-
-	path := flag.Arg(0)
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "read %s: %v\n", path, err)
-		os.Exit(1)
-	}
-
 	// Parse multiline exclude list
 	var excludes []string
 	if multilineExclude != "" {
@@ -132,8 +123,7 @@ func main() {
 		policy = ""
 	}
 
-	// Use the unified formatting pipeline
-	pipeline := formatter.NewPipeline(formatter.PipelineConfig{
+	cfg := formatter.PipelineConfig{
 		Mode:                      mode,
 		ColumnLimit:               colLimit,
 		TabStop:                   tabStop,
@@ -159,7 +149,63 @@ func main() {
 		TraceDSLReasons:           traceDSLReasons && !useLegacy,
 		AllowDSLCallArgs:          allowDSLCallArgs && !useLegacy,
 		AutoDSLCallArgs:           autoDSLCallArgs && !useLegacy,
-	})
+	}
+
+	if printPlan {
+		plan := formatter.ResolvePipelinePlan(cfg)
+		fmt.Fprintf(os.Stdout, "mode=%s\n", plan.Mode)
+		fmt.Fprintf(os.Stdout, "rule_profile=%s\n", plan.RuleProfile)
+		if plan.DSLCallPolicy != "" {
+			fmt.Fprintf(os.Stdout, "dsl_call_policy=%s\n", plan.DSLCallPolicy)
+		}
+		if plan.DSLMultiLineStyle != "" {
+			fmt.Fprintf(os.Stdout, "dsl_multiline_style=%s\n", plan.DSLMultiLineStyle)
+		}
+		if plan.DSLSigsStyle != "" {
+			fmt.Fprintf(os.Stdout, "dsl_sigs_style=%s\n", plan.DSLSigsStyle)
+		}
+		fmt.Fprintf(os.Stdout, "dsl_sigs_native=%v\n", plan.UseDSLFuncSigsNative)
+		fmt.Fprintf(os.Stdout, "dsl_blank_lines_native=%v\n", plan.UseDSLBlankLinesNative)
+		fmt.Fprintf(os.Stdout, "dsl_expr_logical_style=%s\n", plan.DSLExprLogicalStyle)
+		fmt.Fprintf(os.Stdout, "dsl_expr_arithmetic_style=%s\n", plan.DSLExprArithmeticStyle)
+		fmt.Fprintf(os.Stdout, "dsl_expr_case_clause_style=%s\n", plan.DSLExprCaseClauseStyle)
+		fmt.Fprintf(os.Stdout, "dsl_expr_selector_chain_style=%s\n", plan.DSLExprSelectorChainStyle)
+		fmt.Fprintf(os.Stdout, "dsl_call_args_allow=%v\n", plan.AllowDSLCallArgs)
+		fmt.Fprintf(os.Stdout, "dsl_call_args_auto=%v\n", plan.AutoDSLCallArgs)
+
+		stageModes := map[string]formatter.StageMode{
+			"comments":        plan.StagePlan.Comments,
+			"compact-calls":   plan.StagePlan.LogCalls,
+			"expressions":     plan.StagePlan.Expressions,
+			"multiline-calls": plan.StagePlan.MultiLineCalls,
+			"signatures":      plan.StagePlan.Signatures,
+			"blank-lines":     plan.StagePlan.BlankLines,
+		}
+		keys := make([]string, 0, len(stageModes))
+		for k := range stageModes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(os.Stdout, "stage.%s=%s\n", k, stageModes[k])
+		}
+		return
+	}
+
+	if flag.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--mode MODE] [--legacy] [--legacy-hardening] [--trace-dsl] [--trace-dsl-reasons] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] [--print-plan] <path>")
+		os.Exit(2)
+	}
+
+	path := flag.Arg(0)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read %s: %v\n", path, err)
+		os.Exit(1)
+	}
+
+	// Use the unified formatting pipeline
+	pipeline := formatter.NewPipeline(cfg)
 	out := pipeline.Format(data)
 
 	if write {
