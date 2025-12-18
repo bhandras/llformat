@@ -21,8 +21,15 @@ type PipelineConfig struct {
 	DSLSigsStyle           string   // DSL signature style: legacy|dsl (empty => legacy)
 	UseDSLBlankLines       bool     // Use DSL-based blank line formatter
 	UseDSLBlankLinesNative bool     // Use native DSL blank line rules (fallback to legacy)
-	TraceDSL               bool     // Enable DSL rule tracing (only when UseDSLExpr)
-	TraceDSLReasons        bool     // Include "why fired/didn't fire" reasons in DSL tracing
+	// DSLBlankLinesExtraIfErrReturn inserts a blank line before:
+	//
+	//   if err != nil { return ... }
+	//
+	// This is intentionally opt-in because it is opinionated and may interact
+	// with users' desired grouping/spacing style.
+	DSLBlankLinesExtraIfErrReturn bool
+	TraceDSL                      bool // Enable DSL rule tracing (only when UseDSLExpr)
+	TraceDSLReasons               bool // Include "why fired/didn't fire" reasons in DSL tracing
 
 	// Mode provides a user-facing coarse selection of pipeline behavior.
 	// It is intentionally opt-in; when empty, callers can control the pipeline
@@ -332,14 +339,15 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			StagePlan:   &stagePlan,
 		},
 		Style: StageStyleOptions{
-			CommentMoveInline:         cfg.MoveInlineAbove,
-			Excludes:                  cfg.Excludes,
-			DSLMultiLineStyle:         cfg.DSLMultiLineStyle,
-			DSLSigsStyle:              cfg.DSLSigsStyle,
-			DSLExprLogicalStyle:       cfg.DSLExprLogicalStyle,
-			DSLExprArithmeticStyle:    cfg.DSLExprArithmeticStyle,
-			DSLExprCaseClauseStyle:    cfg.DSLExprCaseClauseStyle,
-			DSLExprSelectorChainStyle: cfg.DSLExprSelectorChainStyle,
+			CommentMoveInline:             cfg.MoveInlineAbove,
+			Excludes:                      cfg.Excludes,
+			DSLMultiLineStyle:             cfg.DSLMultiLineStyle,
+			DSLSigsStyle:                  cfg.DSLSigsStyle,
+			DSLBlankLinesExtraIfErrReturn: cfg.DSLBlankLinesExtraIfErrReturn,
+			DSLExprLogicalStyle:           cfg.DSLExprLogicalStyle,
+			DSLExprArithmeticStyle:        cfg.DSLExprArithmeticStyle,
+			DSLExprCaseClauseStyle:        cfg.DSLExprCaseClauseStyle,
+			DSLExprSelectorChainStyle:     cfg.DSLExprSelectorChainStyle,
 		},
 		DSL: DSLStageOptions{
 			Trace:               cfg.TraceDSL,

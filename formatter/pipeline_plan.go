@@ -15,6 +15,8 @@ type PipelinePlan struct {
 	// Native toggles
 	UseDSLFuncSigsNative   bool
 	UseDSLBlankLinesNative bool
+	// Extra blank-line behavior (native blank lines only).
+	DSLBlankLinesExtraIfErrReturn bool
 
 	// Expression style knobs
 	DSLExprLogicalStyle       string
@@ -46,8 +48,9 @@ func (p *Pipeline) Plan() PipelinePlan {
 		DSLMultiLineStyle: p.cfg.DSLMultiLineStyle,
 		DSLSigsStyle:      p.cfg.DSLSigsStyle,
 
-		UseDSLFuncSigsNative:   p.cfg.UseDSLFuncSigsNative,
-		UseDSLBlankLinesNative: p.cfg.UseDSLBlankLinesNative,
+		UseDSLFuncSigsNative:          p.cfg.UseDSLFuncSigsNative,
+		UseDSLBlankLinesNative:        p.cfg.UseDSLBlankLinesNative,
+		DSLBlankLinesExtraIfErrReturn: p.cfg.DSLBlankLinesExtraIfErrReturn,
 
 		DSLExprLogicalStyle:       p.cfg.DSLExprLogicalStyle,
 		DSLExprArithmeticStyle:    p.cfg.DSLExprArithmeticStyle,
@@ -58,4 +61,3 @@ func (p *Pipeline) Plan() PipelinePlan {
 		AutoDSLCallArgs:  p.cfg.AutoDSLCallArgs,
 	}
 }
-

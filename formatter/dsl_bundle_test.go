@@ -63,7 +63,7 @@ func TestDSLBundle_BlankLinesSpecControlsShimAndIterations(t *testing.T) {
 	require.Equal(t, "legacy_blank_lines_fallback", native.BlankLines.Rules[len(native.BlankLines.Rules)-1].Name)
 }
 
-func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
+func TestDSLBundle_BlankLinesNextProfileDoesNotIncludeExtraIfErrReturnByDefault(t *testing.T) {
 	t.Parallel()
 
 	next := ResolveDSLBundle(StageOptions{
@@ -74,7 +74,7 @@ func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
 	for _, r := range next.BlankLines.Rules {
 		names = append(names, r.Name)
 	}
-	require.Contains(t, names, "blank_before_if_err_return")
+	require.NotContains(t, names, "blank_before_if_err_return")
 
 	parity := ResolveDSLBundle(StageOptions{
 		Selection: StageSelectionOptions{RuleProfile: "parity"},
@@ -85,6 +85,21 @@ func TestDSLBundle_BlankLinesNextProfileIncludesExtraRules(t *testing.T) {
 		parityNames = append(parityNames, r.Name)
 	}
 	require.NotContains(t, parityNames, "blank_before_if_err_return")
+}
+
+func TestDSLBundle_BlankLinesExtraIfErrReturnIsOptIn(t *testing.T) {
+	t.Parallel()
+
+	next := ResolveDSLBundle(StageOptions{
+		Selection: StageSelectionOptions{RuleProfile: "next"},
+		Style:     StageStyleOptions{DSLBlankLinesExtraIfErrReturn: true},
+		DSL:       DSLStageOptions{UseBlankLinesNative: true},
+	})
+	names := make([]string, 0, len(next.BlankLines.Rules))
+	for _, r := range next.BlankLines.Rules {
+		names = append(names, r.Name)
+	}
+	require.Contains(t, names, "blank_before_if_err_return")
 }
 
 func TestDSLBundle_SignaturesSpecControlsIterations(t *testing.T) {

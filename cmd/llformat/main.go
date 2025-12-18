@@ -13,34 +13,35 @@ import (
 
 func main() {
 	var (
-		write                  bool
-		colLimit               int
-		tabStop                int
-		moveInline             bool
-		multilineExclude       string
-		useLegacy              bool
-		legacyHardening        bool
-		mode                   string
-		traceDSL               bool
-		traceDSLReasons        bool
-		useDSLComments         bool
-		useDSLCalls            bool
-		useDSLMultiLine        bool
-		dslMultiLineStyle      string
-		dslCallPolicy          string
-		useDSLExpr             bool
-		dslExprLogicalStyle    string
-		dslExprArithmeticStyle string
-		dslExprCaseClauseStyle string
-		dslExprSelectorStyle   string
-		useDSLSigs             bool
-		useDSLSigsNative       bool
-		dslSigsStyle           string
-		useDSLBlankLines       bool
-		useDSLBlankLinesNative bool
-		allowDSLCallArgs       bool
-		autoDSLCallArgs        bool
-		printPlan              bool
+		write                         bool
+		colLimit                      int
+		tabStop                       int
+		moveInline                    bool
+		multilineExclude              string
+		useLegacy                     bool
+		legacyHardening               bool
+		mode                          string
+		traceDSL                      bool
+		traceDSLReasons               bool
+		useDSLComments                bool
+		useDSLCalls                   bool
+		useDSLMultiLine               bool
+		dslMultiLineStyle             string
+		dslCallPolicy                 string
+		useDSLExpr                    bool
+		dslExprLogicalStyle           string
+		dslExprArithmeticStyle        string
+		dslExprCaseClauseStyle        string
+		dslExprSelectorStyle          string
+		useDSLSigs                    bool
+		useDSLSigsNative              bool
+		dslSigsStyle                  string
+		useDSLBlankLines              bool
+		useDSLBlankLinesNative        bool
+		dslBlankLinesExtraIfErrReturn bool
+		allowDSLCallArgs              bool
+		autoDSLCallArgs               bool
+		printPlan                     bool
 	)
 
 	flag.BoolVar(&write, "w", false, "write result to (source) file instead of stdout")
@@ -69,6 +70,7 @@ func main() {
 	flag.StringVar(&dslSigsStyle, "dsl-sigs-style", "legacy", "DSL signature style: legacy|dsl (DSL mode only, experimental)")
 	flag.BoolVar(&useDSLBlankLines, "dsl-blank-lines", true, "use DSL blank line formatter (DSL mode only)")
 	flag.BoolVar(&useDSLBlankLinesNative, "dsl-blank-lines-native", false, "use native DSL blank line rules (fallback to legacy; DSL mode only, experimental)")
+	flag.BoolVar(&dslBlankLinesExtraIfErrReturn, "dsl-blank-lines-extra-if-err", false, "insert a blank line before `if err != nil { return ... }` patterns (native DSL blank lines only, experimental)")
 	flag.BoolVar(&allowDSLCallArgs, "dsl-allow-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments (DSL mode only, experimental)")
 	flag.BoolVar(&autoDSLCallArgs, "dsl-auto-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments only for calls excluded from multiline formatting (DSL mode only, experimental)")
 	flag.BoolVar(&printPlan, "print-plan", false, "print resolved pipeline plan and exit")
@@ -124,31 +126,32 @@ func main() {
 	}
 
 	cfg := formatter.PipelineConfig{
-		Mode:                      mode,
-		ColumnLimit:               colLimit,
-		TabStop:                   tabStop,
-		MoveInlineAbove:           moveInline,
-		Excludes:                  excludes,
-		LegacyHardening:           legacyHardening && useLegacy,
-		UseDSLComments:            !useLegacy && useDSLComments,
-		UseDSLLogCalls:            !useLegacy && useDSLCalls,
-		UseDSLMultiLineCalls:      !useLegacy && useDSLMultiLine,
-		DSLMultiLineStyle:         dslMultiLineStyle,
-		DSLCallPolicy:             policy,
-		UseDSLExpr:                !useLegacy && useDSLExpr,
-		DSLExprLogicalStyle:       dslExprLogicalStyle,
-		DSLExprArithmeticStyle:    dslExprArithmeticStyle,
-		DSLExprCaseClauseStyle:    dslExprCaseClauseStyle,
-		DSLExprSelectorChainStyle: dslExprSelectorStyle,
-		UseDSLFuncSigs:            !useLegacy && useDSLSigs,
-		UseDSLFuncSigsNative:      !useLegacy && useDSLSigsNative,
-		DSLSigsStyle:              dslSigsStyle,
-		UseDSLBlankLines:          !useLegacy && useDSLBlankLines,
-		UseDSLBlankLinesNative:    !useLegacy && useDSLBlankLinesNative,
-		TraceDSL:                  traceDSL && !useLegacy,
-		TraceDSLReasons:           traceDSLReasons && !useLegacy,
-		AllowDSLCallArgs:          allowDSLCallArgs && !useLegacy,
-		AutoDSLCallArgs:           autoDSLCallArgs && !useLegacy,
+		Mode:                          mode,
+		ColumnLimit:                   colLimit,
+		TabStop:                       tabStop,
+		MoveInlineAbove:               moveInline,
+		Excludes:                      excludes,
+		LegacyHardening:               legacyHardening && useLegacy,
+		UseDSLComments:                !useLegacy && useDSLComments,
+		UseDSLLogCalls:                !useLegacy && useDSLCalls,
+		UseDSLMultiLineCalls:          !useLegacy && useDSLMultiLine,
+		DSLMultiLineStyle:             dslMultiLineStyle,
+		DSLCallPolicy:                 policy,
+		UseDSLExpr:                    !useLegacy && useDSLExpr,
+		DSLExprLogicalStyle:           dslExprLogicalStyle,
+		DSLExprArithmeticStyle:        dslExprArithmeticStyle,
+		DSLExprCaseClauseStyle:        dslExprCaseClauseStyle,
+		DSLExprSelectorChainStyle:     dslExprSelectorStyle,
+		UseDSLFuncSigs:                !useLegacy && useDSLSigs,
+		UseDSLFuncSigsNative:          !useLegacy && useDSLSigsNative,
+		DSLSigsStyle:                  dslSigsStyle,
+		UseDSLBlankLines:              !useLegacy && useDSLBlankLines,
+		UseDSLBlankLinesNative:        !useLegacy && useDSLBlankLinesNative,
+		DSLBlankLinesExtraIfErrReturn: !useLegacy && dslBlankLinesExtraIfErrReturn,
+		TraceDSL:                      traceDSL && !useLegacy,
+		TraceDSLReasons:               traceDSLReasons && !useLegacy,
+		AllowDSLCallArgs:              allowDSLCallArgs && !useLegacy,
+		AutoDSLCallArgs:               autoDSLCallArgs && !useLegacy,
 	}
 
 	if err := formatter.ValidatePipelineConfig(cfg); err != nil {
@@ -171,6 +174,7 @@ func main() {
 		}
 		fmt.Fprintf(os.Stdout, "dsl_sigs_native=%v\n", plan.UseDSLFuncSigsNative)
 		fmt.Fprintf(os.Stdout, "dsl_blank_lines_native=%v\n", plan.UseDSLBlankLinesNative)
+		fmt.Fprintf(os.Stdout, "dsl_blank_lines_extra_if_err=%v\n", plan.DSLBlankLinesExtraIfErrReturn)
 		fmt.Fprintf(os.Stdout, "dsl_expr_logical_style=%s\n", plan.DSLExprLogicalStyle)
 		fmt.Fprintf(os.Stdout, "dsl_expr_arithmetic_style=%s\n", plan.DSLExprArithmeticStyle)
 		fmt.Fprintf(os.Stdout, "dsl_expr_case_clause_style=%s\n", plan.DSLExprCaseClauseStyle)
@@ -198,7 +202,7 @@ func main() {
 	}
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--mode MODE] [--legacy] [--legacy-hardening] [--trace-dsl] [--trace-dsl-reasons] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-allow-call-args] [--dsl-auto-call-args] [--print-plan] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--mode MODE] [--legacy] [--legacy-hardening] [--trace-dsl] [--trace-dsl-reasons] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-blank-lines-extra-if-err] [--dsl-allow-call-args] [--dsl-auto-call-args] [--print-plan] <path>")
 		os.Exit(2)
 	}
 

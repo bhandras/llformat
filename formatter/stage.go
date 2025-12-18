@@ -114,6 +114,9 @@ type StageStyleOptions struct {
 
 	DSLMultiLineStyle string
 	DSLSigsStyle      string
+	// DSLBlankLinesExtraIfErrReturn controls whether native DSL blank line rules
+	// should insert a blank line before `if err != nil { return ... }` patterns.
+	DSLBlankLinesExtraIfErrReturn bool
 
 	DSLExprLogicalStyle       string
 	DSLExprArithmeticStyle    string
