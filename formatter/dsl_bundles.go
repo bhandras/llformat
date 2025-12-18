@@ -2,6 +2,13 @@ package formatter
 
 import "github.com/lightninglabs/llformat/dsl"
 
+func normalizedRuleProfile(profile string) string {
+	if profile == "" {
+		return "parity"
+	}
+	return profile
+}
+
 // dslRulesForComments returns the DSL rule list for the comment stage.
 // This intentionally delegates to the legacy comment formatter for parity.
 func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
@@ -15,8 +22,10 @@ func dslRulesForLogCalls() []dsl.Rule {
 }
 
 func dslRulesForExpr(opts StageOptions) []dsl.Rule {
+	profile := normalizedRuleProfile(opts.RuleProfile)
+
 	exprRules := dsl.LongExprRules()
-	if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs || opts.DSLExprLogicalStyle != "" || opts.DSLExprArithmeticStyle != "" || opts.DSLExprCaseClauseStyle != "" || opts.DSLExprSelectorChainStyle != "" {
+	if profile != "parity" || opts.AllowDSLCallArgs || opts.AutoDSLCallArgs || opts.DSLExprLogicalStyle != "" || opts.DSLExprArithmeticStyle != "" || opts.DSLExprCaseClauseStyle != "" || opts.DSLExprSelectorChainStyle != "" {
 		callArgsPolicy := dsl.CallArgsPolicyOff
 		if opts.AutoDSLCallArgs {
 			callArgsPolicy = dsl.CallArgsPolicyAuto
@@ -30,13 +39,32 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 			allowlist = append(append([]string{}, DefaultMultilineExcludes()...), opts.Excludes...)
 		}
 
+		logicalStyle := opts.DSLExprLogicalStyle
+		arithStyle := opts.DSLExprArithmeticStyle
+		caseClauseStyle := opts.DSLExprCaseClauseStyle
+		selectorChainStyle := opts.DSLExprSelectorChainStyle
+		if profile == "modern" || profile == "next" {
+			if logicalStyle == "" {
+				logicalStyle = "layout"
+			}
+			if arithStyle == "" {
+				arithStyle = "layout"
+			}
+			if caseClauseStyle == "" {
+				caseClauseStyle = "layout"
+			}
+			if selectorChainStyle == "" {
+				selectorChainStyle = "layout"
+			}
+		}
+
 		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
 			CallArgsPolicy:       callArgsPolicy,
 			CallArgsAllowlist:    allowlist,
-			LogicalChainStyle:    opts.DSLExprLogicalStyle,
-			ArithmeticChainStyle: opts.DSLExprArithmeticStyle,
-			CaseClauseStyle:      opts.DSLExprCaseClauseStyle,
-			SelectorChainStyle:   opts.DSLExprSelectorChainStyle,
+			LogicalChainStyle:    logicalStyle,
+			ArithmeticChainStyle: arithStyle,
+			CaseClauseStyle:      caseClauseStyle,
+			SelectorChainStyle:   selectorChainStyle,
 		})
 	}
 	return exprRules
@@ -45,7 +73,14 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder dsl.NodeOrder) {
 	style := opts.DSLMultiLineStyle
 	if style == "" {
-		style = "legacy"
+		switch normalizedRuleProfile(opts.RuleProfile) {
+		case "modern":
+			style = "packed-chain-layout"
+		case "next":
+			style = "layout-all"
+		default:
+			style = "legacy"
+		}
 	}
 
 	nodeOrder = dsl.NodeOrderPreorder

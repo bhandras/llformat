@@ -20,6 +20,33 @@ func TestDSLBundlesMultiLineStyleControlsNodeOrder(t *testing.T) {
 	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
 }
 
+func TestDSLBundlesMultiLineStyleDefaultsFromRuleProfile(t *testing.T) {
+	t.Parallel()
+
+	rules, nodeOrder := dslRulesForMultiLineCalls(StageOptions{
+		RuleProfile: "parity",
+	})
+	require.Equal(t, dsl.NodeOrderPreorder, nodeOrder)
+	require.NotEmpty(t, rules)
+	require.Equal(t, "legacy_multiline_scan", rules[0].Name)
+
+	rules, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
+		RuleProfile: "modern",
+	})
+	require.Equal(t, dsl.NodeOrderPreorder, nodeOrder)
+	require.Len(t, rules, 2)
+	require.Equal(t, "long_method_chain", rules[0].Name)
+	require.Equal(t, "long_call_expr", rules[1].Name)
+
+	rules, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
+		RuleProfile: "next",
+	})
+	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
+	require.Len(t, rules, 2)
+	require.Equal(t, "long_method_chain", rules[0].Name)
+	require.Equal(t, "long_call_expr", rules[1].Name)
+}
+
 func TestDSLBundlesSignaturesNativeAlwaysIncludesLegacyFallback(t *testing.T) {
 	t.Parallel()
 
