@@ -31,9 +31,9 @@ Legend:
 ## A) Configuration + Taxonomy (StagePlan / Bundle / Profile)
 
 - [x] **P0 Safe** Add `PipelineConfig.StagePlanOverride *StagePlan` (explicit stage selection without per-stage booleans).
-- [ ] **P0 Safe** Add `RuleProfile -> default StagePlan` mapping (so `RuleProfile` becomes a first-class stage selector).
-- [ ] **P1 Safe** Add `RuleProfile -> default DSLBundle` factory object (bundle selection as a single testable function).
-- [ ] **P1 Safe** Move all DSL stage engine defaults into bundles (node order, max iters, shim flags).
+- [x] **P0 Safe** Add `RuleProfile -> default StagePlan` mapping (so `RuleProfile` becomes a first-class stage selector).
+- [x] **P1 Safe** Add `RuleProfile -> default DSLBundle` factory object (bundle selection as a single testable function).
+- [x] **P1 Safe** Move all DSL stage engine defaults into bundles (node order, max iters, shim flags).
 - [x] **P1 Safe** Add `--print-plan` output (resolved `RuleProfile`, `StagePlan`, and key style knobs).
 - [ ] **P2 Safe** Config validation (unknown profile/style produces clear errors or explicit fallback).
 

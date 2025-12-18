@@ -15,6 +15,7 @@ func buildCommentStageFormatter(cfg BaseConfig, opts StageOptions, plan StagePla
 		Rules:         bundle.Comments.Rules,
 		Trace:         opts.TraceDSL,
 		TraceReasons:  opts.TraceDSLReasons,
+		NodeOrder:     bundle.Comments.NodeOrder,
 		MaxIterations: bundle.Comments.MaxIterations,
 		SkipGofmt:     true,
 	})
@@ -32,12 +33,14 @@ func buildCompactCallStageFormatter(cfg BaseConfig, opts StageOptions, plan Stag
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
-		ColumnLimit:  cfg.ColumnLimit,
-		TabStop:      cfg.TabStop,
-		Rules:        bundle.LogCalls.Rules,
-		Trace:        opts.TraceDSL,
-		TraceReasons: opts.TraceDSLReasons,
-		SkipGofmt:    true,
+		ColumnLimit:   cfg.ColumnLimit,
+		TabStop:       cfg.TabStop,
+		Rules:         bundle.LogCalls.Rules,
+		Trace:         opts.TraceDSL,
+		TraceReasons:  opts.TraceDSLReasons,
+		NodeOrder:     bundle.LogCalls.NodeOrder,
+		MaxIterations: bundle.LogCalls.MaxIterations,
+		SkipGofmt:     true,
 	})
 }
 
@@ -53,12 +56,14 @@ func buildExpressionStageFormatter(cfg BaseConfig, opts StageOptions, plan Stage
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
-		ColumnLimit:  cfg.ColumnLimit,
-		TabStop:      cfg.TabStop,
-		Rules:        bundle.Expressions.Rules,
-		Trace:        opts.TraceDSL,
-		TraceReasons: opts.TraceDSLReasons,
-		SkipGofmt:    true,
+		ColumnLimit:   cfg.ColumnLimit,
+		TabStop:       cfg.TabStop,
+		Rules:         bundle.Expressions.Rules,
+		Trace:         opts.TraceDSL,
+		TraceReasons:  opts.TraceDSLReasons,
+		NodeOrder:     bundle.Expressions.NodeOrder,
+		MaxIterations: bundle.Expressions.MaxIterations,
+		SkipGofmt:     true,
 	})
 }
 
@@ -100,6 +105,7 @@ func buildSignatureStageFormatter(cfg BaseConfig, opts StageOptions, plan StageP
 		Rules:         bundle.Signatures.Rules,
 		Trace:         opts.TraceDSL,
 		TraceReasons:  opts.TraceDSLReasons,
+		NodeOrder:     bundle.Signatures.NodeOrder,
 		MaxIterations: bundle.Signatures.MaxIterations,
 		SkipGofmt:     true,
 	})
@@ -120,6 +126,7 @@ func buildBlankLineStageFormatter(cfg BaseConfig, opts StageOptions, plan StageP
 		Rules:                       bundle.BlankLines.Rules,
 		Trace:                       opts.TraceDSL,
 		TraceReasons:                opts.TraceDSLReasons,
+		NodeOrder:                   bundle.BlankLines.NodeOrder,
 		MaxIterations:               bundle.BlankLines.MaxIterations,
 		DisableLegacyBlankLinesShim: bundle.BlankLines.DisableLegacyBlankLinesShim,
 		SkipGofmt:                   true,

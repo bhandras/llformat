@@ -39,10 +39,36 @@ func TestPipelineStagePlan_LegacyModeUsesLegacyFormatters(t *testing.T) {
 	}
 }
 
+func TestPipelineStagePlan_DefaultUsesLegacyFormatters(t *testing.T) {
+	t.Parallel()
+
+	p := NewPipeline(PipelineConfig{})
+	stages := p.Stages()
+	require.NotEmpty(t, stages)
+
+	for _, s := range stages {
+		_, ok := s.Formatter.(*DSLExprFormatter)
+		require.False(t, ok, "stage=%s", s.Name)
+	}
+}
+
 func TestPipelineStagePlan_DSLParityModeUsesDSLFormatters(t *testing.T) {
 	t.Parallel()
 
 	p := NewPipeline(PipelineConfig{Mode: "dsl-parity"})
+	stages := p.Stages()
+	require.NotEmpty(t, stages)
+
+	for _, s := range stages {
+		_, ok := s.Formatter.(*DSLExprFormatter)
+		require.True(t, ok, "stage=%s", s.Name)
+	}
+}
+
+func TestPipelineStagePlan_RuleProfileModernUsesDSLFormatters(t *testing.T) {
+	t.Parallel()
+
+	p := NewPipeline(PipelineConfig{RuleProfile: "modern"})
 	stages := p.Stages()
 	require.NotEmpty(t, stages)
 

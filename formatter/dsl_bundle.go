@@ -26,6 +26,15 @@ type DSLBundle struct {
 	BlankLines     DSLStageSpec
 }
 
+// ResolveDSLBundle returns the cohesive per-stage DSL rule/config selection for
+// the given stage options.
+//
+// This is intentionally a single entrypoint so profile- and option-driven rule
+// selection stays centralized and easy to test.
+func ResolveDSLBundle(opts StageOptions) DSLBundle {
+	return dslBundleForOptions(opts)
+}
+
 func dslBundleForOptions(opts StageOptions) DSLBundle {
 	multiLineRules, multiLineNodeOrder := dslRulesForMultiLineCalls(opts)
 
@@ -35,13 +44,18 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 	return DSLBundle{
 		Comments: DSLStageSpec{
 			Rules:         dslRulesForComments(opts.CommentMoveInline),
+			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: 1,
 		},
 		LogCalls: DSLStageSpec{
-			Rules: dslRulesForLogCalls(),
+			Rules:         dslRulesForLogCalls(),
+			NodeOrder:     dsl.NodeOrderPreorder,
+			MaxIterations: 100,
 		},
 		Expressions: DSLStageSpec{
-			Rules: dslRulesForExpr(opts),
+			Rules:         dslRulesForExpr(opts),
+			NodeOrder:     dsl.NodeOrderPreorder,
+			MaxIterations: 100,
 		},
 		MultiLineCalls: DSLStageSpec{
 			Rules:         multiLineRules,
@@ -50,10 +64,12 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 		},
 		Signatures: DSLStageSpec{
 			Rules:         dslRulesForSignatures(opts),
+			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: dslMaxItersForSignatures(opts),
 		},
 		BlankLines: DSLStageSpec{
 			Rules:                       blankLineRules,
+			NodeOrder:                   dsl.NodeOrderPreorder,
 			MaxIterations:               dslMaxItersForBlankLines(opts),
 			DisableLegacyBlankLinesShim: disableBlankLinesShim,
 		},
@@ -73,4 +89,3 @@ func dslMaxItersForBlankLines(opts StageOptions) int {
 	}
 	return 200
 }
-

@@ -344,25 +344,35 @@ func stagePlanFromPipelineConfig(cfg PipelineConfig) StagePlan {
 			BlankLines:     StageModeLegacy,
 		}
 	case "dsl-parity", "dsl-modern", "next":
-		return StagePlan{
-			Comments:       StageModeDSL,
-			LogCalls:       StageModeDSL,
-			Expressions:    StageModeDSL,
-			MultiLineCalls: StageModeDSL,
-			Signatures:     StageModeDSL,
-			BlankLines:     StageModeDSL,
+		if plan, ok := stagePlanForRuleProfile(cfg.RuleProfile); ok {
+			return plan
 		}
+		return allDSLStagePlan()
 	}
 
 	switch cfg.DSLCallPolicy {
 	case "modern":
-		return StagePlan{
-			Comments:       StageModeDSL,
-			LogCalls:       StageModeDSL,
-			Expressions:    StageModeDSL,
-			MultiLineCalls: StageModeDSL,
-			Signatures:     StageModeDSL,
-			BlankLines:     StageModeDSL,
+		if plan, ok := stagePlanForRuleProfile(cfg.RuleProfile); ok {
+			return plan
+		}
+		return allDSLStagePlan()
+	}
+
+	// If a non-parity RuleProfile is set but no other stage-selection knobs are
+	// present, treat the profile as the stage selector. This keeps the
+	// out-of-the-box behavior legacy-parity while allowing internal callers to
+	// opt into cohesive DSL bundles without also setting Mode/DSLCallPolicy.
+	if cfg.Mode == "" &&
+		cfg.DSLCallPolicy == "" &&
+		normalizedRuleProfile(cfg.RuleProfile) != "parity" &&
+		!cfg.UseDSLComments &&
+		!cfg.UseDSLLogCalls &&
+		!cfg.UseDSLMultiLineCalls &&
+		!cfg.UseDSLExpr &&
+		!cfg.UseDSLFuncSigs &&
+		!cfg.UseDSLBlankLines {
+		if plan, ok := stagePlanForRuleProfile(cfg.RuleProfile); ok {
+			return plan
 		}
 	}
 

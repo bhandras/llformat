@@ -178,7 +178,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 
 // DefaultStagesWithOptions returns stages with full configuration options.
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
-	dslBundle := dslBundleForOptions(opts)
+	dslBundle := ResolveDSLBundle(opts)
 	stagePlan := stagePlanFromOptions(opts)
 
 	commentFormatter := buildCommentStageFormatter(cfg, opts, stagePlan, dslBundle)
@@ -212,12 +212,12 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		{
 			Name:      "signatures",
 			Formatter: signatureFormatter,
-			Requires: []string{"multiline-calls"}, // After call formatting
+			Requires:  []string{"multiline-calls"}, // After call formatting
 		},
 		{
 			Name:      "blank-lines",
 			Formatter: blankLineFormatter,
-			Requires: []string{"signatures"}, // After signature formatting
+			Requires:  []string{"signatures"}, // After signature formatting
 		},
 	}
 }
