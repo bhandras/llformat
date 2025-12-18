@@ -151,6 +151,11 @@ func main() {
 		AutoDSLCallArgs:           autoDSLCallArgs && !useLegacy,
 	}
 
+	if err := formatter.ValidatePipelineConfig(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+
 	if printPlan {
 		plan := formatter.ResolvePipelinePlan(cfg)
 		fmt.Fprintf(os.Stdout, "mode=%s\n", plan.Mode)

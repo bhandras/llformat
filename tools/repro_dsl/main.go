@@ -55,13 +55,18 @@ func main() {
 	}
 
 	cfg := formatter.PipelineConfig{
-		Mode:               mode,
-		RuleProfile:        ruleProfile,
-		ColumnLimit:        col,
-		TabStop:            tab,
-		TraceDSL:           trace,
-		TraceDSLReasons:    traceReasons,
+		Mode:                 mode,
+		RuleProfile:          ruleProfile,
+		ColumnLimit:          col,
+		TabStop:              tab,
+		TraceDSL:             trace,
+		TraceDSLReasons:      traceReasons,
 		UseOwnershipRegistry: ownership,
+	}
+
+	if err := formatter.ValidatePipelineConfig(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
 	}
 
 	if printPlan {
