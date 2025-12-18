@@ -284,29 +284,19 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		}
 	}
 
+	// Compute the stage plan only after all mode/policy bundles and pipeline
+	// safety adjustments have been applied to cfg.
+	stagePlan := stagePlanFromPipelineConfig(cfg)
+
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
-	stagePlan := &StagePlan{
-		Comments:       stageModeFromBool(cfg.UseDSLComments),
-		LogCalls:       stageModeFromBool(cfg.UseDSLLogCalls),
-		Expressions:    stageModeFromBool(cfg.UseDSLExpr),
-		MultiLineCalls: stageModeFromBool(cfg.UseDSLMultiLineCalls),
-		Signatures:     stageModeFromBool(cfg.UseDSLFuncSigs),
-		BlankLines:     stageModeFromBool(cfg.UseDSLBlankLines),
-	}
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline:         cfg.MoveInlineAbove,
 		Excludes:                  cfg.Excludes,
 		RuleProfile:               cfg.RuleProfile,
-		StagePlan:                 stagePlan,
-		UseDSLComments:            cfg.UseDSLComments,
-		UseDSLLogCalls:            cfg.UseDSLLogCalls,
-		UseDSLMultiLineCalls:      cfg.UseDSLMultiLineCalls,
+		StagePlan:                 &stagePlan,
 		DSLMultiLineStyle:         cfg.DSLMultiLineStyle,
-		UseDSLExpr:                cfg.UseDSLExpr,
-		UseDSLFuncSigs:            cfg.UseDSLFuncSigs,
 		UseDSLFuncSigsNative:      cfg.UseDSLFuncSigsNative,
 		DSLSigsStyle:              cfg.DSLSigsStyle,
-		UseDSLBlankLines:          cfg.UseDSLBlankLines,
 		UseDSLBlankLinesNative:    cfg.UseDSLBlankLinesNative,
 		TraceDSL:                  cfg.TraceDSL,
 		TraceDSLReasons:           cfg.TraceDSLReasons,
@@ -327,6 +317,53 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	return &Pipeline{
 		cfg:    cfg,
 		stages: stages,
+	}
+}
+
+func stagePlanFromPipelineConfig(cfg PipelineConfig) StagePlan {
+	// Prefer the user-facing mode/policy selection as the source of truth for
+	// stage enablement. If neither are specified, fall back to explicit per-stage
+	// toggles for backward compatibility.
+	switch cfg.Mode {
+	case "legacy":
+		return StagePlan{
+			Comments:       StageModeLegacy,
+			LogCalls:       StageModeLegacy,
+			Expressions:    StageModeLegacy,
+			MultiLineCalls: StageModeLegacy,
+			Signatures:     StageModeLegacy,
+			BlankLines:     StageModeLegacy,
+		}
+	case "dsl-parity", "dsl-modern", "next":
+		return StagePlan{
+			Comments:       StageModeDSL,
+			LogCalls:       StageModeDSL,
+			Expressions:    StageModeDSL,
+			MultiLineCalls: StageModeDSL,
+			Signatures:     StageModeDSL,
+			BlankLines:     StageModeDSL,
+		}
+	}
+
+	switch cfg.DSLCallPolicy {
+	case "modern":
+		return StagePlan{
+			Comments:       StageModeDSL,
+			LogCalls:       StageModeDSL,
+			Expressions:    StageModeDSL,
+			MultiLineCalls: StageModeDSL,
+			Signatures:     StageModeDSL,
+			BlankLines:     StageModeDSL,
+		}
+	}
+
+	return StagePlan{
+		Comments:       stageModeFromBool(cfg.UseDSLComments),
+		LogCalls:       stageModeFromBool(cfg.UseDSLLogCalls),
+		Expressions:    stageModeFromBool(cfg.UseDSLExpr),
+		MultiLineCalls: stageModeFromBool(cfg.UseDSLMultiLineCalls),
+		Signatures:     stageModeFromBool(cfg.UseDSLFuncSigs),
+		BlankLines:     stageModeFromBool(cfg.UseDSLBlankLines),
 	}
 }
 
