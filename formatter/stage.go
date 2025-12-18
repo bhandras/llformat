@@ -2,8 +2,6 @@ package formatter
 
 import (
 	"fmt"
-
-	"github.com/lightninglabs/llformat/dsl"
 )
 
 // Stage represents a named formatting stage in the pipeline.
@@ -101,6 +99,7 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 type StageOptions struct {
 	CommentMoveInline        bool
 	Excludes                 []string
+	RuleProfile              string
 	UseDSLComments           bool // Use DSL-based comment stage (delegates to legacy)
 	UseDSLLogCalls           bool // Use DSL-based log/printf call stage
 	UseDSLMultiLineCalls     bool // Use DSL-based multiline call stage
@@ -153,6 +152,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 	return DefaultStagesWithOptions(cfg, StageOptions{
 		CommentMoveInline:        commentMoveInline,
 		Excludes:                 excludes,
+		RuleProfile:              "parity",
 		UseDSLComments:           false,
 		UseDSLLogCalls:           false,
 		UseDSLMultiLineCalls:     false,
@@ -186,7 +186,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		commentFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:   cfg.ColumnLimit,
 			TabStop:       cfg.TabStop,
-			Rules:         dsl.LegacyCommentRules(FormatCommentsInSource, opts.CommentMoveInline),
+			Rules:         dslRulesForComments(opts.CommentMoveInline),
 			Trace:         opts.TraceDSL,
 			TraceReasons:  opts.TraceDSLReasons,
 			MaxIterations: 1,
@@ -194,30 +194,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		})
 	}
 
-	exprRules := dsl.LongExprRules()
-	if opts.AllowDSLCallArgs || opts.AutoDSLCallArgs || opts.DSLExprLogicalStyle != "" || opts.DSLExprArithmeticStyle != "" || opts.DSLExprCaseClauseStyle != "" || opts.DSLExprSelectorChainStyle != "" {
-		callArgsPolicy := dsl.CallArgsPolicyOff
-		if opts.AutoDSLCallArgs {
-			callArgsPolicy = dsl.CallArgsPolicyAuto
-		}
-		if opts.AllowDSLCallArgs {
-			callArgsPolicy = dsl.CallArgsPolicyForce
-		}
-
-		allowlist := opts.Excludes
-		if opts.AutoDSLCallArgs {
-			allowlist = append(append([]string{}, DefaultMultilineExcludes()...), opts.Excludes...)
-		}
-
-		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
-			CallArgsPolicy:       callArgsPolicy,
-			CallArgsAllowlist:    allowlist,
-			LogicalChainStyle:    opts.DSLExprLogicalStyle,
-			ArithmeticChainStyle: opts.DSLExprArithmeticStyle,
-			CaseClauseStyle:      opts.DSLExprCaseClauseStyle,
-			SelectorChainStyle:   opts.DSLExprSelectorChainStyle,
-		})
-	}
+	exprRules := dslRulesForExpr(opts)
 
 	var callFormatter Formatter = NewCompactCallFormatter(Config{
 		ColumnLimit:     cfg.ColumnLimit,
@@ -230,7 +207,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		callFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:  cfg.ColumnLimit,
 			TabStop:      cfg.TabStop,
-			Rules:        dsl.LogPrintfRules(FormatCallGreedy),
+			Rules:        dslRulesForLogCalls(),
 			Trace:        opts.TraceDSL,
 			TraceReasons: opts.TraceDSLReasons,
 			SkipGofmt:    true,
@@ -264,67 +241,7 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		ParseSafe:       opts.MultiLineParseSafe,
 	})
 	if opts.UseDSLMultiLineCalls {
-		style := opts.DSLMultiLineStyle
-		if style == "" {
-			style = "legacy"
-		}
-
-		nodeOrder := dsl.NodeOrderPreorder
-		// For layout-based call-arg formatting, process inner nodes first to
-		// avoid non-idempotent “outer before inner” rewrites (e.g. nested calls
-		// where the inner call is broken after the outer call has already decided
-		// how to pack its arguments).
-		switch style {
-		case "layout-args", "layout-all":
-			nodeOrder = dsl.NodeOrderDeepestFirst
-		}
-
-		var rules []dsl.Rule
-		switch style {
-		case "legacy", "legacy-scan", "scan":
-			rules = dsl.LegacyMultiLineScanRulesWithOptions(
-				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
-				FormatOneMultiLineCallInSource,
-			)
-		case "packed":
-			rules = dsl.PackedMultiLineOnlyRulesWithOptions(
-				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
-				FormatCallPackedMultiLine,
-			)
-		case "packed-chain":
-			rules = dsl.MultiLineCallRulesWithOptions(
-				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
-				FormatCallPackedMultiLine,
-			)
-		case "layout-args":
-			// Try layout-based argument breaking, fall back to packed multiline.
-			rules = dsl.MultiLineCallRulesWithOptions(
-				dsl.MultiLineCallOptions{Excludes: opts.Excludes, CallArgsStyle: "layout"},
-				FormatCallPackedMultiLine,
-			)
-		case "packed-chain-layout", "layout-chain":
-			rules = dsl.MultiLineCallRulesWithOptions(
-				dsl.MultiLineCallOptions{Excludes: opts.Excludes, MethodChainStyle: "layout"},
-				FormatCallPackedMultiLine,
-			)
-		case "layout-all":
-			// Layout-based method-chain breaking + layout-based call-arg breaking.
-			rules = dsl.MultiLineCallRulesWithOptions(
-				dsl.MultiLineCallOptions{
-					Excludes:         opts.Excludes,
-					MethodChainStyle: "layout",
-					CallArgsStyle:    "layout",
-				},
-				FormatCallPackedMultiLine,
-			)
-		default:
-			// Unknown style: fall back to legacy parity mode.
-			rules = dsl.LegacyMultiLineScanRulesWithOptions(
-				dsl.MultiLineCallOptions{Excludes: opts.Excludes},
-				FormatOneMultiLineCallInSource,
-			)
-		}
-
+		rules, nodeOrder := dslRulesForMultiLineCalls(opts)
 		multiLineFormatter = NewDSLExprFormatter(DSLExprConfig{
 			ColumnLimit:   cfg.ColumnLimit,
 			TabStop:       cfg.TabStop,
@@ -367,47 +284,18 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 						TabStop:     cfg.TabStop,
 					})
 				}
+				rules := dslRulesForSignatures(opts)
+				maxIters := 1
 				if opts.UseDSLFuncSigsNative {
-					style := opts.DSLSigsStyle
-					if style == "" {
-						style = "legacy"
-					}
-
-					var rules []dsl.Rule
-					switch style {
-					case "legacy":
-						rules = append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
-							FuncFormatter:   FormatFuncSignatureLegacy,
-							MethodFormatter: FormatInterfaceMethodLegacy,
-						})...)
-					case "dsl":
-						// Pure DSL signature formatting (fallback algorithms).
-						rules = append([]dsl.Rule{}, dsl.SignatureRules()...)
-					default:
-						rules = append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
-							FuncFormatter:   FormatFuncSignatureLegacy,
-							MethodFormatter: FormatInterfaceMethodLegacy,
-						})...)
-					}
-
-					rules = append(rules, dsl.LegacyFuncSigFallbackRules(FormatFuncSigsInSource)...)
-					return NewDSLExprFormatter(DSLExprConfig{
-						ColumnLimit:   cfg.ColumnLimit,
-						TabStop:       cfg.TabStop,
-						Rules:         rules,
-						Trace:         opts.TraceDSL,
-						TraceReasons:  opts.TraceDSLReasons,
-						MaxIterations: 100,
-						SkipGofmt:     true,
-					})
+					maxIters = 100
 				}
 				return NewDSLExprFormatter(DSLExprConfig{
 					ColumnLimit:   cfg.ColumnLimit,
 					TabStop:       cfg.TabStop,
-					Rules:         dsl.LegacyFuncSigRules(FormatFuncSigsInSource),
+					Rules:         rules,
 					Trace:         opts.TraceDSL,
 					TraceReasons:  opts.TraceDSLReasons,
-					MaxIterations: 1,
+					MaxIterations: maxIters,
 					SkipGofmt:     true,
 				})
 			}(),
@@ -423,30 +311,22 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 						BetweenInterfaceMethods: true,
 					})
 				}
+				rules := dslRulesForBlankLines(opts)
+				maxIters := 1
+				disableShim := false
 				if opts.UseDSLBlankLinesNative {
-					// Native DSL blank line rules, with a legacy fallback for
-					// unparsable sources (and as a last resort).
-					rules := append([]dsl.Rule{}, dsl.BlankLineRules()...)
-					rules = append(rules, dsl.LegacyBlankLinesFallbackRules(FormatBlankLinesInSource)...)
-					return NewDSLExprFormatter(DSLExprConfig{
-						ColumnLimit:                 cfg.ColumnLimit,
-						TabStop:                     cfg.TabStop,
-						Rules:                       rules,
-						Trace:                       opts.TraceDSL,
-						TraceReasons:                opts.TraceDSLReasons,
-						MaxIterations:               200,
-						DisableLegacyBlankLinesShim: true,
-						SkipGofmt:                   true,
-					})
+					maxIters = 200
+					disableShim = true
 				}
 				return NewDSLExprFormatter(DSLExprConfig{
-					ColumnLimit:   cfg.ColumnLimit,
-					TabStop:       cfg.TabStop,
-					Rules:         dsl.LegacyBlankLinesRules(FormatBlankLinesInSource),
-					Trace:         opts.TraceDSL,
-					TraceReasons:  opts.TraceDSLReasons,
-					MaxIterations: 1,
-					SkipGofmt:     true,
+					ColumnLimit:                 cfg.ColumnLimit,
+					TabStop:                     cfg.TabStop,
+					Rules:                       rules,
+					Trace:                       opts.TraceDSL,
+					TraceReasons:                opts.TraceDSLReasons,
+					MaxIterations:               maxIters,
+					DisableLegacyBlankLinesShim: disableShim,
+					SkipGofmt:                   true,
 				})
 			}(),
 			Requires: []string{"signatures"}, // After signature formatting

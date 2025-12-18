@@ -288,6 +288,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		CommentMoveInline:         cfg.MoveInlineAbove,
 		Excludes:                  cfg.Excludes,
+		RuleProfile:               cfg.RuleProfile,
 		UseDSLComments:            cfg.UseDSLComments,
 		UseDSLLogCalls:            cfg.UseDSLLogCalls,
 		UseDSLMultiLineCalls:      cfg.UseDSLMultiLineCalls,
