@@ -205,6 +205,18 @@ func isDirectiveLineComment(s string) bool {
 		return true
 	}
 
+	// cgo `//export` directives must have no space between `//` and `export`.
+	// Reflowing (e.g. turning it into `// export`) can break cgo.
+	if strings.HasPrefix(rest, "//export") {
+		if len(rest) == len("//export") {
+			return true
+		}
+		switch rest[len("//export")] {
+		case ' ', '\t':
+			return true
+		}
+	}
+
 	// Linter directives are commonly written without a space, but some linters
 	// also accept a space. Keep this conservative but avoid matching arbitrary
 	// prose: require the directive token to be the first non-space after `//`.
