@@ -488,6 +488,14 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 	width := columnLimit
 	contIndent := wsIndent + "\t"
 	contIndentLen := visualLen(contIndent)
+	curLenAfterWrite := func(s string) int {
+		if strings.Contains(s, "\n") {
+			// Multiline formatted args include their own indentation on continuation
+			// lines, so the last line length already reflects the active column.
+			return lastLineLen(s)
+		}
+		return contIndentLen + firstLineLen(s)
+	}
 
 	var b strings.Builder
 	b.WriteString(head)
@@ -525,7 +533,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 						b.WriteString(contIndent)
 					}
 					b.WriteString(split)
-					curLen = contIndentLen + lastLineLen(split)
+					curLen = curLenAfterWrite(split)
 					first = false
 					prevWasMultiline, prevWasCall = false, false
 					continue
@@ -566,7 +574,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 						b.WriteString(", ")
 						b.WriteString(tentative)
 						if strings.Contains(tentative, "\n") {
-							curLen = contIndentLen + lastLineLen(tentative)
+							curLen = lastLineLen(tentative)
 							prevWasMultiline, prevWasCall = false, false
 						} else {
 							curLen += need
@@ -579,7 +587,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 						curLen = contIndentLen
 						split := buildSplitQuoted(text, contIndentLen, contIndent, effectiveWidth)
 						b.WriteString(split)
-						curLen = contIndentLen + lastLineLen(split)
+						curLen = curLenAfterWrite(split)
 						prevWasMultiline, prevWasCall = false, false
 					}
 				}
@@ -634,7 +642,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 			if first {
 				b.WriteString(contIndent)
 				b.WriteString(nested)
-				curLen = contIndentLen + lastLineLen(nested)
+				curLen = curLenAfterWrite(nested)
 				first = false
 				nestedMulti := strings.Contains(nested, "\n")
 				prevWasMultiline = nestedMulti
@@ -650,7 +658,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 				b.WriteString(contIndent)
 				curLen = contIndentLen
 				b.WriteString(nested)
-				curLen = contIndentLen + lastLineLen(nested)
+				curLen = curLenAfterWrite(nested)
 				first = false
 				nestedMulti := strings.Contains(nested, "\n")
 				prevWasMultiline = nestedMulti
@@ -664,7 +672,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 			b.WriteByte('\n')
 			b.WriteString(contIndent)
 			b.WriteString(nested)
-			curLen = contIndentLen + lastLineLen(nested)
+			curLen = curLenAfterWrite(nested)
 			first = false
 			nestedMulti := strings.Contains(nested, "\n")
 			prevWasMultiline = nestedMulti
@@ -678,7 +686,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 			b.WriteString(contIndent)
 			b.WriteString(a)
 			// After writing possibly multi-line arg, update curLen to length of last line.
-			curLen = contIndentLen + lastLineLen(a)
+			curLen = curLenAfterWrite(a)
 			first = false
 			// If this arg spans multiple lines, mark it and force subsequent breaks.
 			argMulti := strings.Contains(a, "\n")
@@ -707,14 +715,14 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 			b.WriteString(contIndent)
 			curLen = contIndentLen
 			b.WriteString(a)
-			curLen = contIndentLen + lastLineLen(a)
+			curLen = curLenAfterWrite(a)
 		} else {
 			b.WriteString(", ")
 			b.WriteString(a)
 			curLen += need
 			// If arg had newlines, reset curLen to last line length.
 			if argIsMultiline {
-				curLen = contIndentLen + lastLineLen(a)
+				curLen = lastLineLen(a)
 			}
 		}
 		// Track multiline status for the next iteration.

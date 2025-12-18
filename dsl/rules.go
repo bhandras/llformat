@@ -646,10 +646,23 @@ func ArithmeticOps() []string {
 // This allows injecting the legacy formatter implementation to avoid circular imports.
 type LeftFlowFormatFunc func(call []byte, wsIndent string, baseLen int, colLimit, tabStop int) string
 
+// LogPrintfOptions configures LogPrintfRulesWithOptions behavior.
+type LogPrintfOptions struct {
+	// MatchAnySelectorPrefix enables suffix-only matching for selector calls.
+	// See IsLogOrPrintfCallCond.MatchAnySelectorPrefix for details.
+	MatchAnySelectorPrefix bool
+}
+
 // LogPrintfRules returns only the log/printf formatting rule.
 // Use this for isolated testing of log call formatting.
 // The optional formatFunc parameter allows injecting the legacy formatter.
 func LogPrintfRules(formatFunc ...LeftFlowFormatFunc) []Rule {
+	return LogPrintfRulesWithOptions(LogPrintfOptions{}, formatFunc...)
+}
+
+// LogPrintfRulesWithOptions returns only the log/printf formatting rule, with
+// explicit options.
+func LogPrintfRulesWithOptions(opts LogPrintfOptions, formatFunc ...LeftFlowFormatFunc) []Rule {
 	action := &LeftFlowCallAction{Target: "node"}
 	if len(formatFunc) > 0 && formatFunc[0] != nil {
 		action.FormatFunc = formatFunc[0]
@@ -660,7 +673,10 @@ func LogPrintfRules(formatFunc ...LeftFlowFormatFunc) []Rule {
 			Pattern: &NodePattern{Type: "CallExpr"},
 			// Only check if this is a log/printf call - the action will
 			// normalize the format and skip if already in correct format.
-			When:     &IsLogOrPrintfCallCond{Target: "node"},
+			When: &IsLogOrPrintfCallCond{
+				Target:                 "node",
+				MatchAnySelectorPrefix: opts.MatchAnySelectorPrefix,
+			},
 			Priority: 75,
 			Action:   action,
 		},

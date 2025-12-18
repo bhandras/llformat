@@ -78,3 +78,18 @@ func TestBuildSplitQuoted_UsesGofmtCompatibleSpacingAroundPlus(t *testing.T) {
 		require.NotContains(t, out, "\"+\n", "must not emit a quote immediately followed by '+' and newline")
 	})
 }
+
+func TestFormatCallPackedMultiLine_DoesNotOverBreakAfterSplitStringUnderDeepIndent(t *testing.T) {
+	// Regression test: when a string arg is split across multiple lines, the
+	// packed multiline call formatter must compute the "current column" after the
+	// split based on the split string's last line (which already includes its own
+	// indentation), otherwise we can break subsequent args unnecessarily under
+	// deeper indentation.
+	call := []byte(`ProcessData(ctx, "some long string argument that makes the line exceed the configured limit", 42, true)`)
+	out := FormatCallPackedMultiLine(call, "\t\t", 80, 8)
+
+	// When the following args fit, keep them on the same line as the final string
+	// segment.
+	require.Contains(t, out, `", 42, true,`)
+	require.NotContains(t, out, "\",\n\t\t\t42", "must not break before 42 when it fits after the split string")
+}

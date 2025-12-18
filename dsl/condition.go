@@ -1122,6 +1122,17 @@ func countMethodChainCalls(call *ast.CallExpr) int {
 // IsLogOrPrintfCallCond checks if a call expression is a log or printf-style call.
 type IsLogOrPrintfCallCond struct {
 	Target string
+
+	// MatchAnySelectorPrefix enables suffix-only matching for selector calls.
+	//
+	// When false (default), this condition matches only the canonical patterns:
+	// "log.Infof", "fmt.Sprintf", etc.
+	//
+	// When true, any selector expression whose Sel is one of the known log/printf
+	// function names is matched, regardless of the selector prefix (e.g.
+	// "myLogger.Infof", "rpcLog.Errorf"). This is intentionally opt-in because
+	// some repos include custom loggers that should not be rewritten.
+	MatchAnySelectorPrefix bool
 }
 
 // logPrintfPatterns are the function call patterns to match.
@@ -1142,6 +1153,18 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
+	if c.MatchAnySelectorPrefix {
+		switch fun := call.Fun.(type) {
+		case *ast.Ident:
+			// Support dot-imported variants (e.g. `Infof(...)`) when enabled.
+			return isLogPrintfName(fun.Name)
+		case *ast.SelectorExpr:
+			return isLogPrintfName(fun.Sel.Name)
+		default:
+			return false
+		}
+	}
+
 	// Get the function name
 	funcName := getFuncName(call)
 	if funcName == "" {
@@ -1155,6 +1178,15 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	return false
+}
+
+func isLogPrintfName(name string) bool {
+	switch name {
+	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf", "Sprintf":
+		return true
+	default:
+		return false
+	}
 }
 
 // getFuncName extracts the function name from a call expression.
