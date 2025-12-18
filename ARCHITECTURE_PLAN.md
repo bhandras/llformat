@@ -105,7 +105,7 @@ Legend:
 
 - [x] **P0 Safe** Expand property tests (idempotence + AST equivalence) across modes/profiles.
 - [x] **P1 Safe** Add more regression snippet tests for tricky AST constructs (non-golden).
-- [ ] **P1 Safe** Expand “invalid Go doesn’t panic” coverage.
+- [x] **P1 Safe** Expand “invalid Go doesn’t panic” coverage.
 
 ---
 
