@@ -179,79 +179,12 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []
 func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	dslBundle := dslBundleForOptions(opts)
 
-	var commentFormatter Formatter = NewCommentFormatter(CommentConfig{
-		ColumnLimit:     cfg.ColumnLimit,
-		TabStop:         cfg.TabStop,
-		MoveInlineAbove: opts.CommentMoveInline,
-	})
-	if opts.UseDSLComments {
-		commentFormatter = NewDSLExprFormatter(DSLExprConfig{
-			ColumnLimit:   cfg.ColumnLimit,
-			TabStop:       cfg.TabStop,
-			Rules:         dslBundle.Comments.Rules,
-			Trace:         opts.TraceDSL,
-			TraceReasons:  opts.TraceDSLReasons,
-			MaxIterations: dslBundle.Comments.MaxIterations,
-			SkipGofmt:     true,
-		})
-	}
-
-	var callFormatter Formatter = NewCompactCallFormatter(Config{
-		ColumnLimit:     cfg.ColumnLimit,
-		TabStop:         cfg.TabStop,
-		UseASTSelection: opts.CompactCallUseASTSelect,
-		SkipGofmt:       true,
-		ParseSafe:       opts.CompactCallParseSafe,
-	})
-	if opts.UseDSLLogCalls {
-		callFormatter = NewDSLExprFormatter(DSLExprConfig{
-			ColumnLimit:  cfg.ColumnLimit,
-			TabStop:      cfg.TabStop,
-			Rules:        dslBundle.LogCalls.Rules,
-			Trace:        opts.TraceDSL,
-			TraceReasons: opts.TraceDSLReasons,
-			SkipGofmt:    true,
-		})
-	}
-
-	var exprFormatter Formatter = NewLongExprFormatter(LongExprConfig{
-		ColumnLimit:      cfg.ColumnLimit,
-		TabStop:          cfg.TabStop,
-		ParseSafe:        opts.LongExprParseSafe,
-		UseASTSelection:  opts.LongExprUseASTSelect,
-		ExcludeCallExprs: opts.LongExprExcludeCallExprs,
-	})
-	if opts.UseDSLExpr {
-		exprFormatter = NewDSLExprFormatter(DSLExprConfig{
-			ColumnLimit:  cfg.ColumnLimit,
-			TabStop:      cfg.TabStop,
-			Rules:        dslBundle.Expressions.Rules,
-			Trace:        opts.TraceDSL,
-			TraceReasons: opts.TraceDSLReasons,
-			SkipGofmt:    true,
-		})
-	}
-
-	var multiLineFormatter Formatter = NewMultiLineCallFormatter(MultiLineConfig{
-		ColumnLimit:     cfg.ColumnLimit,
-		TabStop:         cfg.TabStop,
-		Excludes:        opts.Excludes,
-		UseASTSelection: opts.MultiLineUseASTSelect,
-		SkipGofmt:       true,
-		ParseSafe:       opts.MultiLineParseSafe,
-	})
-	if opts.UseDSLMultiLineCalls {
-		multiLineFormatter = NewDSLExprFormatter(DSLExprConfig{
-			ColumnLimit:   cfg.ColumnLimit,
-			TabStop:       cfg.TabStop,
-			Rules:         dslBundle.MultiLineCalls.Rules,
-			Trace:         opts.TraceDSL,
-			TraceReasons:  opts.TraceDSLReasons,
-			NodeOrder:     dslBundle.MultiLineCalls.NodeOrder,
-			MaxIterations: dslBundle.MultiLineCalls.MaxIterations,
-			SkipGofmt:     true,
-		})
-	}
+	commentFormatter := buildCommentStageFormatter(cfg, opts, dslBundle)
+	callFormatter := buildCompactCallStageFormatter(cfg, opts, dslBundle)
+	exprFormatter := buildExpressionStageFormatter(cfg, opts, dslBundle)
+	multiLineFormatter := buildMultiLineCallStageFormatter(cfg, opts, dslBundle)
+	signatureFormatter := buildSignatureStageFormatter(cfg, opts, dslBundle)
+	blankLineFormatter := buildBlankLineStageFormatter(cfg, opts, dslBundle)
 
 	return []Stage{
 		{
@@ -275,47 +208,13 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 			Requires:  []string{"expressions"}, // After expression formatting
 		},
 		{
-			Name: "signatures",
-			Formatter: func() Formatter {
-				if !opts.UseDSLFuncSigs {
-					return NewFuncSigFormatter(FuncSigConfig{
-						ColumnLimit: cfg.ColumnLimit,
-						TabStop:     cfg.TabStop,
-					})
-				}
-				return NewDSLExprFormatter(DSLExprConfig{
-					ColumnLimit:   cfg.ColumnLimit,
-					TabStop:       cfg.TabStop,
-					Rules:         dslBundle.Signatures.Rules,
-					Trace:         opts.TraceDSL,
-					TraceReasons:  opts.TraceDSLReasons,
-					MaxIterations: dslBundle.Signatures.MaxIterations,
-					SkipGofmt:     true,
-				})
-			}(),
+			Name:      "signatures",
+			Formatter: signatureFormatter,
 			Requires: []string{"multiline-calls"}, // After call formatting
 		},
 		{
-			Name: "blank-lines",
-			Formatter: func() Formatter {
-				if !opts.UseDSLBlankLines {
-					return NewBlankLineFormatter(BlankLineConfig{
-						BeforeReturn:            true,
-						BetweenCases:            true,
-						BetweenInterfaceMethods: true,
-					})
-				}
-				return NewDSLExprFormatter(DSLExprConfig{
-					ColumnLimit:                 cfg.ColumnLimit,
-					TabStop:                     cfg.TabStop,
-					Rules:                       dslBundle.BlankLines.Rules,
-					Trace:                       opts.TraceDSL,
-					TraceReasons:                opts.TraceDSLReasons,
-					MaxIterations:               dslBundle.BlankLines.MaxIterations,
-					DisableLegacyBlankLinesShim: dslBundle.BlankLines.DisableLegacyBlankLinesShim,
-					SkipGofmt:                   true,
-				})
-			}(),
+			Name:      "blank-lines",
+			Formatter: blankLineFormatter,
 			Requires: []string{"signatures"}, // After signature formatting
 		},
 	}
