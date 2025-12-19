@@ -98,3 +98,46 @@ func f() {
 		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error) {\n\n\t\t_ = req",
 		"expected a blank line after the opening brace for a multiline closure signature")
 }
+
+func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineClosureSignature(t *testing.T) {
+	const in = `package p
+
+type SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns struct{}
+type AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak struct{}
+
+func f() {
+	alreadyFormatted := func(
+		first SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns,
+		second AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak) {
+		_ = first
+		_ = second
+	}
+
+	_ = alreadyFormatted
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		RuleProfile:          "next",
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other stages off to make this test focused.
+		UseDSLLogCalls:       false,
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out,
+		"\talreadyFormatted := func(\n\t\tfirst SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns,\n\t\tsecond AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak) {",
+		"expected the already-multiline closure signature to remain multiline")
+	require.Contains(t, out, ") {\n\n\t\t_ = first",
+		"expected a blank line after the opening brace for an already-multiline closure signature")
+}
+
