@@ -114,16 +114,18 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
-		ColumnLimit:   cfg.ColumnLimit,
-		TabStop:       cfg.TabStop,
-		Rules:         bundle.MultiLineCalls.Rules,
-		Trace:         opts.DSL.Trace,
-		TraceReasons:  opts.DSL.TraceReasons,
-		NodeOrder:     bundle.MultiLineCalls.NodeOrder,
-		MaxIterations: bundle.MultiLineCalls.MaxIterations,
-		SkipGofmt:     true,
-		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		ColumnLimit:       cfg.ColumnLimit,
+		TabStop:           cfg.TabStop,
+		Rules:             bundle.MultiLineCalls.Rules,
+		Trace:             opts.DSL.Trace,
+		TraceReasons:      opts.DSL.TraceReasons,
+		NodeOrder:         bundle.MultiLineCalls.NodeOrder,
+		MaxIterations:     bundle.MultiLineCalls.MaxIterations,
+		AutoMaxIterations: bundle.MultiLineCalls.AutoMaxIterations,
+		DetectCycles:      bundle.MultiLineCalls.DetectCycles,
+		SkipGofmt:         true,
+		StageName:         stageName,
+		Budget:            dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			// Use the legacy multiline stage's ownership selection (AST-based)
 			// to avoid rewriting within calls that this stage will later format.

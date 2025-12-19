@@ -39,6 +39,7 @@ func ResolveDSLBundle(opts StageOptions) DSLBundle {
 
 func dslBundleForOptions(opts StageOptions) DSLBundle {
 	multiLineRules, multiLineNodeOrder := dslRulesForMultiLineCalls(opts)
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 
 	blankLineRules := dslRulesForBlankLines(opts)
 	disableBlankLinesShim := opts.DSL.UseBlankLinesNative
@@ -60,9 +61,15 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			MaxIterations: 100,
 		},
 		MultiLineCalls: DSLStageSpec{
-			Rules:         multiLineRules,
-			NodeOrder:     multiLineNodeOrder,
-			MaxIterations: 20,
+			Rules:     multiLineRules,
+			NodeOrder: multiLineNodeOrder,
+			// Multiline call formatting applies at most one rewrite per iteration.
+			// For large files with many long calls, a small fixed cap can cause
+			// later calls to be missed entirely. Enable an AST-informed iteration
+			// limit in the "next" profile, which is intentionally opt-in.
+			MaxIterations:     20,
+			AutoMaxIterations: profile == "next",
+			DetectCycles:      profile == "next",
 		},
 		Signatures: DSLStageSpec{
 			Rules:         dslRulesForSignatures(opts),

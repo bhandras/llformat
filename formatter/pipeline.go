@@ -32,8 +32,8 @@ type PipelineConfig struct {
 	// printf/logcall formatting under the "next" profile. When 0, a profile
 	// default is used.
 	LogCallsMinTailLen int
-	TraceDSL                      bool // Enable DSL rule tracing (only when UseDSLExpr)
-	TraceDSLReasons               bool // Include "why fired/didn't fire" reasons in DSL tracing
+	TraceDSL           bool // Enable DSL rule tracing (only when UseDSLExpr)
+	TraceDSLReasons    bool // Include "why fired/didn't fire" reasons in DSL tracing
 
 	// Mode provides a user-facing coarse selection of pipeline behavior.
 	// It is intentionally opt-in; when empty, callers can control the pipeline
@@ -211,12 +211,10 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLBlankLines = true
 		cfg.UseDSLBlankLinesNative = true
 
-		// Enable the modern policy defaults, then override to the most
-		// layout-driven multi-line style.
+		// Enable the modern policy defaults. The multiline-call style defaults
+		// are applied later so callers can still override DSLMultiLineStyle
+		// explicitly.
 		cfg.DSLCallPolicy = "modern"
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "layout-all"
-		}
 	default:
 		// Unknown mode: ignore (callers can still set individual toggles).
 	}
@@ -313,12 +311,12 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	// Rule-profile defaults that should apply even when callers set individual
 	// toggles directly (without selecting a Mode or DSLCallPolicy bundle).
 	//
-	// "next" is expected to use the layout-driven multiline call engine by
-	// default when the multiline DSL stage is enabled.
+	// "next" is expected to use the layout-driven multiline call engine (with
+	// packed call args) by default when the multiline DSL stage is enabled.
 	if normalizedRuleProfile(cfg.RuleProfile) == "next" &&
 		cfg.UseDSLMultiLineCalls &&
 		cfg.DSLMultiLineStyle == "" {
-		cfg.DSLMultiLineStyle = "layout-all"
+		cfg.DSLMultiLineStyle = "packed-chain-layout"
 	}
 
 	// Stage ownership: when multiline formatting is explicitly configured to
