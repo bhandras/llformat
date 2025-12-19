@@ -206,23 +206,59 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 	switch style {
 	case "legacy":
 		funcFormatter := FormatFuncSignatureLegacy
+		methodFormatter := FormatInterfaceMethodLegacy
 		if profile == "next" {
 			funcFormatter = FormatFuncSignatureNext
+			methodFormatter = FormatInterfaceMethodNext
 		}
 		rules = append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
 			FuncFormatter:   funcFormatter,
-			MethodFormatter: FormatInterfaceMethodLegacy,
+			MethodFormatter: methodFormatter,
 		})...)
 		// In the "next" profile, also reflow signatures that are already multiline
 		// even if no single line exceeds the column limit.
 		if profile == "next" {
+			// SignatureRules returns:
+			// - rules[0] => BreakFuncSignatureAction
+			// - rules[1] => BreakInterfaceMethodAction
+			//
+			// Reuse those actions so the injected formatters apply.
+			var funcAction dsl.Action = rules[0].Action
+			var methodAction dsl.Action
+			if len(rules) > 1 {
+				methodAction = rules[1].Action
+			}
+
 			rules = append(rules, dsl.Rule{
 				Name:     "multiline_func_decl",
 				Pattern:  &dsl.NodePattern{Type: "FuncDecl"},
 				When:     &dsl.HasMultilineFuncSignatureCond{Target: "node"},
 				Priority: 89,
-				Action:   rules[0].Action,
+				Action:   funcAction,
 			})
+
+			// Also reflow interface methods that are already multiline. This is
+			// important for the next profile so we can collapse short multiline
+			// return lists like:
+			//   M() (
+			//     *T,
+			//     error)
+			// into:
+			//   M() (*T, error)
+			if methodAction != nil {
+				rules = append(rules, dsl.Rule{
+					Name:    "multiline_interface_method",
+					Pattern: &dsl.NodePattern{Type: "Field"},
+					When: &dsl.AndCond{
+						Conds: []dsl.Condition{
+							&dsl.IsInterfaceMethodCond{Target: "node"},
+							&dsl.HasMultilineInterfaceMethodCond{Target: "node"},
+						},
+					},
+					Priority: 89,
+					Action:   methodAction,
+				})
+			}
 
 			// Also format function literals (closures). These don't use the legacy
 			// line-based signature formatter, so we add a dedicated rule that looks

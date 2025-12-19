@@ -147,12 +147,14 @@ func FormatFuncSignatureLegacy(signature, indent string, colLimit, tabStop int) 
 // signatures into a single line when they fit within the column limit.
 //
 // Example:
-//   func f() (
-//     *T,
-//     error) {
+//
+//	func f() (
+//	  *T,
+//	  error) {
 //
 // becomes:
-//   func f() (*T, error) {
+//
+//	func f() (*T, error) {
 func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (string, bool) {
 	f := NewFuncSigFormatter(FuncSigConfig{
 		ColumnLimit: colLimit,
@@ -1303,4 +1305,12 @@ func FormatInterfaceMethod(method, indent string, colLimit, tabStop int) string 
 	}}
 
 	return f.breakInterfaceMethod(method, indent)
+}
+
+// FormatInterfaceMethodNext formats an interface method signature for the "next"
+// profile, using the same normalization/collapse behavior as
+// FormatFuncSignatureNext.
+func FormatInterfaceMethodNext(method, indent string, colLimit, tabStop int) string {
+	formatted, _ := FormatFuncSignatureNext(method, indent, colLimit, tabStop)
+	return formatted
 }

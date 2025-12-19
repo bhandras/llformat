@@ -3157,17 +3157,26 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) ([]byt
 		return nil, false
 	}
 
-	// Check if line width exceeds limit
-	if ctx.LineWidth(node) <= ctx.ColumnLimit {
-		return nil, false
-	}
-
 	// Get positions
 	fieldStart := ctx.Fset.Position(field.Pos()).Offset
 	fieldEnd := ctx.Fset.Position(field.End()).Offset
+	if fieldStart < 0 || fieldEnd > len(ctx.Source) || fieldStart >= fieldEnd {
+		return nil, false
+	}
+
+	// The original interface-method rule only fired when the method exceeded the
+	// column limit. The "next" profile also wants to reflow signatures that are
+	// already multiline (e.g. to collapse short return lists) even when no single
+	// line exceeds the limit.
+	//
+	// Preserve the fast-path skip for single-line methods that already fit.
+	sigText := string(ctx.Source[fieldStart:fieldEnd])
+	if !strings.Contains(sigText, "\n") && ctx.LineWidth(node) <= ctx.ColumnLimit {
+		return nil, false
+	}
 
 	// Extract the method declaration
-	method := strings.TrimSpace(string(ctx.Source[fieldStart:fieldEnd]))
+	method := strings.TrimSpace(sigText)
 
 	// Get the indent
 	indent := ctx.IndentAt(node)

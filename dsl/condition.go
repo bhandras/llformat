@@ -1440,6 +1440,33 @@ func (c *HasMultilineFuncLitSignatureCond) Eval(caps Captures, ctx *Context) boo
 	return strings.Contains(sig, "\n")
 }
 
+// HasMultilineInterfaceMethodCond checks if an interface method signature spans
+// multiple lines (i.e. there is a newline inside the method field text).
+//
+// This is used by the "next" profile to reflow already-multiline interface
+// methods even when no line exceeds the column limit, enabling collapse of
+// short manually-split return lists.
+type HasMultilineInterfaceMethodCond struct {
+	Target string
+}
+
+func (c *HasMultilineInterfaceMethodCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	field, ok := node.(*ast.Field)
+	if !ok || field == nil {
+		return false
+	}
+
+	start := ctx.Fset.Position(field.Pos()).Offset
+	end := ctx.Fset.Position(field.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return false
+	}
+
+	sig := string(ctx.Source[start:end])
+	return strings.Contains(sig, "\n")
+}
+
 // Eval implements Condition for HasNestedMultilineTypeCond.
 func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
