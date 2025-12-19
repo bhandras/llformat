@@ -220,6 +220,25 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 				Priority: 89,
 				Action:   rules[0].Action,
 			})
+
+			// Also format function literals (closures). These don't use the legacy
+			// line-based signature formatter, so we add a dedicated rule that looks
+			// only at the `func`..`{` signature span.
+			rules = append(rules, dsl.Rule{
+				Name:    "func_lit_signature",
+				Pattern: &dsl.NodePattern{Type: "FuncLit"},
+				When: &dsl.OrCond{
+					Conds: []dsl.Condition{
+						&dsl.AnyLineWidthFuncLitSignatureCond{Target: "node", Op: ">", Value: 0},
+						&dsl.HasMultilineFuncLitSignatureCond{Target: "node"},
+					},
+				},
+				Priority: 89,
+				Action: &dsl.BreakFuncLitSignatureAction{
+					Target:     "node",
+					FormatFunc: funcFormatter,
+				},
+			})
 		}
 	case "dsl":
 		// Pure DSL signature formatting (fallback algorithms).

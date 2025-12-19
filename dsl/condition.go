@@ -1370,6 +1370,76 @@ func (c *HasMultilineFuncSignatureCond) Eval(caps Captures, ctx *Context) bool {
 	return strings.Contains(sig, "\n")
 }
 
+// AnyLineWidthFuncLitSignatureCond checks if ANY line of a function literal
+// signature exceeds a threshold (defaults to ctx.ColumnLimit).
+//
+// The signature span is limited to `func`..`{` (exclusive of the body).
+type AnyLineWidthFuncLitSignatureCond struct {
+	Target string
+	Op     string
+	Value  int // If 0, uses ctx.ColumnLimit
+}
+
+func (c *AnyLineWidthFuncLitSignatureCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	lit, ok := node.(*ast.FuncLit)
+	if !ok || lit == nil || lit.Body == nil || !lit.Body.Lbrace.IsValid() {
+		return false
+	}
+
+	start := ctx.Fset.Position(lit.Pos()).Offset
+	brace := ctx.Fset.Position(lit.Body.Lbrace).Offset
+	if start < 0 || brace > len(ctx.Source) || start >= brace {
+		return false
+	}
+
+	sigText := string(ctx.Source[start:brace])
+	threshold := c.Value
+	if threshold == 0 {
+		threshold = ctx.ColumnLimit
+	}
+
+	lines := strings.Split(sigText, "\n")
+	for i, line := range lines {
+		if i == 0 {
+			lineStart := start
+			for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+				lineStart--
+			}
+			prefix := string(ctx.Source[lineStart:start])
+			line = prefix + line
+		}
+		w := visualLen(line, ctx.TabStop)
+		if compareInt(w, c.Op, threshold) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasMultilineFuncLitSignatureCond checks if a function literal signature spans
+// multiple lines (i.e. there is a newline between `func` and the opening brace).
+type HasMultilineFuncLitSignatureCond struct {
+	Target string
+}
+
+func (c *HasMultilineFuncLitSignatureCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	lit, ok := node.(*ast.FuncLit)
+	if !ok || lit == nil || lit.Body == nil || !lit.Body.Lbrace.IsValid() {
+		return false
+	}
+
+	start := ctx.Fset.Position(lit.Pos()).Offset
+	brace := ctx.Fset.Position(lit.Body.Lbrace).Offset
+	if start < 0 || brace > len(ctx.Source) || start >= brace {
+		return false
+	}
+
+	sig := string(ctx.Source[start:brace])
+	return strings.Contains(sig, "\n")
+}
+
 // Eval implements Condition for HasNestedMultilineTypeCond.
 func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)

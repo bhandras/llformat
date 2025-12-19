@@ -2019,6 +2019,83 @@ type BreakFuncSignatureAction struct {
 	FormatFunc SignatureFormatFunc
 }
 
+// BreakFuncLitSignatureAction formats function literals (closures) by extracting
+// the literal signature from `func` to `{` and reformatting it.
+//
+// Unlike BreakFuncSignatureAction, this does not insert blank lines after the
+// opening brace; function literals should remain compact.
+type BreakFuncLitSignatureAction struct {
+	Target     string
+	FormatFunc SignatureFormatFunc
+}
+
+// Execute implements Action for BreakFuncLitSignatureAction.
+func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+
+	funcLit, ok := node.(*ast.FuncLit)
+	if !ok || funcLit == nil || funcLit.Body == nil || !funcLit.Body.Lbrace.IsValid() {
+		return nil, false
+	}
+
+	// Get source positions.
+	start := ctx.Fset.Position(funcLit.Pos()).Offset
+	bracePos := ctx.Fset.Position(funcLit.Body.Lbrace).Offset
+	if start < 0 || bracePos > len(ctx.Source) || start >= bracePos {
+		return nil, false
+	}
+
+	// Find the start of the line containing the literal, so we can preserve any
+	// prefix before the `func` keyword (e.g. `x := `).
+	lineStart := start
+	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
+		lineStart--
+	}
+	prefix := string(ctx.Source[lineStart:start])
+
+	// Extract the signature including the opening brace (starting at `func`).
+	signature := strings.TrimSpace(string(ctx.Source[start : bracePos+1]))
+	wsIndent := ctx.IndentAt(node)
+
+	var formatted string
+	if a.FormatFunc != nil {
+		var needsBlank bool
+		// FormatFunc expects `indent` to be the leading whitespace indentation,
+		// not the full prefix before `func`.
+		formatted, needsBlank = a.FormatFunc(signature, wsIndent, ctx.ColumnLimit, ctx.TabStop)
+		_ = needsBlank // ignored for func literals
+	} else {
+		formatted, _ = formatSignatureSimple(signature, wsIndent, ctx.ColumnLimit, ctx.TabStop)
+	}
+
+	// Reattach the original prefix (e.g. `x := `) to the first line.
+	if nl := strings.IndexByte(formatted, '\n'); nl >= 0 {
+		first := formatted[:nl]
+		rest := formatted[nl:]
+		first = prefix + strings.TrimPrefix(first, wsIndent)
+		formatted = first + rest
+	} else {
+		formatted = prefix + strings.TrimPrefix(formatted, wsIndent)
+	}
+
+	if formatted == prefix+signature {
+		return nil, false
+	}
+
+	afterBrace := bracePos + 1
+
+	out, err := ApplySingleEdit(ctx.Source, lineStart, afterBrace, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
 // Execute implements Action for BreakFuncSignatureAction.
 func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	node := resolveTarget(caps, a.Target)
