@@ -7,7 +7,7 @@ type DefaultRuleOptions struct {
 	LeftFlowFormat        LeftFlowFormatFunc
 	PackedMultiLineFormat PackedMultiLineFormatFunc
 	FuncSignatureFormat   SignatureFormatFunc
-	InterfaceMethodFormat InterfaceMethodFormatFunc
+	InterfaceMethodFormat SignatureFormatFunc
 }
 
 // DefaultRules returns the standard formatting rules, including blank line rules.
@@ -731,26 +731,26 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 	// multiline call from being immediately "re-packed" on a subsequent
 	// iteration, which would cause oscillation and defeat the layout owner.
 	fallbackSingleLineOnly := &PackedMultiLineCallAction{
-		Target:          "node",
-		FormatFunc:      action.FormatFunc,
+		Target:           "node",
+		FormatFunc:       action.FormatFunc,
 		OnlyIfSingleLine: true,
 	}
 
-			longCallConds := []Condition{
-				// Use CollapsedWidthCond for multiline nodes (first line may be short),
-				// but also consider actual line width for single-line nodes. This avoids
-				// false negatives when the source contains extra spacing.
-				&OrCond{Conds: []Condition{
-					&LineWidthCond{Target: "node", Op: ">", Value: 0},
-					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-				}},
-				&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
-				&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-				&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-				// Avoid rewriting calls that contain inline comments; AST-based rendering
-				// would drop them.
-				&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
-			}
+	longCallConds := []Condition{
+		// Use CollapsedWidthCond for multiline nodes (first line may be short),
+		// but also consider actual line width for single-line nodes. This avoids
+		// false negatives when the source contains extra spacing.
+		&OrCond{Conds: []Condition{
+			&LineWidthCond{Target: "node", Op: ">", Value: 0},
+			&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+		}},
+		&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+		&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+		&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+		// Avoid rewriting calls that contain inline comments; AST-based rendering
+		// would drop them.
+		&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
+	}
 	// When layout is enabled, avoid independently rewriting receiver calls inside
 	// method chains. Those are better handled by the outer method chain / call
 	// argument formatting to prevent oscillation and parse hazards.
@@ -801,9 +801,9 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 
 	// Generic call expression that exceeds column limit.
 	// Skip method chains (handled by long_method_chain, when enabled) and
-		// log/printf calls. Use CollapsedWidthCond (plus LineWidthCond) to handle
-		// multiline calls where the first line is short but the total content
-		// exceeds the column limit.
+	// log/printf calls. Use CollapsedWidthCond (plus LineWidthCond) to handle
+	// multiline calls where the first line is short but the total content
+	// exceeds the column limit.
 	rules = append(rules, Rule{
 		Name:    "long_call_expr",
 		Pattern: &NodePattern{Type: "CallExpr"},
@@ -851,18 +851,18 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 		{
 			Name:    "long_call_expr_packed",
 			Pattern: &NodePattern{Type: "CallExpr"},
-				When: &AndCond{
-					Conds: []Condition{
-						&OrCond{Conds: []Condition{
-							&LineWidthCond{Target: "node", Op: ">", Value: 0},
-							&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-						}},
-						&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
-						&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-						&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-						&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
-					},
+			When: &AndCond{
+				Conds: []Condition{
+					&OrCond{Conds: []Condition{
+						&LineWidthCond{Target: "node", Op: ">", Value: 0},
+						&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+					}},
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+					&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
 				},
+			},
 			Priority: 50,
 			Action:   action,
 		},
@@ -887,13 +887,13 @@ func LegacyMultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 		{
 			Name:    "legacy_long_call_expr",
 			Pattern: &NodePattern{Type: "CallExpr"},
-				When: &AndCond{
-					Conds: []Condition{
-						&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
-						&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-					},
+			When: &AndCond{
+				Conds: []Condition{
+					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
 				},
-				Priority: 50,
+			},
+			Priority: 50,
 			Action:   action,
 		},
 	}
@@ -1314,7 +1314,7 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 // SignatureConfig holds optional formatters for signature rules.
 type SignatureConfig struct {
 	FuncFormatter   SignatureFormatFunc
-	MethodFormatter InterfaceMethodFormatFunc
+	MethodFormatter SignatureFormatFunc
 }
 
 // SignatureRules returns rules for function signature formatting.

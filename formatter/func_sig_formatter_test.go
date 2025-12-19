@@ -48,8 +48,10 @@ func TestSignaturesGoldenDSL(t *testing.T) {
 	// Use DSL formatter with signature rules using the legacy formatters,
 	// plus blank line rules for interface methods
 	sigRules := dsl.SignatureRules(dsl.SignatureConfig{
-		FuncFormatter:   FormatFuncSignature,
-		MethodFormatter: FormatInterfaceMethod,
+		FuncFormatter: FormatFuncSignature,
+		MethodFormatter: func(signature, indent string, colLimit, tabStop int) (string, bool) {
+			return FormatInterfaceMethod(signature, indent, colLimit, tabStop), false
+		},
 	})
 	blankRules := dsl.BlankLineRules()
 	allRules := append(sigRules, blankRules...)

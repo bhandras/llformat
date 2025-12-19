@@ -206,10 +206,14 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 	switch style {
 	case "legacy":
 		funcFormatter := FormatFuncSignatureLegacy
-		methodFormatter := FormatInterfaceMethodLegacy
+		methodFormatter := func(signature, indent string, colLimit, tabStop int) (string, bool) {
+			return FormatInterfaceMethodLegacy(signature, indent, colLimit, tabStop), false
+		}
 		if profile == "next" {
 			funcFormatter = FormatFuncSignatureNext
-			methodFormatter = FormatInterfaceMethodNext
+			methodFormatter = func(signature, indent string, colLimit, tabStop int) (string, bool) {
+				return FormatInterfaceMethodNext(signature, indent, colLimit, tabStop), false
+			}
 		}
 		rules = append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
 			FuncFormatter:   funcFormatter,
@@ -284,8 +288,10 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 		rules = append([]dsl.Rule{}, dsl.SignatureRules()...)
 	default:
 		rules = append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
-			FuncFormatter:   FormatFuncSignatureLegacy,
-			MethodFormatter: FormatInterfaceMethodLegacy,
+			FuncFormatter: FormatFuncSignatureLegacy,
+			MethodFormatter: func(signature, indent string, colLimit, tabStop int) (string, bool) {
+				return FormatInterfaceMethodLegacy(signature, indent, colLimit, tabStop), false
+			},
 		})...)
 	}
 

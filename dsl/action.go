@@ -2017,6 +2017,16 @@ func formatCallLeftFlowSimple(call *ast.CallExpr, indent string, ctx *Context) s
 // Returns the formatted signature and whether a blank line should be added after.
 type SignatureFormatFunc func(signature, indent string, colLimit, tabStop int) (string, bool)
 
+func formatSignatureWithFallback(signature, indent string, colLimit, tabStop int, formatFunc SignatureFormatFunc, fallback SignatureFormatFunc) (string, bool) {
+	if formatFunc != nil {
+		return formatFunc(signature, indent, colLimit, tabStop)
+	}
+	if fallback != nil {
+		return fallback(signature, indent, colLimit, tabStop)
+	}
+	return formatSignatureSimple(signature, indent, colLimit, tabStop)
+}
+
 // BreakFuncSignatureAction breaks a long function signature using left-flow packing.
 // It extracts the entire signature line and reformats it.
 type BreakFuncSignatureAction struct {
@@ -2191,12 +2201,7 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	var formatted string
 	var needsBlank bool
 
-	if a.FormatFunc != nil {
-		formatted, needsBlank = a.FormatFunc(signature, indent, ctx.ColumnLimit, ctx.TabStop)
-	} else {
-		// Fallback: use simple break after first comma that exceeds limit
-		formatted, needsBlank = formatSignatureSimple(signature, indent, ctx.ColumnLimit, ctx.TabStop)
-	}
+	formatted, needsBlank = formatSignatureWithFallback(signature, indent, ctx.ColumnLimit, ctx.TabStop, a.FormatFunc, nil)
 
 	// Check if the formatted signature is different
 	// We need to compare the actual strings, not normalized versions,
@@ -3133,13 +3138,10 @@ func findSignatureBreakPoint(fields []*ast.Field, listStart, listEnd int,
 	return breaks[0].pos, breaks[0].isComma
 }
 
-// InterfaceMethodFormatFunc is the signature for interface method formatting.
-type InterfaceMethodFormatFunc func(method, indent string, colLimit, tabStop int) string
-
 // BreakInterfaceMethodAction formats a long interface method declaration.
 type BreakInterfaceMethodAction struct {
 	Target     string
-	FormatFunc InterfaceMethodFormatFunc
+	FormatFunc SignatureFormatFunc
 }
 
 // Execute implements Action for BreakInterfaceMethodAction.
@@ -3183,13 +3185,9 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) ([]byt
 
 	// Format using the injected formatter or fallback
 	var formatted string
-
-	if a.FormatFunc != nil {
-		formatted = a.FormatFunc(method, indent, ctx.ColumnLimit, ctx.TabStop)
-	} else {
-		// Fallback: use simple break
-		formatted = formatMethodSimple(method, indent, ctx.ColumnLimit, ctx.TabStop)
-	}
+	formatted, _ = formatSignatureWithFallback(method, indent, ctx.ColumnLimit, ctx.TabStop, a.FormatFunc, func(signature, indent string, colLimit, tabStop int) (string, bool) {
+		return formatMethodSimple(signature, indent, colLimit, tabStop), false
+	})
 
 	// Check if formatted is different
 	if formatted == indent+method {
