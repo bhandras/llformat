@@ -57,7 +57,17 @@ Usage:
 llformat [-w] <path-to-go-source>
 ```
 
-The pipeline also supports a convenience `--mode` flag:
+Recommended usage (next pipeline):
+
+```
+llformat --next [-w] <path-to-go-source>
+```
+
+The CLI historically supported a `--mode` flag for selecting different
+pipelines during development/testing, but it is now considered internal and is
+intentionally undocumented in the CLI help output.
+
+Legacy/internal pipeline modes:
 
 - `--mode legacy`: legacy multi-stage pipeline
 - `--mode dsl-parity`: DSL pipeline with parity-oriented defaults

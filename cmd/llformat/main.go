@@ -18,6 +18,7 @@ func main() {
 		tabStop                       int
 		moveInline                    bool
 		multilineExclude              string
+		nextMode                      bool
 		useLegacy                     bool
 		legacyHardening               bool
 		mode                          string
@@ -45,12 +46,29 @@ func main() {
 		printPlan                     bool
 	)
 
+	printUsage := func() {
+		fmt.Fprintln(os.Stderr, "usage: llformat [--next] [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--print-plan] <path>")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "flags:")
+		fmt.Fprintln(os.Stderr, "  --next                    enable the \"next\" formatter pipeline (recommended)")
+		fmt.Fprintln(os.Stderr, "  -w, --write               write result to (source) file instead of stdout")
+		fmt.Fprintln(os.Stderr, "  --col N                   column limit for formatting (default 80)")
+		fmt.Fprintln(os.Stderr, "  --tab N                   tab stop width for column calculations (default 8)")
+		fmt.Fprintln(os.Stderr, "  --wrap-inline-comments    hoist trailing inline comments above for wrapping")
+		fmt.Fprintln(os.Stderr, "  --multiline-exclude FUNCS comma-separated function names to exclude from multiline formatting")
+		fmt.Fprintln(os.Stderr, "  --print-plan              print resolved pipeline plan and exit")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "note: additional legacy/experimental flags exist but are intentionally undocumented")
+	}
+	flag.Usage = printUsage
+
 	flag.BoolVar(&write, "w", false, "write result to (source) file instead of stdout")
 	flag.BoolVar(&write, "write", false, "write result to (source) file instead of stdout")
 	flag.IntVar(&colLimit, "col", 80, "column limit for formatting")
 	flag.IntVar(&tabStop, "tab", 8, "tab stop width for column calculations")
 	flag.BoolVar(&moveInline, "wrap-inline-comments", false, "when formatting comments, hoist trailing inline comments above for wrapping")
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
+	flag.BoolVar(&nextMode, "next", false, "use the next-generation formatter pipeline (alias for --mode=next)")
 	flag.BoolVar(&useLegacy, "legacy", false, "use legacy multi-stage formatter instead of DSL")
 	flag.BoolVar(&legacyHardening, "legacy-hardening", false, "enable parse-safe + AST-guided selection in legacy stages (legacy mode only, experimental)")
 	flag.StringVar(&mode, "mode", "", "pipeline mode: legacy|dsl-parity|dsl-modern|next (overrides individual DSL toggles when set)")
@@ -77,6 +95,15 @@ func main() {
 	flag.BoolVar(&autoDSLCallArgs, "dsl-auto-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments only for calls excluded from multiline formatting (DSL mode only, experimental)")
 	flag.BoolVar(&printPlan, "print-plan", false, "print resolved pipeline plan and exit")
 	flag.Parse()
+
+	if nextMode {
+		if mode != "" && mode != "next" {
+			fmt.Fprintln(os.Stderr, "invalid flags: --next cannot be combined with --mode")
+			printUsage()
+			os.Exit(2)
+		}
+		mode = "next"
+	}
 
 	// Policy bundle is applied in the pipeline, but for CLI ergonomics we also
 	// ensure "modern" implies the relevant DSL stages are enabled.
@@ -205,7 +232,7 @@ func main() {
 	}
 
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--mode MODE] [--legacy] [--legacy-hardening] [--trace-dsl] [--trace-dsl-reasons] [--dsl-call-policy POLICY] [--dsl-comments] [--dsl-calls] [--dsl-multiline-calls] [--dsl-multiline-style STYLE] [--dsl-expr] [--dsl-expr-logical-style STYLE] [--dsl-expr-arithmetic-style STYLE] [--dsl-expr-case-style STYLE] [--dsl-expr-selector-style STYLE] [--dsl-sigs] [--dsl-sigs-native] [--dsl-sigs-style STYLE] [--dsl-blank-lines] [--dsl-blank-lines-native] [--dsl-blank-lines-extra-if-err] [--dsl-allow-call-args] [--dsl-auto-call-args] [--print-plan] <path>")
+		printUsage()
 		os.Exit(2)
 	}
 
