@@ -23,7 +23,7 @@ func someFunc(a, b, c, d int) int { return 0 }
 `
 
 	legacy := NewPipeline(PipelineConfig{
-		ColumnLimit:          20,
+		ColumnLimit:          21,
 		TabStop:              8,
 		UseDSLLogCalls:       false,
 		UseDSLMultiLineCalls: true,
@@ -33,7 +33,7 @@ func someFunc(a, b, c, d int) int { return 0 }
 	legacyOut := string(legacy.Format([]byte(in)))
 
 	packed := NewPipeline(PipelineConfig{
-		ColumnLimit:          20,
+		ColumnLimit:          21,
 		TabStop:              8,
 		UseDSLLogCalls:       false,
 		UseDSLMultiLineCalls: true,

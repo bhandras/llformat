@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lightninglabs/llformat/dsl"
+	llwidth "github.com/lightninglabs/llformat/width"
 	"github.com/stretchr/testify/require"
 )
 
@@ -107,6 +108,22 @@ func TestFormatCallPackedMultiLine_DoesNotOverBreakAfterSplitStringUnderDeepInde
 	// segment.
 	require.Contains(t, out, `", 42, true,`)
 	require.NotContains(t, out, "\",\n\t\t\t42", "must not break before 42 when it fits after the split string")
+}
+
+func TestFormatCallPackedMultiLineNext_DoesNotOverflowWhenBreakingAddsComma(t *testing.T) {
+	// Regression test: packed multiline can decide to break *after* packing
+	// multiple args onto a continuation line. When that happens, it adds a comma
+	// at the end of the current line (`,\n`). We must not allow packing to consume
+	// the full width budget and then overflow by 1 when emitting that comma.
+	call := []byte(`someFunc(aaaaa, bbbbb, c)`)
+	out := FormatCallPackedMultiLineNext(call, "", 20, 8)
+
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		require.LessOrEqual(t, llwidth.VisualLenWithTab(line, 8), 20, "line exceeds configured column limit: %q", line)
+	}
 }
 
 func TestFormatCallPackedMultiLine_DoesNotReflowNestedLenCallWhenItFitsOnItsOwnLine(t *testing.T) {

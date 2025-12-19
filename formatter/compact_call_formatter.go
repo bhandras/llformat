@@ -495,6 +495,14 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 	}
 
 	width := columnLimit
+	// Packed multiline always terminates argument lines with a comma (either when
+	// breaking before the next arg, or via a trailing comma before the closing
+	// paren). Reserve one column so we don't "pack" to the exact column limit and
+	// then overflow by 1 when emitting that comma.
+	lineWidth := width
+	if lineWidth > 0 {
+		lineWidth--
+	}
 	contIndent := wsIndent + "\t"
 	contIndentLen := visualLen(contIndent)
 	curLenAfterWrite := func(s string) int {
@@ -550,7 +558,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 				// Not first: decide placement.
 				// 1) If the plain quoted string fits on current line after ", ", keep it.
 				plain := quoteGoString(text)
-				if advanceCols(curLen+2, plain) <= width {
+				if advanceCols(curLen+2, plain) <= lineWidth {
 					b.WriteString(", ")
 					b.WriteString(plain)
 					curLen = advanceCols(curLen+2, plain)
@@ -620,9 +628,9 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 			// reflow recursively and start on a fresh continuation line.
 			fits := false
 			if first {
-				fits = advanceCols(contIndentLen, a) <= width
+				fits = advanceCols(contIndentLen, a) <= lineWidth
 			} else {
-				fits = advanceCols(curLen+2, a) <= width
+				fits = advanceCols(curLen+2, a) <= lineWidth
 			}
 			hasAlways := callHasAlwaysMultilineComposite(a)
 			hasNested := llast.HasNestedCall(a)
@@ -717,7 +725,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 		// multiline, stay on same line (e.g., "}, []string{" in Configure)
 		shouldBreakAfterCall := seenMultilineCall
 		shouldBreakAfterComposite := seenMultilineComposite && !seenMultilineCall && !argIsMultiline
-		shouldBreak := curLen+need > width || forcedBreak || shouldBreakAfterCall || shouldBreakAfterComposite
+		shouldBreak := curLen+need > lineWidth || forcedBreak || shouldBreakAfterCall || shouldBreakAfterComposite
 		if shouldBreak {
 			// Break line after comma from previous arg.
 			b.WriteByte(',')
@@ -780,6 +788,14 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 	}
 
 	width := columnLimit
+	// Packed multiline always terminates argument lines with a comma (either when
+	// breaking before the next arg, or via a trailing comma before the closing
+	// paren). Reserve one column so we don't "pack" to the exact column limit and
+	// then overflow by 1 when emitting that comma.
+	lineWidth := width
+	if lineWidth > 0 {
+		lineWidth--
+	}
 	contIndent := wsIndent + "\t"
 	contIndentLen := visualLen(contIndent)
 	curLenAfterWrite := func(s string) int {
@@ -881,7 +897,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 				}
 
 				plain := quoteGoString(text)
-				if advanceCols(curLen+2, plain) <= width {
+				if advanceCols(curLen+2, plain) <= lineWidth {
 					b.WriteString(", ")
 					b.WriteString(plain)
 					curLen = advanceCols(curLen+2, plain)
@@ -934,11 +950,11 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 		if llast.IsCallExpr(a) {
 			fits := false
 			if first {
-				fits = advanceCols(contIndentLen, a) <= width
+				fits = advanceCols(contIndentLen, a) <= lineWidth
 			} else {
-				fits = advanceCols(curLen+2, a) <= width
+				fits = advanceCols(curLen+2, a) <= lineWidth
 			}
-			fitsFresh := advanceCols(contIndentLen, a) <= width
+			fitsFresh := advanceCols(contIndentLen, a) <= lineWidth
 			hasAlways := callHasAlwaysMultilineComposite(a)
 			hasNested := llast.HasNestedCall(a)
 
@@ -1041,7 +1057,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 		argIsMultiline := strings.Contains(a, "\n")
 		shouldBreakAfterCall := seenMultilineCall
 		shouldBreakAfterComposite := seenMultilineComposite && !seenMultilineCall && !argIsMultiline
-		shouldBreak := curLen+need > width || forcedBreak || shouldBreakAfterCall || shouldBreakAfterComposite
+		shouldBreak := curLen+need > lineWidth || forcedBreak || shouldBreakAfterCall || shouldBreakAfterComposite
 		if shouldBreak {
 			b.WriteByte(',')
 			b.WriteByte('\n')
@@ -1295,9 +1311,9 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 				}
 
 				normArgs = append(normArgs, arg{
-					kind:              argText,
-					text:              str,
-					raw:               trimmed,
+					kind:               argText,
+					text:               str,
+					raw:                trimmed,
 					containsFormatVerb: containsFormatVerb(str),
 				})
 				continue
@@ -1338,9 +1354,9 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 		curLen = visualLen(contIndent)
 	}
 
-		for i, a := range normArgs {
-			justBroke := false
-			if i > 0 {
+	for i, a := range normArgs {
+		justBroke := false
+		if i > 0 {
 			// If this arg starts with a comment, detach it so we
 			// can place it next to the preceding argument in the
 			// correct position.
@@ -1380,49 +1396,49 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 					curLen += 1 + visualLen(blockCommentPrefix)
 				}
 				// Fall through to printing arg on same line.
-				} else {
-					// Greedy argument packing: keep each argument on the current line if
-					// it fits, otherwise break before it.
-					//
-					// Note: Avoid lookahead that forces a break before the first arg just
-					// to keep pairs together; that can under-fill the current line and
-					// "repack" arguments in a surprising way.
-					switch a.kind {
-					case argExpr:
-						need := firstLineLen(a.expr)
-						if isTargetedCallStart(a.expr) {
-							need = exprHeadLen(a.expr)
-						}
-						// If this is the final argument, also account for the closing paren.
-						reserve := 0
-						// Only reserve ')' for single-line expressions; for multi-line
-						// expressions (including explicit string concatenations), ')' will
-						// end up on the last line, so reserving it against the first line can
-						// cause unnecessary breaks.
-						if opts.ReserveClosingParen && i == len(normArgs)-1 && !strings.Contains(a.expr, "\n") {
-							reserve = 1
-						}
-						fits := curLen+2+need+reserve < width
-						if opts.AllowExactFit {
-							fits = curLen+2+need+reserve <= width
-						}
-						if fits {
-							b.WriteString(", ")
-							curLen += 2
-							if lineCommentPrefix != "" {
-								b.WriteString(lineCommentPrefix)
-								curLen += visualLen(lineCommentPrefix)
+			} else {
+				// Greedy argument packing: keep each argument on the current line if
+				// it fits, otherwise break before it.
+				//
+				// Note: Avoid lookahead that forces a break before the first arg just
+				// to keep pairs together; that can under-fill the current line and
+				// "repack" arguments in a surprising way.
+				switch a.kind {
+				case argExpr:
+					need := firstLineLen(a.expr)
+					if isTargetedCallStart(a.expr) {
+						need = exprHeadLen(a.expr)
+					}
+					// If this is the final argument, also account for the closing paren.
+					reserve := 0
+					// Only reserve ')' for single-line expressions; for multi-line
+					// expressions (including explicit string concatenations), ')' will
+					// end up on the last line, so reserving it against the first line can
+					// cause unnecessary breaks.
+					if opts.ReserveClosingParen && i == len(normArgs)-1 && !strings.Contains(a.expr, "\n") {
+						reserve = 1
+					}
+					fits := curLen+2+need+reserve < width
+					if opts.AllowExactFit {
+						fits = curLen+2+need+reserve <= width
+					}
+					if fits {
+						b.WriteString(", ")
+						curLen += 2
+						if lineCommentPrefix != "" {
+							b.WriteString(lineCommentPrefix)
+							curLen += visualLen(lineCommentPrefix)
 						}
 						if blockCommentPrefix != "" {
 							b.WriteByte(' ')
 							b.WriteString(blockCommentPrefix)
 							curLen += 1 + visualLen(blockCommentPrefix)
 						}
-							// Reset after the first decision.
-						} else {
-							// Put trailing line comment on
-							// the same line as the comma.
-							b.WriteByte(',')
+						// Reset after the first decision.
+					} else {
+						// Put trailing line comment on
+						// the same line as the comma.
+						b.WriteByte(',')
 						if lineCommentPrefix != "" {
 							b.WriteByte(' ')
 							b.WriteString(lineCommentPrefix)
@@ -1439,8 +1455,8 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 							b.WriteByte(' ')
 							curLen += visualLen(blockCommentPrefix) + 1
 						}
-							// Reset after the first decision.
-						}
+						// Reset after the first decision.
+					}
 				case argText:
 					// minimal placeable segment on same
 					// line: "X" +
@@ -1476,22 +1492,22 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 			}
 		}
 
-			if a.kind == argExpr {
-				// For nested targeted calls, use the head length to
-				// decide fit.
-				need := firstLineLen(a.expr)
-				if isTargetedCallStart(a.expr) {
-					need = exprHeadLen(a.expr)
-				}
-				reserve := 0
-				if opts.ReserveClosingParen && i == len(normArgs)-1 && !strings.Contains(a.expr, "\n") {
-					reserve = 1
-				}
-				if !justBroke && !isRawStringLiteral(a.expr) && curLen+need+reserve > width {
-					b.WriteByte('\n')
-					b.WriteString(contIndent)
-					curLen = visualLen(contIndent)
-				}
+		if a.kind == argExpr {
+			// For nested targeted calls, use the head length to
+			// decide fit.
+			need := firstLineLen(a.expr)
+			if isTargetedCallStart(a.expr) {
+				need = exprHeadLen(a.expr)
+			}
+			reserve := 0
+			if opts.ReserveClosingParen && i == len(normArgs)-1 && !strings.Contains(a.expr, "\n") {
+				reserve = 1
+			}
+			if !justBroke && !isRawStringLiteral(a.expr) && curLen+need+reserve > width {
+				b.WriteByte('\n')
+				b.WriteString(contIndent)
+				curLen = visualLen(contIndent)
+			}
 			if isTargetedCallStart(a.expr) {
 				formatted := formatCallGreedyWithOptions([]byte(a.expr), wsIndent, curLen, opts)
 				b.WriteString(formatted)
@@ -1504,12 +1520,12 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 		}
 
 		// String arg: split greedily
-			rest := a.text
-			hasTrailingArgs := i < len(normArgs)-1
-			// If the user explicitly wrote a concatenation expression (and we didn't
-			// preserve it as argExpr), avoid producing a tiny trailing verb segment
-			// by biasing toward breaking arguments instead of splitting awkwardly.
-			for len(rest) > 0 {
+		rest := a.text
+		hasTrailingArgs := i < len(normArgs)-1
+		// If the user explicitly wrote a concatenation expression (and we didn't
+		// preserve it as argExpr), avoid producing a tiny trailing verb segment
+		// by biasing toward breaking arguments instead of splitting awkwardly.
+		for len(rest) > 0 {
 			q := quoteGoString(rest)
 			// If there are more args after this string, we only need to ensure
 			// the trailing comma fits on the current line. The following argument
@@ -1564,70 +1580,95 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 			fitsPreferredHere := advanceCols(curLen, q)+preferredReserve <= width
 			fitsHere := advanceCols(curLen, q)+commaReserve <= width
 
-				if fitsPreferredHere {
+			if fitsPreferredHere {
+				b.WriteString(q)
+				curLen = advanceCols(curLen, q)
+				rest = ""
+				break
+			}
+			if fitsHere {
+				// Even if we'd like to keep additional args on the same line, avoid
+				// splitting a string literal that already fits; let args break instead.
+				b.WriteString(q)
+				curLen = advanceCols(curLen, q)
+				rest = ""
+				break
+			}
+
+			// Before splitting the string on the current line, try moving the
+			// whole literal to a continuation line. This primarily helps when the
+			// call starts mid-line (e.g. `return nil, fmt.Errorf(...)`) and the
+			// literal would fit cleanly once the prefix is removed.
+			isPrintfString := hasTrailingArgs && a.containsFormatVerb
+			if opts.PreferBreakBeforeSplit &&
+				curLen != visualLen(contIndent) &&
+				// Avoid creating hanging-paren layouts for single-string calls like:
+				//   fmt.Errorf(
+				//     "...")
+				// Prefer splitting the string on the current line instead.
+				hasTrailingArgs &&
+				!(opts.AvoidHangingParenForPrintf && isPrintfString) {
+				fitsPreferredCont := advanceCols(contStart, q)+preferredReserve <= width
+				fitsCont := advanceCols(contStart, q)+commaReserve <= width
+
+				if fitsPreferredCont {
+					b.WriteByte('\n')
+					b.WriteString(contIndent)
+					curLen = contStart
 					b.WriteString(q)
 					curLen = advanceCols(curLen, q)
 					rest = ""
 					break
 				}
-				if fitsHere {
-					// Even if we'd like to keep additional args on the same line, avoid
-					// splitting a string literal that already fits; let args break instead.
+
+				if fitsCont {
+					// Prefer keeping the string whole on a clean continuation line.
+					// If there are trailing args, let them break rather than introducing
+					// string concatenation solely to "make room".
+					b.WriteByte('\n')
+					b.WriteString(contIndent)
+					curLen = contStart
 					b.WriteString(q)
 					curLen = advanceCols(curLen, q)
 					rest = ""
 					break
 				}
+			}
 
-				// Before splitting the string on the current line, try moving the
-				// whole literal to a continuation line. This primarily helps when the
-				// call starts mid-line (e.g. `return nil, fmt.Errorf(...)`) and the
-				// literal would fit cleanly once the prefix is removed.
-					isPrintfString := hasTrailingArgs && a.containsFormatVerb
-					if opts.PreferBreakBeforeSplit &&
-						curLen != visualLen(contIndent) &&
-						// Avoid creating hanging-paren layouts for single-string calls like:
-						//   fmt.Errorf(
-						//     "...")
-						// Prefer splitting the string on the current line instead.
-						hasTrailingArgs &&
-						!(opts.AvoidHangingParenForPrintf && isPrintfString) {
-						fitsPreferredCont := advanceCols(contStart, q)+preferredReserve <= width
-						fitsCont := advanceCols(contStart, q)+commaReserve <= width
-
-					if fitsPreferredCont {
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = contStart
-						b.WriteString(q)
-						curLen = advanceCols(curLen, q)
-						rest = ""
-						break
-					}
-
-					if fitsCont {
-						// Prefer keeping the string whole on a clean continuation line.
-						// If there are trailing args, let them break rather than introducing
-						// string concatenation solely to "make room".
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = contStart
-						b.WriteString(q)
-						curLen = advanceCols(curLen, q)
-						rest = ""
-						break
-					}
+			// Choose the last ASCII space whose QUOTED prefix fits, taking into
+			// account escape expansion inside the literal and gofmt's
+			// context-sensitive spacing around '+'.
+			//
+			// Important: do this *before* forcing a newline due to "capCols <= 0".
+			// When `hasTrailingArgs` and the segment ends with a space, gofmt emits
+			// `"..."+"..."` (no space before '+'), which is one column cheaper than
+			// `"..." + "..."`. The join-aware cut helpers already account for this.
+			cut := lastQuotedSpaceBefore(curLen, rest, width)
+			if opts.UseJoinAwareSpaceCut {
+				cut = lastQuotedSpaceBeforeWithJoin(curLen, rest, width, hasTrailingArgs)
+			}
+			if opts.AvoidTinyFormatVerbTail || opts.MinTailLen > 0 {
+				if opts.UseJoinAwareSpaceCut {
+					cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(curLen, rest, width, hasTrailingArgs, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
+				} else {
+					cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
 				}
+			}
 
-				// Choose the last ASCII space whose QUOTED prefix fits, taking into
-				// account escape expansion inside the literal and gofmt's
-				// context-sensitive spacing around '+'.
-				//
-				// Important: do this *before* forcing a newline due to "capCols <= 0".
-				// When `hasTrailingArgs` and the segment ends with a space, gofmt emits
-				// `"..."+"..."` (no space before '+'), which is one column cheaper than
-				// `"..." + "..."`. The join-aware cut helpers already account for this.
-				cut := lastQuotedSpaceBefore(curLen, rest, width)
+			// Capacity for content (excluding quotes and join operator) of this
+			// split segment. This is a non-final segment (we are splitting), so we
+			// allow exact fill up to the boundary with the trailing join.
+			capCols := (width) - curLen - 2 - 2 // quotes + " +"
+			if cut <= 0 && capCols <= 0 {
+				b.WriteByte('\n')
+				b.WriteString(contIndent)
+				curLen = visualLen(contIndent)
+				capCols = width - curLen - 2 - 2
+				if capCols <= 0 {
+					capCols = 1
+				}
+				// Recompute cut now that we're on a continuation line.
+				cut = lastQuotedSpaceBefore(curLen, rest, width)
 				if opts.UseJoinAwareSpaceCut {
 					cut = lastQuotedSpaceBeforeWithJoin(curLen, rest, width, hasTrailingArgs)
 				}
@@ -1638,55 +1679,30 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 						cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
 					}
 				}
+			}
 
-				// Capacity for content (excluding quotes and join operator) of this
-				// split segment. This is a non-final segment (we are splitting), so we
-				// allow exact fill up to the boundary with the trailing join.
-				capCols := (width) - curLen - 2 - 2 // quotes + " +"
-				if cut <= 0 && capCols <= 0 {
-					b.WriteByte('\n')
-					b.WriteString(contIndent)
-					curLen = visualLen(contIndent)
-					capCols = width - curLen - 2 - 2
-					if capCols <= 0 {
-						capCols = 1
-					}
-					// Recompute cut now that we're on a continuation line.
-					cut = lastQuotedSpaceBefore(curLen, rest, width)
-					if opts.UseJoinAwareSpaceCut {
-						cut = lastQuotedSpaceBeforeWithJoin(curLen, rest, width, hasTrailingArgs)
-					}
-					if opts.AvoidTinyFormatVerbTail || opts.MinTailLen > 0 {
-						if opts.UseJoinAwareSpaceCut {
-							cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(curLen, rest, width, hasTrailingArgs, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
-						} else {
-							cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
-						}
-					}
-				}
-
-				if cut <= 0 {
-					// No space within capacity. If we are not on a
-					// continuation line and the upcoming word (up
-					// to the next space) would fit on a
-					// continuation line, wrap before it to avoid
-					// splitting a word on the head line.
-					if curLen != visualLen(contIndent) {
-						if sp := strings.IndexByte(rest, ' '); sp > 0 {
-							base := visualLen(contIndent)
-							// compute content width of the
-							// first word at cont indent
+			if cut <= 0 {
+				// No space within capacity. If we are not on a
+				// continuation line and the upcoming word (up
+				// to the next space) would fit on a
+				// continuation line, wrap before it to avoid
+				// splitting a word on the head line.
+				if curLen != visualLen(contIndent) {
+					if sp := strings.IndexByte(rest, ' '); sp > 0 {
+						base := visualLen(contIndent)
+						// compute content width of the
+						// first word at cont indent
 						wordCols := advanceCols(base, rest[:sp]) - base
-							nextCap := (width) - base - 2 - 2 // quotes + " +"
-							if hasTrailingArgs {
-								// If we can split at a space, gofmt may emit `"..."+"..."`
-								// (no space before '+'), which is one column cheaper.
-								nextCap++
-							}
-							if wordCols <= nextCap {
-								b.WriteByte('\n')
-								b.WriteString(contIndent)
-								curLen = visualLen(contIndent)
+						nextCap := (width) - base - 2 - 2 // quotes + " +"
+						if hasTrailingArgs {
+							// If we can split at a space, gofmt may emit `"..."+"..."`
+							// (no space before '+'), which is one column cheaper.
+							nextCap++
+						}
+						if wordCols <= nextCap {
+							b.WriteByte('\n')
+							b.WriteString(contIndent)
+							curLen = visualLen(contIndent)
 							// Recompute capacity on
 							// the fresh
 							// continuation line
@@ -1694,12 +1710,12 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 							if capCols <= 0 {
 								capCols = 1
 							}
-								continue
-							}
+							continue
 						}
 					}
-					// Hard cut by visual columns.
-					idx := cutIndexForWidthFrom(curLen, rest, capCols)
+				}
+				// Hard cut by visual columns.
+				idx := cutIndexForWidthFrom(curLen, rest, capCols)
 				if idx >= len(rest) {
 					// Splitting didn't make progress (typically because indentation
 					// already exceeds the width budget). Emit the full literal and
@@ -1711,10 +1727,10 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 					rest = ""
 					break
 				}
-					seg := rest[:idx]
-					writeSplit(seg, hasTrailingArgs)
-					rest = rest[idx:]
-					continue
+				seg := rest[:idx]
+				writeSplit(seg, hasTrailingArgs)
+				rest = rest[idx:]
+				continue
 			}
 			// Pure greedy: no additional word-pushing heuristics.
 			// Pure greedy: take the last space within capacity.
@@ -1725,11 +1741,11 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 				rest = ""
 				break
 			}
-				seg := rest[:cut+1] // keep the space at end
-				writeSplit(seg, hasTrailingArgs)
-				rest = rest[cut+1:]
-			}
+			seg := rest[:cut+1] // keep the space at end
+			writeSplit(seg, hasTrailingArgs)
+			rest = rest[cut+1:]
 		}
+	}
 	b.WriteByte(')')
 	return b.String()
 }
@@ -2280,17 +2296,17 @@ func FormatCallGreedyNext(call []byte, wsIndent string, baseLen int, colLimit, t
 	tabStop = ts
 	currentTargets = defaultTargets()
 
-		result := formatCallGreedyWithOptions(call, wsIndent, baseLen, greedyCallOptions{
-			UseJoinAwareSpaceCut: true,
-			ReserveClosingParen:  true,
-			AllowExactFit:        true,
-			MinTailLen:           8,
-			PreferBreakBeforeSplit:  true,
-			AvoidHangingParenForPrintf: true,
-			AvoidTinyFormatVerbTail: true,
-			ReserveTrailingExprArgs: 2,
-			PreserveStringConcatExpr: true,
-		})
+	result := formatCallGreedyWithOptions(call, wsIndent, baseLen, greedyCallOptions{
+		UseJoinAwareSpaceCut:       true,
+		ReserveClosingParen:        true,
+		AllowExactFit:              true,
+		MinTailLen:                 8,
+		PreferBreakBeforeSplit:     true,
+		AvoidHangingParenForPrintf: true,
+		AvoidTinyFormatVerbTail:    true,
+		ReserveTrailingExprArgs:    2,
+		PreserveStringConcatExpr:   true,
+	})
 
 	columnLimit = oldColumnLimit
 	tabStop = oldTabStop
@@ -2315,17 +2331,17 @@ func formatCallGreedyNextWithMinTailLen(call []byte, wsIndent string, baseLen in
 		minTailLen = 0
 	}
 
-		result := formatCallGreedyWithOptions(call, wsIndent, baseLen, greedyCallOptions{
-			UseJoinAwareSpaceCut: true,
-			ReserveClosingParen:  true,
-			AllowExactFit:        true,
-			MinTailLen:           minTailLen,
-			PreferBreakBeforeSplit:  true,
-			AvoidHangingParenForPrintf: true,
-			AvoidTinyFormatVerbTail: true,
-			ReserveTrailingExprArgs: 2,
-			PreserveStringConcatExpr: true,
-		})
+	result := formatCallGreedyWithOptions(call, wsIndent, baseLen, greedyCallOptions{
+		UseJoinAwareSpaceCut:       true,
+		ReserveClosingParen:        true,
+		AllowExactFit:              true,
+		MinTailLen:                 minTailLen,
+		PreferBreakBeforeSplit:     true,
+		AvoidHangingParenForPrintf: true,
+		AvoidTinyFormatVerbTail:    true,
+		ReserveTrailingExprArgs:    2,
+		PreserveStringConcatExpr:   true,
+	})
 
 	columnLimit = oldColumnLimit
 	tabStop = oldTabStop
