@@ -2057,15 +2057,31 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	signature := strings.TrimSpace(string(ctx.Source[start : bracePos+1]))
 	wsIndent := ctx.IndentAt(node)
 
+	// For function literals assigned inline (e.g. `x := func(...) ... {`), the
+	// effective available width for the `func` signature is reduced by the
+	// prefix before the `func` keyword. Treat `wsIndent` as the baseline
+	// indentation and subtract the extra visual width contributed by `prefix`
+	// (minus `wsIndent`) from the column budget passed to signature formatting.
+	effectiveColLimit := ctx.ColumnLimit
+	prefixWidth := visualLen(prefix, ctx.TabStop)
+	wsIndentWidth := visualLen(wsIndent, ctx.TabStop)
+	if prefixWidth > wsIndentWidth {
+		effectiveColLimit -= prefixWidth - wsIndentWidth
+		if effectiveColLimit < 20 {
+			effectiveColLimit = 20
+		}
+	}
+
 	var formatted string
 	if a.FormatFunc != nil {
 		var needsBlank bool
+
 		// FormatFunc expects `indent` to be the leading whitespace indentation,
 		// not the full prefix before `func`.
-		formatted, needsBlank = a.FormatFunc(signature, wsIndent, ctx.ColumnLimit, ctx.TabStop)
+		formatted, needsBlank = a.FormatFunc(signature, wsIndent, effectiveColLimit, ctx.TabStop)
 		_ = needsBlank // ignored for func literals
 	} else {
-		formatted, _ = formatSignatureSimple(signature, wsIndent, ctx.ColumnLimit, ctx.TabStop)
+		formatted, _ = formatSignatureSimple(signature, wsIndent, effectiveColLimit, ctx.TabStop)
 	}
 
 	// Reattach the original prefix (e.g. `x := `) to the first line.

@@ -19,14 +19,14 @@ func (r *rpcServer) parseOpenChannelReq(*OpenChannelRequest, bool) (*InitFunding
 }
 
 func f(r *rpcServer) {
-	requestParser := func(req *OpenChannelRequest) (
+	rp := func(req *OpenChannelRequest) (
 		*InitFundingMsg,
 		error) {
 		_ = req
 		return r.parseOpenChannelReq(req, false)
 	}
 
-	_ = requestParser
+	_ = rp
 }
 `
 
@@ -47,9 +47,49 @@ func f(r *rpcServer) {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out, "requestParser := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
+	require.Contains(t, out, "rp := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
 		"expected the multiline closure return list to be collapsed when it fits under the column limit")
-	require.NotContains(t, out, "requestParser := func(req *OpenChannelRequest) (\n",
+	require.NotContains(t, out, "rp := func(req *OpenChannelRequest) (\n",
 		"must not keep the split return list for a short closure signature in next profile")
 }
 
+func TestPipelineNext_Signatures_BreaksClosureSignatureWhenPrefixOverflowsColumnLimit(t *testing.T) {
+	const in = `package p
+
+type OpenChannelRequest struct{}
+type InitFundingMsg struct{}
+
+func f() {
+	requestParserForFundingInit := func(req *OpenChannelRequest) (*InitFundingMsg, error) {
+		_ = req
+		return nil, nil
+	}
+
+	_ = requestParserForFundingInit
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		RuleProfile:          "next",
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other stages off to make this test focused.
+		UseDSLLogCalls:       false,
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out,
+		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error) {",
+		"expected the closure signature to break when the assignment prefix makes it exceed the column limit")
+	require.NotContains(t, out,
+		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
+		"must not keep the closure signature on a single line when it overflows due to its prefix")
+}
