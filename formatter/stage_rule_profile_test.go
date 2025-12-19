@@ -52,10 +52,9 @@ func TestDSLBundlesMultiLineStyleDefaultsFromRuleProfile(t *testing.T) {
 	rules, nodeOrder = dslRulesForMultiLineCalls(StageOptions{
 		Selection: StageSelectionOptions{RuleProfile: "next"},
 	})
-	require.Equal(t, dsl.NodeOrderDeepestFirst, nodeOrder)
-	require.Len(t, rules, 2)
-	require.Equal(t, "long_method_chain", rules[0].Name)
-	require.Equal(t, "long_call_expr", rules[1].Name)
+	require.Equal(t, dsl.NodeOrderPreorder, nodeOrder)
+	require.Len(t, rules, 1)
+	require.Equal(t, "long_call_expr_packed", rules[0].Name)
 }
 
 func TestDSLBundlesSignaturesNativeAlwaysIncludesLegacyFallback(t *testing.T) {

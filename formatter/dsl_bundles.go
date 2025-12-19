@@ -96,7 +96,10 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		case "modern":
 			style = "packed-chain-layout"
 		case "next":
-			style = "layout-all"
+			// The "next" profile is opinionated: for non-log/printf calls, prefer
+			// packed multiline formatting (fits => keep; overflow => multiline with
+			// tightly packed args) as the default.
+			style = "packed"
 		default:
 			style = "legacy"
 		}

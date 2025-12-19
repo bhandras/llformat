@@ -29,10 +29,9 @@ func TestDSLBundle_MultiLineSpecFollowsRuleProfileDefaults(t *testing.T) {
 	next := ResolveDSLBundle(StageOptions{
 		Selection: StageSelectionOptions{RuleProfile: "next"},
 	})
-	require.Len(t, next.MultiLineCalls.Rules, 2)
-	require.Equal(t, "long_method_chain", next.MultiLineCalls.Rules[0].Name)
-	require.Equal(t, "long_call_expr", next.MultiLineCalls.Rules[1].Name)
-	require.Equal(t, dsl.NodeOrderDeepestFirst, next.MultiLineCalls.NodeOrder)
+	require.Len(t, next.MultiLineCalls.Rules, 1)
+	require.Equal(t, "long_call_expr_packed", next.MultiLineCalls.Rules[0].Name)
+	require.Equal(t, dsl.NodeOrderPreorder, next.MultiLineCalls.NodeOrder)
 }
 
 func TestDSLBundle_BlankLinesSpecControlsShimAndIterations(t *testing.T) {

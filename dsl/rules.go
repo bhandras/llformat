@@ -736,13 +736,13 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 		OnlyIfSingleLine: true,
 	}
 
-	longCallConds := []Condition{
-		&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-		&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
-		&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-		&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-		// Avoid rewriting calls that contain inline comments; AST-based rendering
-		// would drop them.
+		longCallConds := []Condition{
+			&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+			&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+			&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+			&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+			// Avoid rewriting calls that contain inline comments; AST-based rendering
+			// would drop them.
 		&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
 	}
 	// When layout is enabled, avoid independently rewriting receiver calls inside
@@ -844,14 +844,14 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 		{
 			Name:    "long_call_expr_packed",
 			Pattern: &NodePattern{Type: "CallExpr"},
-			When: &AndCond{
-				Conds: []Condition{
-					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
-					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-					&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
-				},
+				When: &AndCond{
+					Conds: []Condition{
+						&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+						&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+						&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+						&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+						&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
+					},
 			},
 			Priority: 50,
 			Action:   action,
@@ -877,13 +877,13 @@ func LegacyMultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 		{
 			Name:    "legacy_long_call_expr",
 			Pattern: &NodePattern{Type: "CallExpr"},
-			When: &AndCond{
-				Conds: []Condition{
-					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node"}},
-					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+				When: &AndCond{
+					Conds: []Condition{
+						&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+						&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+					},
 				},
-			},
-			Priority: 50,
+				Priority: 50,
 			Action:   action,
 		},
 	}
