@@ -142,6 +142,168 @@ func FormatFuncSignatureLegacy(signature, indent string, colLimit, tabStop int) 
 	return formatted, needsBlank
 }
 
+// FormatFuncSignatureNext formats a function declaration signature for the "next"
+// profile. Unlike the legacy behavior, it will reflow some already-multiline
+// signatures into a single line when they fit within the column limit.
+//
+// Example:
+//   func f() (
+//     *T,
+//     error) {
+//
+// becomes:
+//   func f() (*T, error) {
+func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (string, bool) {
+	f := NewFuncSigFormatter(FuncSigConfig{
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+	})
+
+	// When the signature already contains newlines, prefer to collapse it if it
+	// fits. This is safe for the "next" profile and handles common patterns where
+	// return lists were manually split but are short.
+	if strings.Contains(signature, "\n") {
+		collapsed := collapseSignatureWhitespace(signature)
+		collapsed = tightenSignatureParens(collapsed)
+		if width.VisualLenWithTab(indent+collapsed, tabStop) <= colLimit {
+			return indent + collapsed, false
+		}
+		// Even if it doesn't fit, collapsing whitespace makes subsequent breaking
+		// decisions more consistent.
+		signature = collapsed
+	}
+
+	formatted := f.breakSignature(signature, indent)
+	needsBlank := strings.Count(formatted, "\n") > 0
+	return formatted, needsBlank
+}
+
+func collapseSignatureWhitespace(sig string) string {
+	var b strings.Builder
+	b.Grow(len(sig))
+
+	inString := byte(0)
+	escaped := false
+	pendingSpace := false
+	hasWritten := false
+	lastWritten := byte(0)
+
+	for i := 0; i < len(sig); i++ {
+		c := sig[i]
+
+		if inString != 0 {
+			b.WriteByte(c)
+			hasWritten = true
+			lastWritten = c
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == '\\' && inString == '"' {
+				escaped = true
+				continue
+			}
+			if c == inString {
+				inString = 0
+			}
+			continue
+		}
+
+		if c == '"' || c == '`' || c == '\'' {
+			if pendingSpace && hasWritten && lastWritten != ' ' {
+				b.WriteByte(' ')
+				lastWritten = ' '
+			}
+			pendingSpace = false
+
+			inString = c
+			b.WriteByte(c)
+			hasWritten = true
+			lastWritten = c
+			continue
+		}
+
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			pendingSpace = true
+			continue
+		}
+
+		if pendingSpace && hasWritten && lastWritten != ' ' {
+			b.WriteByte(' ')
+			lastWritten = ' '
+		}
+		pendingSpace = false
+
+		b.WriteByte(c)
+		hasWritten = true
+		lastWritten = c
+	}
+
+	return b.String()
+}
+
+func tightenSignatureParens(sig string) string {
+	// Remove spaces immediately after '(' and immediately before ')'. This is a
+	// simple whitespace tightening to get from:
+	//   "() ( *T, error) {"
+	// to:
+	//   "() (*T, error) {"
+	//
+	// Avoid touching content inside string literals.
+	out := make([]byte, 0, len(sig))
+
+	inString := byte(0)
+	escaped := false
+
+	for i := 0; i < len(sig); i++ {
+		c := sig[i]
+
+		if inString != 0 {
+			out = append(out, c)
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == '\\' && inString == '"' {
+				escaped = true
+				continue
+			}
+			if c == inString {
+				inString = 0
+			}
+			continue
+		}
+
+		if c == '"' || c == '`' || c == '\'' {
+			inString = c
+			out = append(out, c)
+			continue
+		}
+
+		if c == '(' {
+			out = append(out, c)
+			// Skip spaces after '('
+			for i+1 < len(sig) && sig[i+1] == ' ' {
+				i++
+			}
+			continue
+		}
+
+		if c == ')' {
+			// Drop trailing space before ')'
+			if len(out) > 0 && out[len(out)-1] == ' ' {
+				out = out[:len(out)-1]
+			}
+			out = append(out, c)
+			continue
+		}
+
+		out = append(out, c)
+	}
+
+	return string(out)
+}
+
 // FormatInterfaceMethodLegacy formats an interface method signature using the
 // legacy FuncSigFormatter implementation.
 func FormatInterfaceMethodLegacy(method, indent string, colLimit, tabStop int) string {

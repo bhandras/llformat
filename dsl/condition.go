@@ -1344,6 +1344,32 @@ type HasNestedMultilineTypeCond struct {
 	Target string
 }
 
+// HasMultilineFuncSignatureCond checks if a function declaration signature spans
+// multiple lines (i.e. there is a newline between `func` and the opening brace).
+//
+// This is intentionally signature-specific: checking the entire FuncDecl node
+// text would always see newlines in the function body.
+type HasMultilineFuncSignatureCond struct {
+	Target string
+}
+
+func (c *HasMultilineFuncSignatureCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	decl, ok := node.(*ast.FuncDecl)
+	if !ok || decl == nil || decl.Body == nil || !decl.Body.Lbrace.IsValid() {
+		return false
+	}
+
+	start := ctx.Fset.Position(decl.Pos()).Offset
+	brace := ctx.Fset.Position(decl.Body.Lbrace).Offset
+	if start < 0 || brace > len(ctx.Source) || start >= brace {
+		return false
+	}
+
+	sig := string(ctx.Source[start:brace])
+	return strings.Contains(sig, "\n")
+}
+
 // Eval implements Condition for HasNestedMultilineTypeCond.
 func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)

@@ -193,6 +193,7 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 		return dsl.LegacyFuncSigRules(FormatFuncSigsInSource)
 	}
 
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 	style := opts.Style.DSLSigsStyle
 	if style == "" {
 		style = "legacy"
@@ -201,10 +202,25 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 	var rules []dsl.Rule
 	switch style {
 	case "legacy":
+		funcFormatter := FormatFuncSignatureLegacy
+		if profile == "next" {
+			funcFormatter = FormatFuncSignatureNext
+		}
 		rules = append([]dsl.Rule{}, dsl.SignatureRules(dsl.SignatureConfig{
-			FuncFormatter:   FormatFuncSignatureLegacy,
+			FuncFormatter:   funcFormatter,
 			MethodFormatter: FormatInterfaceMethodLegacy,
 		})...)
+		// In the "next" profile, also reflow signatures that are already multiline
+		// even if no single line exceeds the column limit.
+		if profile == "next" {
+			rules = append(rules, dsl.Rule{
+				Name:     "multiline_func_decl",
+				Pattern:  &dsl.NodePattern{Type: "FuncDecl"},
+				When:     &dsl.HasMultilineFuncSignatureCond{Target: "node"},
+				Priority: 89,
+				Action:   rules[0].Action,
+			})
+		}
 	case "dsl":
 		// Pure DSL signature formatting (fallback algorithms).
 		rules = append([]dsl.Rule{}, dsl.SignatureRules()...)
