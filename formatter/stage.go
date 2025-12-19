@@ -114,6 +114,10 @@ type StageStyleOptions struct {
 
 	DSLMultiLineStyle string
 	DSLSigsStyle      string
+	// DSLLogCallsMinTailLen controls how aggressively the "next" log/printf call
+	// formatter avoids leaving a tiny remainder segment on the next line when
+	// splitting a long string literal. A value of 0 uses the profile default.
+	DSLLogCallsMinTailLen int
 	// DSLBlankLinesExtraIfErrReturn controls whether native DSL blank line rules
 	// should insert a blank line before `if err != nil { return ... }` patterns.
 	DSLBlankLinesExtraIfErrReturn bool

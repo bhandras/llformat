@@ -17,8 +17,25 @@ func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
 
 // dslRulesForLogCalls returns the DSL rule list for the log/printf call stage.
 // This uses the legacy call formatter implementation to ensure parity.
-func dslRulesForLogCalls() []dsl.Rule {
-	return dsl.LogPrintfRules(FormatCallGreedy)
+func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
+	matchAnyPrefix := profile == "modern" || profile == "next"
+
+	formatFunc := FormatCallGreedy
+	if profile == "next" {
+		minTailLen := opts.Style.DSLLogCallsMinTailLen
+		if minTailLen == 0 {
+			minTailLen = 8
+		}
+		formatFunc = func(call []byte, wsIndent string, baseLen int, colLimit, ts int) string {
+			return formatCallGreedyNextWithMinTailLen(call, wsIndent, baseLen, colLimit, ts, minTailLen)
+		}
+	}
+
+	return dsl.LogPrintfRulesWithOptions(
+		dsl.LogPrintfOptions{MatchAnySelectorPrefix: matchAnyPrefix},
+		formatFunc,
+	)
 }
 
 func dslRulesForExpr(opts StageOptions) []dsl.Rule {
@@ -71,9 +88,11 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 }
 
 func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder dsl.NodeOrder) {
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
+
 	style := opts.Style.DSLMultiLineStyle
 	if style == "" {
-		switch normalizedRuleProfile(opts.Selection.RuleProfile) {
+		switch profile {
 		case "modern":
 			style = "packed-chain-layout"
 		case "next":
@@ -81,6 +100,11 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		default:
 			style = "legacy"
 		}
+	}
+
+	packedFallback := FormatCallPackedMultiLine
+	if profile == "next" {
+		packedFallback = FormatCallPackedMultiLineNext
 	}
 
 	nodeOrder = dsl.NodeOrderPreorder
@@ -102,18 +126,18 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 	case "packed":
 		rules = dsl.PackedMultiLineOnlyRulesWithOptions(
 			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	case "packed-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	case "layout-args":
 		// Try layout-based argument breaking, fall back to packed multiline.
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes, CallArgsStyle: "layout"},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	case "layout-args-groups-pairs":
 		// Layout-based argument breaking with explicit pair grouping, falling
@@ -124,12 +148,12 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 			},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	case "packed-chain-layout", "layout-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
 			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes, MethodChainStyle: "layout"},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	case "layout-all":
 		// Layout-based method-chain breaking + layout-based call-arg breaking.
@@ -139,7 +163,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				MethodChainStyle: "layout",
 				CallArgsStyle:    "layout",
 			},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	case "layout-all-groups-pairs":
 		rules = dsl.MultiLineCallRulesWithOptions(
@@ -149,7 +173,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 			},
-			FormatCallPackedMultiLine,
+			packedFallback,
 		)
 	default:
 		// Unknown style: fall back to legacy parity mode.

@@ -726,6 +726,15 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 	if len(formatFunc) > 0 && formatFunc[0] != nil {
 		action.FormatFunc = formatFunc[0]
 	}
+	// When used as a fallback from layout-based formatting, only apply the packed
+	// formatter to still-single-line long calls. This prevents a layout-shaped
+	// multiline call from being immediately "re-packed" on a subsequent
+	// iteration, which would cause oscillation and defeat the layout owner.
+	fallbackSingleLineOnly := &PackedMultiLineCallAction{
+		Target:          "node",
+		FormatFunc:      action.FormatFunc,
+		OnlyIfSingleLine: true,
+	}
 
 	longCallConds := []Condition{
 		&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
@@ -741,6 +750,15 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 	// argument formatting to prevent oscillation and parse hazards.
 	if opts.CallArgsStyle == "layout" || opts.MethodChainStyle == "layout" {
 		longCallConds = append(longCallConds, &NotCond{Cond: &IsChainedCallReceiverCond{Target: "node"}})
+	}
+	// For layout-driven call-argument formatting, avoid independently rewriting
+	// nested calls that appear inside another call's argument list. The outer
+	// call-arg layout pass can format these as structured docs and will make a
+	// better whole-call decision; rewriting the inner call first can force it
+	// multiline due to the (irrelevant) prefix width, causing the outer layout
+	// formatter to bail out and fall back to packed/legacy.
+	if opts.CallArgsStyle == "layout" {
+		longCallConds = append(longCallConds, &NotCond{Cond: &IsCallArgCond{Target: "node"}})
 	}
 
 	var rules []Rule
@@ -794,7 +812,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 						Target:   "node",
 						Grouping: opts.CallArgsGrouping,
 					},
-					Else: action,
+					Else: fallbackSingleLineOnly,
 				}
 			default:
 				return action

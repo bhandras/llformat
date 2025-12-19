@@ -28,6 +28,10 @@ type PipelineConfig struct {
 	// This is intentionally opt-in because it is opinionated and may interact
 	// with users' desired grouping/spacing style.
 	DSLBlankLinesExtraIfErrReturn bool
+	// LogCallsMinTailLen controls the minimum tail length for string splits in
+	// printf/logcall formatting under the "next" profile. When 0, a profile
+	// default is used.
+	LogCallsMinTailLen int
 	TraceDSL                      bool // Enable DSL rule tracing (only when UseDSLExpr)
 	TraceDSLReasons               bool // Include "why fired/didn't fire" reasons in DSL tracing
 
@@ -306,6 +310,17 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.RuleProfile = "parity"
 	}
 
+	// Rule-profile defaults that should apply even when callers set individual
+	// toggles directly (without selecting a Mode or DSLCallPolicy bundle).
+	//
+	// "next" is expected to use the layout-driven multiline call engine by
+	// default when the multiline DSL stage is enabled.
+	if normalizedRuleProfile(cfg.RuleProfile) == "next" &&
+		cfg.UseDSLMultiLineCalls &&
+		cfg.DSLMultiLineStyle == "" {
+		cfg.DSLMultiLineStyle = "layout-all"
+	}
+
 	// Stage ownership: when multiline formatting is explicitly configured to
 	// own layout of call arguments, prefer the DSL expression stage so the legacy
 	// expression formatter does not interfere inside call args. The DSL
@@ -343,6 +358,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			Excludes:                      cfg.Excludes,
 			DSLMultiLineStyle:             cfg.DSLMultiLineStyle,
 			DSLSigsStyle:                  cfg.DSLSigsStyle,
+			DSLLogCallsMinTailLen:         cfg.LogCallsMinTailLen,
 			DSLBlankLinesExtraIfErrReturn: cfg.DSLBlankLinesExtraIfErrReturn,
 			DSLExprLogicalStyle:           cfg.DSLExprLogicalStyle,
 			DSLExprArithmeticStyle:        cfg.DSLExprArithmeticStyle,

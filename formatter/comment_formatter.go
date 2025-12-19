@@ -45,6 +45,9 @@ func NewCommentFormatter(cfg CommentConfig) *CommentFormatter {
 
 // FormatFile implements greedy reflowing of comment-only lines.
 func (f *CommentFormatter) FormatFile(src []byte) []byte {
+	formatGlobalsMu.Lock()
+	defer formatGlobalsMu.Unlock()
+
 	// Use package-level width helpers
 	if f.cfg.ColumnLimit > 0 {
 		columnLimit = f.cfg.ColumnLimit

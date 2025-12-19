@@ -33,6 +33,7 @@ func main() {
 		dslExprArithmeticStyle        string
 		dslExprCaseClauseStyle        string
 		dslExprSelectorStyle          string
+		logCallsMinTailLen            int
 		useDSLSigs                    bool
 		useDSLSigsNative              bool
 		dslSigsStyle                  string
@@ -65,6 +66,7 @@ func main() {
 	flag.StringVar(&dslExprArithmeticStyle, "dsl-expr-arithmetic-style", "", "DSL expression arithmetic chain style: legacy|layout (DSL mode only, experimental)")
 	flag.StringVar(&dslExprCaseClauseStyle, "dsl-expr-case-style", "", "DSL expression case clause style: legacy|layout (DSL mode only, experimental)")
 	flag.StringVar(&dslExprSelectorStyle, "dsl-expr-selector-style", "", "DSL expression selector chain style: legacy|layout (DSL mode only, experimental)")
+	flag.IntVar(&logCallsMinTailLen, "logcalls-min-tail-len", 0, "minimum tail length when splitting printf/logcall strings in next profile (0 => default)")
 	flag.BoolVar(&useDSLSigs, "dsl-sigs", true, "use DSL signature formatter (delegates to legacy; DSL mode only)")
 	flag.BoolVar(&useDSLSigsNative, "dsl-sigs-native", false, "use native DSL signature rules (fallback to legacy; DSL mode only, experimental)")
 	flag.StringVar(&dslSigsStyle, "dsl-sigs-style", "legacy", "DSL signature style: legacy|dsl (DSL mode only, experimental)")
@@ -148,6 +150,7 @@ func main() {
 		UseDSLBlankLines:              !useLegacy && useDSLBlankLines,
 		UseDSLBlankLinesNative:        !useLegacy && useDSLBlankLinesNative,
 		DSLBlankLinesExtraIfErrReturn: !useLegacy && dslBlankLinesExtraIfErrReturn,
+		LogCallsMinTailLen:            logCallsMinTailLen,
 		TraceDSL:                      traceDSL && !useLegacy,
 		TraceDSLReasons:               traceDSLReasons && !useLegacy,
 		AllowDSLCallArgs:              allowDSLCallArgs && !useLegacy,

@@ -961,29 +961,54 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 		return nil, false
 	}
 
-	// Note: we intentionally force the top-level argument list into "break mode"
-	// (one argument per line) rather than allowing partial flattening. Without a
-	// "break parent" mechanism, nested groups can break while the surrounding
-	// argument list stays flat, yielding awkward output like:
+	isMake := false
+	if ident, okIdent := call.Fun.(*ast.Ident); okIdent && ident.Name == "make" {
+		isMake = true
+	}
+
+	// Note: this action is only selected for "long" calls, so we always include
+	// a ForceBreak barrier to ensure the output becomes multiline when a rule
+	// chooses this action.
 	//
-	//   f(a, x ||\n\t...)
-	//
-	// For long calls this is both less readable and can lead to non-idempotent
-	// behavior where subsequent runs repack/unpack adjacent args.
-	argsGroup := layout.G(layout.C(
-		// Force break mode for the arg list. This avoids partial flattening when
-		// any argument contains required breaks (e.g. long binary chains).
-		layout.FB(),
-		layout.SL(), // newline after "("
-		layout.C(argDocs...),
-		layout.T(","), // trailing comma for multiline calls
-	))
+	// For most calls we follow the existing "newline after (" style to match
+	// next-mode expectations and existing tests. For `make(...)` calls we keep
+	// the first argument inline (so `make([]T, ...)` remains readable), but still
+	// break subsequent arguments onto new lines.
+	var argsGroupDocs []layout.Doc
+	if isMake && len(argDocs) > 1 {
+		// Keep the first argument inline, then force a break so the remaining
+		// arguments are laid out one-per-line. This yields:
+		//   make([]T,
+		//       0,
+		//       n,
+		//   )
+		argsGroupDocs = append(argsGroupDocs, argDocs[0], layout.FB())
+		for i := 1; i < len(argDocs); i++ {
+			argsGroupDocs = append(argsGroupDocs, layout.T(","), layout.L(), argDocs[i])
+		}
+	} else {
+		argsGroupDocs = append(argsGroupDocs, layout.FB())
+		// Standard style: newline right after "(".
+		argsGroupDocs = append(argsGroupDocs, layout.SL())
+		for i, d := range argDocs {
+			if i > 0 {
+				argsGroupDocs = append(argsGroupDocs, layout.T(","), layout.L())
+			}
+			argsGroupDocs = append(argsGroupDocs, d)
+		}
+	}
+
+	// Trailing comma in broken form. This is key to making gofmt preserve the
+	// multi-line call layout.
+	argsGroupDocs = append(argsGroupDocs, layout.IB(layout.T(","), layout.T("")))
+
+	argsGroup := layout.G(layout.C(argsGroupDocs...))
 
 	doc := layout.G(layout.C(
 		funDoc,
 		layout.T("("),
-		layout.N("\t", argsGroup), // gofmt-like: indent args by one tab on breaks
-		layout.SL(),               // newline + base indent before ")"
+		layout.N("\t", argsGroup),
+		layout.SL(),
 		layout.T(")"),
 	))
 
@@ -1010,11 +1035,6 @@ func buildCallArgsDocs(args []ast.Expr, grouping string, ctx *Context) ([]layout
 		// that conceptually operate on tuples of arguments.
 		var docs []layout.Doc
 		for i := 0; i < len(args); {
-			if i > 0 {
-				// Separate groups as if they were single args.
-				docs = append(docs, layout.T(","), layout.L())
-			}
-
 			left, ok := callArgDoc(args[i], ctx)
 			if !ok {
 				return nil, false
@@ -1033,21 +1053,18 @@ func buildCallArgsDocs(args []ast.Expr, grouping string, ctx *Context) ([]layout
 
 			// Within a group, keep the pair flat when possible but allow the
 			// second element to wrap if it doesn't fit.
-			group := layout.G(layout.C(left, layout.T(","), layout.SL(), right))
+			group := layout.G(layout.C(left, layout.T(","), layout.L(), right))
 			docs = append(docs, group)
 			i += 2
 		}
 		return docs, true
 	default:
 		// Default: one argument per line (forced break).
-		var docs []layout.Doc
-		for i, arg := range args {
+		docs := make([]layout.Doc, 0, len(args))
+		for _, arg := range args {
 			argDoc, ok := callArgDoc(arg, ctx)
 			if !ok {
 				return nil, false
-			}
-			if i > 0 {
-				docs = append(docs, layout.T(","), layout.L())
 			}
 			docs = append(docs, argDoc)
 		}
@@ -1477,6 +1494,13 @@ type PackedMultiLineCallAction struct {
 	// FormatFunc is an optional function that formats the call using legacy
 	// logic. If nil, a simplified fallback is used.
 	FormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
+
+	// OnlyIfSingleLine restricts this action to calls that are currently rendered
+	// on a single line in the source span. This is useful as a fallback when a
+	// layout-based formatter "owns" the multiline shape and we only want the
+	// packed formatter to run when the call is still a long single-line
+	// expression.
+	OnlyIfSingleLine bool
 }
 
 // LegacyOnePerLineCallAction formats generic function calls using the legacy

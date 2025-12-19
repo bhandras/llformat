@@ -50,7 +50,7 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			MaxIterations: 1,
 		},
 		LogCalls: DSLStageSpec{
-			Rules:         dslRulesForLogCalls(),
+			Rules:         dslRulesForLogCalls(opts),
 			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: 100,
 		},

@@ -79,6 +79,21 @@ func TestBuildSplitQuoted_UsesGofmtCompatibleSpacingAroundPlus(t *testing.T) {
 	})
 }
 
+func TestBuildSplitQuotedForCallArg_UsesGofmtCompatibleSpacingWhenTrailingArgs(t *testing.T) {
+	// When a split string literal is a call argument and there are additional args
+	// after it, gofmt may elide the space before '+' when the segment ends with a
+	// space. We mirror that behavior for idempotence and to preserve one extra
+	// column of budget.
+	out := buildSplitQuotedForCallArg(
+		"unable to lookup peer alias: %v with a tail that forces wrapping",
+		0,
+		"\t",
+		36,
+		true,
+	)
+	require.Contains(t, out, "\"+\n\t\t\"", "expected at least one join rendered as `\"+\\n` when the segment ends with a space")
+}
+
 func TestFormatCallPackedMultiLine_DoesNotOverBreakAfterSplitStringUnderDeepIndent(t *testing.T) {
 	// Regression test: when a string arg is split across multiple lines, the
 	// packed multiline call formatter must compute the "current column" after the
@@ -92,4 +107,58 @@ func TestFormatCallPackedMultiLine_DoesNotOverBreakAfterSplitStringUnderDeepInde
 	// segment.
 	require.Contains(t, out, `", 42, true,`)
 	require.NotContains(t, out, "\",\n\t\t\t42", "must not break before 42 when it fits after the split string")
+}
+
+func TestFormatCallPackedMultiLine_DoesNotReflowNestedLenCallWhenItFitsOnItsOwnLine(t *testing.T) {
+	// Regression test: nested calls like len(...) should not be recursively
+	// reformatted into packed multiline when they would fit on their own
+	// continuation line. This avoids ugly results like:
+	//   len(
+	//     x,
+	//   )
+	call := []byte(`make([][]byte, 0, len(chanBackupsProtos.ChanBackups))`)
+	out := FormatCallPackedMultiLineNext(call, "\t\t", 60, 8)
+	require.Contains(t, out, "len(chanBackupsProtos.ChanBackups)")
+	require.NotContains(t, out, "len(\n", "must not expand len(...) into a nested multiline call when it fits as-is")
+}
+
+func TestFormatCallGreedy_DoesNotSplitShortFormatStringToFitCommaSpace(t *testing.T) {
+	// Regression test for "early break" in deeply indented return statements:
+	// when the format string itself fits on the current line, but there isn't
+	// enough room for a trailing ", " before the next arg, we prefer keeping the
+	// format string intact and breaking before the next argument rather than
+	// splitting the string into `"..." +\n"...", err`.
+	call := []byte(`fmt.Errorf("error parsing psbt: %w", err)`)
+
+	// Choose a baseLen such that the quoted format string ends at column 79,
+	// leaving room for a comma but not for ", " (comma+space).
+	//
+	// In formatCallGreedy:
+	//   curLen starts at baseLen + len("fmt.Errorf") + 1.
+	// The quoted string literal here is 24 columns wide.
+	//
+	// len("fmt.Errorf") is 10, so curLen = baseLen + 11.
+	// We want curLen + 24 == 79 => curLen == 55 => baseLen == 44.
+	out := FormatCallGreedy(call, "\t\t\t\t\t", 44, 80, 8)
+
+	require.Contains(t, out, `"error parsing psbt: %w",`)
+	require.Contains(t, out, "\n\t\t\t\t\t\terr")
+	require.NotContains(t, out, "\" +\n", "must not split a short format string just to make room for a following space")
+}
+
+func TestFormatCallGreedyNext_JoinAwareSplit_PreservesSpaceBeforePlus(t *testing.T) {
+	// Regression test for "peer alias" getting collapsed to "peeralias" due to
+	// overly conservative width accounting around `+` when there are trailing
+	// call args.
+	//
+	// With a tight column limit, we want the first split to be able to end at a
+	// space boundary and still fit the join when gofmt would render `"..." +`
+	// as `"..." +` or `"..." +` vs `"..." +` (context-sensitive).
+	call := []byte(`fmt.Errorf("unable to lookup peer alias more: %v", err)`)
+	out := FormatCallGreedyNext(call, "", 0, 36, 8)
+
+	// Ensure the split preserves the space boundary before `+`, allowing the
+	// next segment to start with "alias..." rather than joining words.
+	require.Contains(t, out, "\"unable to lookup peer \"+\n\t\"alias", "expected join-aware split at the `peer ` boundary")
+	require.NotContains(t, out, "\"peer\"+\n\t\"alias", "must not drop the trailing space at the split point")
 }

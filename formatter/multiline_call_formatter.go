@@ -2,8 +2,8 @@ package formatter
 
 import (
 	"bytes"
-	formatstd "go/format"
 	"go/ast"
+	formatstd "go/format"
 	"go/parser"
 	"go/token"
 	"strings"
@@ -126,6 +126,9 @@ func NewMultiLineCallFormatter(cfg MultiLineConfig) *MultiLineCallFormatter {
 
 // FormatFile formats with the formatter's config.
 func (f *MultiLineCallFormatter) FormatFile(src []byte) []byte {
+	formatGlobalsMu.Lock()
+	defer formatGlobalsMu.Unlock()
+
 	// Apply config to package-level parameters used by helpers.
 	columnLimit = f.cfg.ColumnLimit
 	tabStop = f.cfg.TabStop
@@ -462,6 +465,9 @@ func (f *MultiLineCallFormatter) formatAsMultiLine(callBytes []byte, wsIndent st
 // This is exported so the DSL stage can delegate to the legacy scan-based
 // implementation without creating an import cycle.
 func FormatOneMultiLineCallInSource(src []byte, colLimit, tabStop int, excludes []string) ([]byte, bool) {
+	formatGlobalsMu.Lock()
+	defer formatGlobalsMu.Unlock()
+
 	cfg := MultiLineConfig{
 		ColumnLimit: colLimit,
 		TabStop:     tabStop,
