@@ -938,8 +938,13 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) ([]byte
 		return nil, false
 	}
 
-	// Only attempt this on "long" calls.
-	if (&CollapsedWidthCond{Target: a.Target, Op: ">", Value: 0}).Eval(caps, ctx) == false {
+	// Only attempt this on "long" calls. Consider both the actual line width
+	// (useful for single-line nodes with extra spacing) and the collapsed width
+	// (useful for multiline nodes where the first line may be short).
+	if (&OrCond{Conds: []Condition{
+		&LineWidthCond{Target: a.Target, Op: ">", Value: 0},
+		&CollapsedWidthCond{Target: a.Target, Op: ">", Value: 0},
+	}}).Eval(caps, ctx) == false {
 		return nil, false
 	}
 

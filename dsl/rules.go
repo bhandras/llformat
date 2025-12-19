@@ -736,15 +736,21 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 		OnlyIfSingleLine: true,
 	}
 
-		longCallConds := []Condition{
-			&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-			&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
-			&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
-			&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
-			// Avoid rewriting calls that contain inline comments; AST-based rendering
-			// would drop them.
-		&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
-	}
+			longCallConds := []Condition{
+				// Use CollapsedWidthCond for multiline nodes (first line may be short),
+				// but also consider actual line width for single-line nodes. This avoids
+				// false negatives when the source contains extra spacing.
+				&OrCond{Conds: []Condition{
+					&LineWidthCond{Target: "node", Op: ">", Value: 0},
+					&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+				}},
+				&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+				&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
+				&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
+				// Avoid rewriting calls that contain inline comments; AST-based rendering
+				// would drop them.
+				&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
+			}
 	// When layout is enabled, avoid independently rewriting receiver calls inside
 	// method chains. Those are better handled by the outer method chain / call
 	// argument formatting to prevent oscillation and parse hazards.
@@ -795,8 +801,9 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 
 	// Generic call expression that exceeds column limit.
 	// Skip method chains (handled by long_method_chain, when enabled) and
-	// log/printf calls. Use CollapsedWidthCond to handle multiline calls where the
-	// first line is short but the total content exceeds the column limit.
+		// log/printf calls. Use CollapsedWidthCond (plus LineWidthCond) to handle
+		// multiline calls where the first line is short but the total content
+		// exceeds the column limit.
 	rules = append(rules, Rule{
 		Name:    "long_call_expr",
 		Pattern: &NodePattern{Type: "CallExpr"},
@@ -846,13 +853,16 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 			Pattern: &NodePattern{Type: "CallExpr"},
 				When: &AndCond{
 					Conds: []Condition{
-						&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+						&OrCond{Conds: []Condition{
+							&LineWidthCond{Target: "node", Op: ">", Value: 0},
+							&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+						}},
 						&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
 						&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
 						&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
 						&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
 					},
-			},
+				},
 			Priority: 50,
 			Action:   action,
 		},
