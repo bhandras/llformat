@@ -12,6 +12,20 @@ import (
 type FuncSigConfig struct {
 	ColumnLimit int
 	TabStop     int
+	// CanonicalMultilineSigLists forces a gofmt-like formatting style for
+	// multiline parameter and result lists. In particular, if a parenthesized
+	// return list doesn't fit on one line, we prefer:
+	//   f(...) (
+	//     a,
+	//     b,
+	//   )
+	// rather than partially breaking inside the list, e.g.:
+	//   f(...) (a,
+	//     b)
+	//
+	// This is enabled for the "next" profile, but kept off for legacy behavior
+	// to avoid changing golden fixtures.
+	CanonicalMultilineSigLists bool
 }
 
 // FuncSigFormatter formats long function signatures by breaking them across lines.
@@ -157,8 +171,9 @@ func FormatFuncSignatureLegacy(signature, indent string, colLimit, tabStop int) 
 //	func f() (*T, error) {
 func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (string, bool) {
 	f := NewFuncSigFormatter(FuncSigConfig{
-		ColumnLimit: colLimit,
-		TabStop:     tabStop,
+		ColumnLimit:                colLimit,
+		TabStop:                    tabStop,
+		CanonicalMultilineSigLists: true,
 	})
 
 	// When the signature already contains newlines, prefer to collapse it if it
@@ -714,114 +729,142 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 				// Returns don't all fit inline
 				retContent := returns[1 : len(returns)-1]
 				retList := f.splitParams(retContent)
+				retList = filterNonEmptyTrimmed(retList)
 
-				// Check if the first return item fits inline after ") ("
-				// If not, put all returns on a fresh line
-				firstRet := ""
-				if len(retList) > 0 {
-					firstRet = strings.TrimSpace(retList[0])
-				}
-				testFirstInline := currentLine + ") (" + firstRet
-				if len(retList) > 1 {
-					testFirstInline += ","
-				} else {
-					testFirstInline += ")"
-					if hasBrace {
-						testFirstInline += " {"
-					}
-				}
-
-				if width.VisualLenWithTab(testFirstInline, f.cfg.TabStop) > f.cfg.ColumnLimit {
-					// First return doesn't fit inline - put all returns on fresh line
+				if f.cfg.CanonicalMultilineSigLists {
+					// For the "next" profile, avoid partially breaking the return list
+					// like:
+					//   f(...) (a,
+					//     b)
+					// Prefer the gofmt-like style:
+					//   f(...) (
+					//     a,
+					//     b,
+					//   )
 					result.WriteString(" (")
 					result.WriteByte('\n')
-					result.WriteString(contIndent)
-					currentLine = contIndent
 
-					// Now left-flow pack the returns from the fresh line
-					for i, ret := range retList {
-						ret = strings.TrimSpace(ret)
-						if ret == "" {
-							continue
-						}
-
-						separator := ""
-						if i > 0 {
-							separator = ", "
-						}
-
-						testAdd := separator + ret
-						isLastRet := i == len(retList)-1
-						testCheck := currentLine + testAdd
-						if isLastRet {
-							testCheck += ")"
-							if hasBrace {
-								testCheck += " {"
-							}
-						}
-
-						if width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
-							if i > 0 {
-								result.WriteByte(',')
-							}
-							result.WriteByte('\n')
-							result.WriteString(contIndent)
-							currentLine = contIndent + ret
-							result.WriteString(ret)
-						} else {
-							if i > 0 {
-								result.WriteString(", ")
-								currentLine += ", "
-							}
-							result.WriteString(ret)
-							currentLine += ret
-						}
+					for _, ret := range retList {
+						result.WriteString(contIndent)
+						result.WriteString(ret)
+						result.WriteString(",")
+						result.WriteByte('\n')
 					}
+
+					result.WriteString(indent)
 					result.WriteByte(')')
 				} else {
-					// First return fits inline - use left-flow packing
-					result.WriteString(" (")
-					currentLine = currentLine + ") ("
-
-					for i, ret := range retList {
-						ret = strings.TrimSpace(ret)
-						if ret == "" {
-							continue
-						}
-
-						separator := ""
-						if i > 0 {
-							separator = ", "
-						}
-
-						testAdd := separator + ret
-						isLastRet := i == len(retList)-1
-						testCheck := currentLine + testAdd
-						if isLastRet {
-							testCheck += ")"
-							if hasBrace {
-								testCheck += " {"
-							}
-						}
-
-						if width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
-							if i > 0 {
-								result.WriteByte(',')
-							}
-							result.WriteByte('\n')
-							result.WriteString(contIndent)
-							currentLine = contIndent + ret
-							result.WriteString(ret)
-						} else {
-							if i > 0 {
-								result.WriteString(", ")
-								currentLine += ", "
-							}
-							result.WriteString(ret)
-							currentLine += ret
+					// Legacy behavior: attempt to keep the first return inline after ") ("
+					// and left-flow pack the remainder.
+					//
+					// Note: this may produce partially-broken return lists which are less
+					// gofmt-like, but is kept to preserve golden fixtures.
+					firstRet := ""
+					if len(retList) > 0 {
+						firstRet = strings.TrimSpace(retList[0])
+					}
+					testFirstInline := currentLine + ") (" + firstRet
+					if len(retList) > 1 {
+						testFirstInline += ","
+					} else {
+						testFirstInline += ")"
+						if hasBrace {
+							testFirstInline += " {"
 						}
 					}
-					result.WriteByte(')')
+
+					if width.VisualLenWithTab(testFirstInline, f.cfg.TabStop) > f.cfg.ColumnLimit {
+						// First return doesn't fit inline - put all returns on fresh line
+						result.WriteString(" (")
+						result.WriteByte('\n')
+						result.WriteString(contIndent)
+						currentLine = contIndent
+
+						// Now left-flow pack the returns from the fresh line
+						for i, ret := range retList {
+							ret = strings.TrimSpace(ret)
+							if ret == "" {
+								continue
+							}
+
+							separator := ""
+							if i > 0 {
+								separator = ", "
+							}
+
+							testAdd := separator + ret
+							isLastRet := i == len(retList)-1
+							testCheck := currentLine + testAdd
+							if isLastRet {
+								testCheck += ")"
+								if hasBrace {
+									testCheck += " {"
+								}
+							}
+
+							if width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
+								if i > 0 {
+									result.WriteByte(',')
+								}
+								result.WriteByte('\n')
+								result.WriteString(contIndent)
+								currentLine = contIndent + ret
+								result.WriteString(ret)
+							} else {
+								if i > 0 {
+									result.WriteString(", ")
+									currentLine += ", "
+								}
+								result.WriteString(ret)
+								currentLine += ret
+							}
+						}
+						result.WriteByte(')')
+					} else {
+						// First return fits inline - use left-flow packing
+						result.WriteString(" (")
+						currentLine = currentLine + ") ("
+
+						for i, ret := range retList {
+							ret = strings.TrimSpace(ret)
+							if ret == "" {
+								continue
+							}
+
+							separator := ""
+							if i > 0 {
+								separator = ", "
+							}
+
+							testAdd := separator + ret
+							isLastRet := i == len(retList)-1
+							testCheck := currentLine + testAdd
+							if isLastRet {
+								testCheck += ")"
+								if hasBrace {
+									testCheck += " {"
+								}
+							}
+
+							if width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
+								if i > 0 {
+									result.WriteByte(',')
+								}
+								result.WriteByte('\n')
+								result.WriteString(contIndent)
+								currentLine = contIndent + ret
+								result.WriteString(ret)
+							} else {
+								if i > 0 {
+									result.WriteString(", ")
+									currentLine += ", "
+								}
+								result.WriteString(ret)
+								currentLine += ret
+							}
+						}
+						result.WriteByte(')')
+					}
 				}
 			} else {
 				// Returns fit on the same line
@@ -842,6 +885,18 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	}
 
 	return result.String()
+}
+
+func filterNonEmptyTrimmed(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 // findMatchingParen finds the index of the closing paren matching the one at start.

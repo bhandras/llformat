@@ -75,3 +75,48 @@ type I interface {
 	require.Contains(t, out, "s string,\n\t\tother",
 		"expected the interface method signature to be broken across lines when it exceeds the column limit")
 }
+
+func TestPipelineNext_Signatures_InterfaceMethod_UsesCanonicalMultilineReturnList(t *testing.T) {
+	const in = `package p
+
+import "context"
+
+type Invoice struct{}
+
+type I interface {
+	InvoicesAddedSince(ctx context.Context, sinceAddIndex uint64) ([]Invoice, error)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		RuleProfile:          "next",
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other DSL stages off so this test stays focused.
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		UseDSLExpr:             false,
+		UseDSLComments:         false,
+		UseDSLBlankLines:       false,
+		UseDSLBlankLinesNative: false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	// Don't partially break inside the return list like:
+	//   ... ([]Invoice,
+	//     error)
+	require.NotContains(t, out, "([]Invoice,\n\t\terror)",
+		"next profile should not partially break inside a parenthesized return list")
+
+	// Prefer gofmt-like multiline results when it doesn't fit.
+	require.Contains(t, out, ") (\n\t\t[]Invoice,\n\t\terror,\n\t)",
+		"next profile should use canonical multiline return lists with the closing paren on its own line")
+
+	// No blank lines inside the return list.
+	require.NotContains(t, out, "[]Invoice,\n\n\t\terror",
+		"should not introduce empty lines inside the return list")
+}
