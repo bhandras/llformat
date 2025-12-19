@@ -618,6 +618,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	contIndent := indent + "\t"
 	currentLine := result.String()
 	paramList := f.splitParams(params)
+	paramList = filterNonEmptyTrimmed(paramList)
 
 	// Calculate trailing for last param
 	// For params, we only consider ") (" as trailing if there are returns that might need to break
@@ -644,6 +645,19 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	}
 	if hasBrace {
 		trailingFull += " {"
+	}
+
+	// In the "next" profile we prefer to keep short return lists inline, and
+	// instead break parameters earlier if necessary.
+	//
+	// This avoids awkward (but parseable) formats like:
+	//   M(a, b) ([]T,
+	//     error)
+	//
+	// and also helps avoid edge cases where a trailing comma ends up exactly on
+	// the column boundary.
+	if f.cfg.CanonicalMultilineSigLists && hasParenReturns && len(paramList) > 1 && isSmallParenReturnList(returns) {
+		trailingMinimal = trailingFull
 	}
 
 	for i, param := range paramList {
@@ -897,6 +911,24 @@ func filterNonEmptyTrimmed(items []string) []string {
 		out = append(out, item)
 	}
 	return out
+}
+
+func isSmallParenReturnList(returns string) bool {
+	trimmed := strings.TrimSpace(returns)
+	if len(trimmed) < 2 || trimmed[0] != '(' || trimmed[len(trimmed)-1] != ')' {
+		return false
+	}
+	if strings.Contains(trimmed, "\n") {
+		return false
+	}
+	content := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+	if content == "" {
+		return true
+	}
+	parts := filterNonEmptyTrimmed(scanner.SplitTopLevel(content))
+	// "Short" here is intentionally conservative; keeping `([]T, error)` on one
+	// line is almost always desirable.
+	return len(parts) <= 2
 }
 
 // findMatchingParen finds the index of the closing paren matching the one at start.

@@ -27,6 +27,40 @@ func NewBlankLineFormatter(cfg BlankLineConfig) *BlankLineFormatter {
 	return &BlankLineFormatter{cfg: cfg}
 }
 
+func isLineComment(trimmed string) bool {
+	return strings.HasPrefix(trimmed, "//")
+}
+
+// isInterfaceMethodDocBlockLine reports whether this comment line is part of a
+// doc comment block that is directly attached to an interface method
+// declaration (with no blank lines in-between).
+func (f *BlankLineFormatter) isInterfaceMethodDocBlockLine(lines [][]byte, i int) bool {
+	if i < 0 || i >= len(lines) {
+		return false
+	}
+	trimmed := strings.TrimSpace(string(lines[i]))
+	if !isLineComment(trimmed) {
+		return false
+	}
+
+	// Walk forward through a contiguous block of line-comments. Stop if we hit a
+	// blank line; that breaks doc association.
+	for j := i + 1; j < len(lines); j++ {
+		nextTrimmed := strings.TrimSpace(string(lines[j]))
+		if nextTrimmed == "" {
+			return false
+		}
+		if isLineComment(nextTrimmed) {
+			continue
+		}
+
+		// The first non-comment, non-blank line determines attachment.
+		return f.classifyLine(nextTrimmed, false, true) == "interface_method"
+	}
+
+	return false
+}
+
 // FormatFile adds blank lines where configured.
 func (f *BlankLineFormatter) FormatFile(src []byte) []byte {
 	lines := bytes.Split(src, []byte("\n"))
@@ -42,8 +76,12 @@ func (f *BlankLineFormatter) FormatFile(src []byte) []byte {
 		trimmed := strings.TrimSpace(lineStr)
 
 		// Determine line type
-		lineType := f.classifyLine(trimmed, inSwitch > 0, inInterface >
-			0)
+		lineType := f.classifyLine(trimmed, inSwitch > 0, inInterface > 0)
+		if inInterface > 0 && isLineComment(trimmed) && f.isInterfaceMethodDocBlockLine(lines, i) {
+			lineType = "interface_method_doc"
+		} else if isLineComment(trimmed) {
+			lineType = "comment"
+		}
 
 		// Track switch nesting
 		if strings.HasPrefix(trimmed, "switch ") ||
@@ -95,17 +133,26 @@ func (f *BlankLineFormatter) FormatFile(src []byte) []byte {
 		}
 
 		if f.cfg.BetweenInterfaceMethods &&
-			lineType == "interface_method" {
-			// Add blank before interface method if previous line is
-			// not blank and not the opening of interface But DO add
-			// blank after embedded interfaces (transition from
-			// embeds to methods)
-			if prevLineType == "embedded_interface" {
-				needsBlankBefore = true
-			} else if prevLineType != "blank" &&
-				prevLineType != "open_brace" &&
-				prevLineType != "interface_open" {
-				needsBlankBefore = true
+			(lineType == "interface_method" || lineType == "interface_method_doc") {
+			// If this is a method line following its doc comment, never insert a
+			// blank line between them. If we want a blank line between interface
+			// methods, it must go before the doc comment block.
+			if lineType == "interface_method" && prevLineType == "interface_method_doc" {
+				needsBlankBefore = false
+			} else if lineType == "interface_method_doc" && prevLineType == "interface_method_doc" {
+				needsBlankBefore = false
+			} else {
+				// Add blank before interface method if previous line is
+				// not blank and not the opening of interface But DO add
+				// blank after embedded interfaces (transition from
+				// embeds to methods)
+				if prevLineType == "embedded_interface" {
+					needsBlankBefore = true
+				} else if prevLineType != "blank" &&
+					prevLineType != "open_brace" &&
+					prevLineType != "interface_open" {
+					needsBlankBefore = true
+				}
 			}
 		}
 

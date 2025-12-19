@@ -76,7 +76,7 @@ type I interface {
 		"expected the interface method signature to be broken across lines when it exceeds the column limit")
 }
 
-func TestPipelineNext_Signatures_InterfaceMethod_UsesCanonicalMultilineReturnList(t *testing.T) {
+func TestPipelineNext_Signatures_InterfaceMethod_PrefersInlineSmallReturnListByBreakingParams(t *testing.T) {
 	const in = `package p
 
 import "context"
@@ -84,6 +84,7 @@ import "context"
 type Invoice struct{}
 
 type I interface {
+	// InvoicesAddedSince returns invoices.
 	InvoicesAddedSince(ctx context.Context, sinceAddIndex uint64) ([]Invoice, error)
 }
 `
@@ -106,17 +107,67 @@ type I interface {
 
 	out := string(p.Format([]byte(in)))
 
+	// Keep doc comment directly adjacent to the method (no blank line),
+	// otherwise godoc detaches.
+	require.Contains(t, out, "\t// InvoicesAddedSince returns invoices.\n\tInvoicesAddedSince(",
+		"doc comment must remain directly adjacent to its interface method")
+
+	// Keep small return lists inline by breaking params earlier when needed.
+	require.Contains(t, out, ") ([]Invoice, error)",
+		"expected a small return list to stay inline in next profile")
+
 	// Don't partially break inside the return list like:
 	//   ... ([]Invoice,
 	//     error)
 	require.NotContains(t, out, "([]Invoice,\n\t\terror)",
 		"next profile should not partially break inside a parenthesized return list")
+	require.NotContains(t, out, ") (\n\t\t[]Invoice,\n\t\terror,\n\t)",
+		"expected params to break before forcing a multiline return list when the return list is small")
+}
 
-	// Prefer gofmt-like multiline results when it doesn't fit.
-	require.Contains(t, out, ") (\n\t\t[]Invoice,\n\t\terror,\n\t)",
-		"next profile should use canonical multiline return lists with the closing paren on its own line")
+func TestPipelineNext_Signatures_InterfaceMethod_UsesCanonicalMultilineReturnListForLongReturns(t *testing.T) {
+	const in = `package p
+
+import (
+	"context"
+
+	"github.com/lightningnetwork/lnd/lntypes"
+)
+
+type Invoice struct{}
+
+type I interface {
+	FetchPendingInvoices(ctx context.Context) (map[lntypes.Hash]Invoice, error)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		RuleProfile:          "next",
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other DSL stages off so this test stays focused.
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		UseDSLExpr:             false,
+		UseDSLComments:         false,
+		UseDSLBlankLines:       false,
+		UseDSLBlankLinesNative: false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	// Don't partially break inside the return list.
+	require.NotContains(t, out, "(map[lntypes.Hash]Invoice,\n\t\terror)",
+		"next profile should not partially break inside a parenthesized return list")
+
+	// For long returns, prefer gofmt-like multiline results.
+	require.Contains(t, out, ") (\n\t\tmap[lntypes.Hash]Invoice,\n\t\terror,\n\t)",
+		"next profile should use canonical multiline return lists for long return types")
 
 	// No blank lines inside the return list.
-	require.NotContains(t, out, "[]Invoice,\n\n\t\terror",
+	require.NotContains(t, out, "map[lntypes.Hash]Invoice,\n\n\t\terror",
 		"should not introduce empty lines inside the return list")
 }
