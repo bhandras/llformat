@@ -126,6 +126,28 @@ func TestFormatCallPackedMultiLineNext_DoesNotOverflowWhenBreakingAddsComma(t *t
 	}
 }
 
+func TestFormatCallGreedyNext_DoesNotOverflowWhenBreakingAfterExactFitArgAddsComma(t *testing.T) {
+	const colLimit = 30
+	const tabStop = 8
+
+	// This call is crafted so that the first non-string argument would "fit"
+	// exactly at the column limit under AllowExactFit, but then we immediately
+	// need to break before the next arg. That break appends a trailing comma to
+	// the current line (`,\n`), so we must leave room for it.
+	//
+	// Prior to reserving 1 column for the potential trailing comma on expression
+	// args, this could produce a line of length colLimit+1.
+	call := []byte(`f("123456789012", abcdefghijkl, b)`)
+	out := FormatCallGreedyNext(call, "", 0, colLimit, tabStop)
+
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		require.LessOrEqual(t, llwidth.VisualLenWithTab(line, tabStop), colLimit, "line exceeds configured column limit: %q", line)
+	}
+}
+
 func TestFormatCallPackedMultiLine_DoesNotReflowNestedLenCallWhenItFitsOnItsOwnLine(t *testing.T) {
 	// Regression test: nested calls like len(...) should not be recursively
 	// reformatted into packed multiline when they would fit on their own

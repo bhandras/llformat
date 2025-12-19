@@ -1418,9 +1418,22 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 					if opts.ReserveClosingParen && i == len(normArgs)-1 && !strings.Contains(a.expr, "\n") {
 						reserve = 1
 					}
-					fits := curLen+2+need+reserve < width
+
+					// If we might need to break after placing this arg (i.e. there are
+					// trailing args), we must leave room for the trailing comma we will
+					// append to end the line (`,\n`).
+					//
+					// This only matters when AllowExactFit is enabled; otherwise the
+					// strict `< width` check naturally leaves at least one column of
+					// slack.
+					trailingCommaReserve := 0
+					if opts.AllowExactFit && i < len(normArgs)-1 {
+						trailingCommaReserve = 1
+					}
+
+					fits := curLen+2+need+reserve+trailingCommaReserve < width
 					if opts.AllowExactFit {
-						fits = curLen+2+need+reserve <= width
+						fits = curLen+2+need+reserve+trailingCommaReserve <= width
 					}
 					if fits {
 						b.WriteString(", ")
@@ -1503,7 +1516,17 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 			if opts.ReserveClosingParen && i == len(normArgs)-1 && !strings.Contains(a.expr, "\n") {
 				reserve = 1
 			}
-			if !justBroke && !isRawStringLiteral(a.expr) && curLen+need+reserve > width {
+
+			// See trailingCommaReserve rationale above: avoid placing an arg such
+			// that it ends exactly at the column limit when there are more args,
+			// since we may need to append a trailing comma to break before the
+			// next arg.
+			trailingCommaReserve := 0
+			if opts.AllowExactFit && i < len(normArgs)-1 {
+				trailingCommaReserve = 1
+			}
+
+			if !justBroke && !isRawStringLiteral(a.expr) && curLen+need+reserve+trailingCommaReserve > width {
 				b.WriteByte('\n')
 				b.WriteString(contIndent)
 				curLen = visualLen(contIndent)

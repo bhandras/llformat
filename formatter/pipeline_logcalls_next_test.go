@@ -200,7 +200,11 @@ func f(req reqT, minTimeLockDelta int) error {
 `
 
 	p := NewPipeline(PipelineConfig{
-		ColumnLimit:    60,
+		// This is intentionally tight: at 60 columns the tail segment
+		// `"supported is %v"` cannot keep `req.TimeLockDelta,` on the same line
+		// without overflowing once we append the trailing comma to break before
+		// the next arg. At 61 columns, it should fit exactly.
+		ColumnLimit:    61,
 		TabStop:        8,
 		RuleProfile:    "next",
 		UseDSLLogCalls: true,
