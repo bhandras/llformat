@@ -51,6 +51,8 @@ func f(r *rpcServer) {
 		"expected the multiline closure return list to be collapsed when it fits under the column limit")
 	require.NotContains(t, out, "rp := func(req *OpenChannelRequest) (\n",
 		"must not keep the split return list for a short closure signature in next profile")
+	require.NotContains(t, out, "rp := func(req *OpenChannelRequest) (*InitFundingMsg, error) {\n\n\t\t_ = req",
+		"must not add a blank line after the opening brace when the closure signature is single-line")
 }
 
 func TestPipelineNext_Signatures_BreaksClosureSignatureWhenPrefixOverflowsColumnLimit(t *testing.T) {
@@ -92,4 +94,7 @@ func f() {
 	require.NotContains(t, out,
 		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
 		"must not keep the closure signature on a single line when it overflows due to its prefix")
+	require.Contains(t, out,
+		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error) {\n\n\t\t_ = req",
+		"expected a blank line after the opening brace for a multiline closure signature")
 }

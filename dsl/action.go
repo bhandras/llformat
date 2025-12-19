@@ -2073,13 +2073,11 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	}
 
 	var formatted string
+	var needsBlank bool
 	if a.FormatFunc != nil {
-		var needsBlank bool
-
 		// FormatFunc expects `indent` to be the leading whitespace indentation,
 		// not the full prefix before `func`.
 		formatted, needsBlank = a.FormatFunc(signature, wsIndent, effectiveColLimit, ctx.TabStop)
-		_ = needsBlank // ignored for func literals
 	} else {
 		formatted, _ = formatSignatureSimple(signature, wsIndent, effectiveColLimit, ctx.TabStop)
 	}
@@ -2099,6 +2097,41 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	}
 
 	afterBrace := bracePos + 1
+
+	// Match the FuncDecl behavior: when the signature is multi-line, add a blank
+	// line after the opening brace (unless the signature already contains nested
+	// multiline content like broken func types, where additional spacing is
+	// usually excessive).
+	hasNestedMultiline := strings.Contains(formatted, "func(\n")
+	if needsBlank && !hasNestedMultiline {
+		pos := afterBrace
+		for pos < len(ctx.Source) && (ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
+			pos++
+		}
+		if pos < len(ctx.Source) && ctx.Source[pos] == '\n' {
+			pos++
+			lineContentStart := pos
+			for pos < len(ctx.Source) && (ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
+				pos++
+			}
+			if pos < len(ctx.Source) && ctx.Source[pos] != '\n' && ctx.Source[pos] != '}' {
+				var b EditBuilder
+				b.Replace(lineStart, afterBrace, []byte(formatted))
+				b.Insert(lineContentStart, []byte("\n"))
+				out, changed, err := b.Apply(ctx.Source)
+				if err != nil {
+					return nil, false
+				}
+				if changed {
+					fset := token.NewFileSet()
+					if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+						return nil, false
+					}
+				}
+				return out, changed
+			}
+		}
+	}
 
 	out, err := ApplySingleEdit(ctx.Source, lineStart, afterBrace, []byte(formatted))
 	if err != nil {
