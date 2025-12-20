@@ -91,8 +91,9 @@ func f(graph Graph, ctx interface{}, includeUnannounced bool, req Req) (*Resp, e
 	out := string(p.Format(in))
 
 	// Ensure the callback signature breaks between edgeInfo and c1 (the key fix)
-	// rather than overflowing on a single line.
+	// rather than overflowing on a single line or splitting inside the shared
+	// `c1, c2 *models.ChannelEdgePolicy` group.
 	require.Regexp(t, regexp.MustCompile(
-		`func\((?:\n\s*)?edgeInfo \*models\.ChannelEdgeInfo,\n\s*c1, c2 \*models\.ChannelEdgePolicy\) error \{`,
+		`func\(edgeInfo \*models\.ChannelEdgeInfo,\n\t\tc1, c2 \*models\.ChannelEdgePolicy\) error \{`,
 	), out)
 }
