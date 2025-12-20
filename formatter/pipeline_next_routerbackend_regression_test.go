@@ -92,10 +92,11 @@ func f(graph graphT) {
 	require.Contains(t, out, "FetchChannelEndpoints: func(chanID uint64) (int, int, error) {",
 		"expected func literal signature return list to be packed like normal signatures")
 
-	// Multi-assign call: prefer breaking before the call instead of rewriting the
-	// call args into a multiline call.
-	require.NotContains(t, out, "FetchChannelEdgesByID(\n", "must not reflow a one-arg call into multiline just because the prefix is long")
-	require.Contains(t, out, "graph.FetchChannelEdgesByID(chanID)", "expected the call to remain single-line")
+	// Multi-assign call: prefer keeping the assignment attached by formatting the
+	// call itself as packed multiline when needed (avoids detaching with a
+	// break-before-call rewrite).
+	require.Contains(t, out, "err := graph.FetchChannelEdgesByID(\n", "expected packed multiline call for a long multi-assign prefix in next")
+	require.NotContains(t, out, "err :=\n\t\t\tgraph.FetchChannelEdgesByID(", "must not detach the call from the assignment")
 }
 
 func TestPipelineNext_Regressions_FuncLitFieldPrefix_OverflowsLine_BreakBeforeFunc(t *testing.T) {
