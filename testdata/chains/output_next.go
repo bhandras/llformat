@@ -1,3 +1,4 @@
+// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -11,8 +12,7 @@ import (
 
 // Example 1: Simple method chain that exceeds line limit
 func methodChain1() {
-	result := client.
-		WithTimeout(30*time.Second).
+	result := client.WithTimeout(30*time.Second).
 		WithRetry(3).
 		WithHeaders(headers).
 		Execute(ctx, request)
@@ -21,8 +21,7 @@ func methodChain1() {
 
 // Example 2: Method chain with long method names
 func methodChain2() {
-	result := builder.
-		SetVeryLongConfigurationOption(true).
+	result := builder.SetVeryLongConfigurationOption(true).
 		EnableAnotherFeatureFlag(false).
 		ConfigureAdvancedSettings(opts).
 		Build()
@@ -38,8 +37,7 @@ func methodChain3(update *NodeUpdate) {
 
 // Example 4: Deeply nested method chain
 func methodChain4() {
-	result := factory.
-		CreateBuilder().
+	result := factory.CreateBuilder().
 		WithOption1(val1).
 		WithOption2(val2).
 		WithOption3(val3).
@@ -51,16 +49,18 @@ func methodChain4() {
 
 // Example 5: Method chain with struct literal argument
 func methodChain5() {
-	result := client.
-		Configure(Config{Timeout: 30 * time.Second, MaxConnections: 3}).
-		Execute(ctx, nil)
+	result := client.Configure(
+		Config{
+			Timeout:        30 * time.Second,
+			MaxConnections: 3,
+		},
+	).Execute(ctx, nil)
 	_ = result
 }
 
 // Example 6: Method chain returning error
 func methodChain6() error {
-	return processor.
-		Initialize(ctx).
+	return processor.Initialize(ctx).
 		LoadConfig(configPath).
 		ValidateInputs(inputs).
 		ProcessAll().
@@ -73,7 +73,13 @@ func methodChain6() error {
 
 // Example 7: Long struct literal in assignment
 func structLiteral1() {
-	cfg := Config{Host: "localhost", Port: 8080, Timeout: 30 * time.Second, MaxConnections: 100, EnableTLS: true}
+	cfg := Config{
+		Host:           "localhost",
+		Port:           8080,
+		Timeout:        30 * time.Second,
+		MaxConnections: 100,
+		EnableTLS:      true,
+	}
 	_ = cfg
 }
 
@@ -87,30 +93,48 @@ func structLiteral2() {
 			MaxConnections: 100,
 			EnableTLS:      true,
 			CertPath:       "/path/to/cert",
-		},
-	)
+		})
 	_ = server
 }
 
 // Example 9: Nested struct literals
 func structLiteral3() {
-	opts := Options{Server: ServerConfig{Host: "localhost", Port: 8080}, Client: ClientConfig{Timeout: 30 * time.Second, Retries: 3}}
+	opts := Options{
+		Server: ServerConfig{
+			Host: "localhost",
+			Port: 8080,
+		},
+		Client: ClientConfig{
+			Timeout: 30 * time.Second,
+			Retries: 3,
+		},
+	}
 	_ = opts
 }
 
 // Example 10: Struct literal with anonymous function field (from example.go_)
 func structLiteral4() {
-	handler := Handler{OnSuccess: func(result string) {
-		processResult(
-			result,
-		)
-	}, OnError: func(err error) { logError(err) }}
+	handler := Handler{
+		OnSuccess: func(result string) {
+			processResult(result)
+		},
+		OnError: func(err error) {
+			logError(err)
+		},
+	}
 	_ = handler
 }
 
 // Example 11: Large struct literal (similar to example.go_ feature manager)
 func structLiteral5() {
-	mgr := FeatureManager{EnableFeatureA: true, EnableFeatureB: false, EnableFeatureC: true, EnableFeatureD: false, Timeout: 30 * time.Second, MaxRetries: 5}
+	mgr := FeatureManager{
+		EnableFeatureA: true,
+		EnableFeatureB: false,
+		EnableFeatureC: true,
+		EnableFeatureD: false,
+		Timeout:        30 * time.Second,
+		MaxRetries:     5,
+	}
 	_ = mgr
 }
 
@@ -142,7 +166,10 @@ func makeCall3(items []Item) {
 
 // Example 15: Defer with function literal (from example.go_ line 450-453)
 func deferExample1(sub *Subscription) {
-	defer func() { sub.Cancel(); cleanup() }()
+	defer func() {
+		sub.Cancel()
+		cleanup()
+	}()
 	doWork()
 }
 
@@ -209,7 +236,6 @@ func appendExample2(items []string) []string {
 func complexIf1(cache *Cache) {
 	if cache.Get(key).IsValid() && cache.Get(key).NotExpired() &&
 		cache.Get(key).HasPermission(user) {
-
 		process()
 	}
 }
@@ -229,8 +255,8 @@ func complexIf2(val interface{}) {
 
 // Example 24: Error wrapping with context (from example.go_)
 func errorHandling1() error {
-	return fmtpkg.Errorf("failed to initialize component %s with "+
-		"config %v: %w", componentName, config, err)
+	return fmtpkg.Errorf("failed to initialize component %s with config "+
+		"%v: %w", componentName, config, err)
 }
 
 // Example 25: Multiple error checks in sequence (cleanup pattern from
@@ -272,8 +298,9 @@ func typeSwitch1(est *Estimator) {
 // Example 27: Function literal with parameters
 func funcLiteral1() {
 	processFn(
-		func(ctx context.Context, data []byte,
-			opts Options) (Result, error) {
+		func(ctx context.Context, data []byte, opts Options) (Result,
+			error) {
+
 			return Result{}, nil
 		},
 	)
@@ -282,8 +309,15 @@ func funcLiteral1() {
 // Example 28: Multiple function literal arguments
 func funcLiteral2() {
 	handle(
-		func() error { return nil }, func() error { return nil },
-		func() error { return nil },
+		func() error {
+			return nil
+		},
+		func() error {
+			return nil
+		},
+		func() error {
+			return nil
+		},
 	)
 }
 
@@ -320,10 +354,12 @@ func (clientType) WithRetry(int) clientType {
 }
 
 func (clientType) WithHeaders(interface{}) clientType {
+
 	return clientType{}
 }
 
 func (clientType) Execute(context.Context, interface{}) interface{} {
+
 	return nil
 }
 
@@ -344,10 +380,12 @@ func (builderType) EnableAnotherFeatureFlag(bool) builderType {
 }
 
 func (builderType) ConfigureAdvancedSettings(interface{}) builderType {
+
 	return builderType{}
 }
 
 func (builderType) Build() interface{} {
+
 	return nil
 }
 
@@ -372,18 +410,22 @@ func (factoryType) CreateBuilder() factoryType {
 }
 
 func (factoryType) WithOption1(interface{}) factoryType {
+
 	return factoryType{}
 }
 
 func (factoryType) WithOption2(interface{}) factoryType {
+
 	return factoryType{}
 }
 
 func (factoryType) WithOption3(interface{}) factoryType {
+
 	return factoryType{}
 }
 
 func (factoryType) WithOption4(interface{}) factoryType {
+
 	return factoryType{}
 }
 
@@ -392,6 +434,7 @@ func (factoryType) Finalize() factoryType {
 }
 
 func (factoryType) Build() interface{} {
+
 	return nil
 }
 
@@ -408,6 +451,7 @@ func (processorType) LoadConfig(string) processorType {
 }
 
 func (processorType) ValidateInputs(interface{}) processorType {
+
 	return processorType{}
 }
 
@@ -521,6 +565,7 @@ func (*CacheEntry) NotExpired() bool {
 }
 
 func (*CacheEntry) HasPermission(interface{}) bool {
+
 	return false
 }
 
@@ -554,6 +599,7 @@ var srvrLog logType
 type Estimator struct{}
 
 func (*Estimator) Config() interface{} {
+
 	return nil
 }
 

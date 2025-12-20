@@ -1,3 +1,4 @@
+// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -85,11 +86,9 @@ func main() {
 	)
 
 	// Method chaining that should be wrapped
-	database.
-		Query("SELECT * FROM users").
-		Where("active = ?", true).
-		OrderBy("created_at DESC").
-		Limit(100)
+	database.Query("SELECT * FROM users").Where("active = ?", true).OrderBy(
+		"created_at DESC",
+	).Limit(100)
 
 	// Function with anonymous function
 	ProcessAsync(
@@ -192,8 +191,7 @@ func CreateUser(firstName, lastName, email, phone, role string) User {
 	return User{}
 }
 
-func ProcessData(ctx context.Context, data string, count int, enabled bool,
-	timestamp time.Time, config *Config) {
+func ProcessData(ctx context.Context, data string, count int, enabled bool, timestamp time.Time, config *Config) {
 }
 
 func OuterFunction(inner string, arg2, arg3 string) string {
@@ -207,16 +205,14 @@ func InnerFunction(arg1, arg2, arg3 string) string {
 func Configure(config map[string]interface{}, items []string) {
 }
 
-func ProcessAsync(fn func() error, onSuccess, onFailure func(),
-	timeout time.Duration, retries int) {
+func ProcessAsync(fn func() error, onSuccess, onFailure func(), timeout time.Duration, retries int) {
 }
 
 func add(a, b int) int {
 	return a + b
 }
 
-func handleError(err error, ctx context.Context, retryCount, maxRetries int,
-	backoffDelay time.Duration) {
+func handleError(err error, ctx context.Context, retryCount, maxRetries int, backoffDelay time.Duration) {
 }
 
 type User struct{}

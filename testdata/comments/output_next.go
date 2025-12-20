@@ -1,5 +1,6 @@
 // This is a very long line comment that should be wrapped by the comment
 // formatter into multiple lines while preserving the indentation and markers.
+// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 // Another paragraph with multiple spaces and tabs that should be collapsed into

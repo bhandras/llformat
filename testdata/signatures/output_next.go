@@ -1,3 +1,4 @@
+// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -23,8 +24,8 @@ func getUserDetails(ctx context.Context, userID string, includeProfile bool,
 
 // Example 3: Long method signature
 func (s *Server) HandleComplexRequest(ctx context.Context, req *Request,
-	opts *Options, callback func(error),
-	middleware []Middleware) (*Response, error) {
+	opts *Options, callback func(error), middleware []Middleware) (
+	*Response, error) {
 
 	return nil, nil
 }
@@ -51,10 +52,7 @@ func processGenericData(data map[string]interface{},
 // Example 7: Method with receiver and long params
 func (repo *UserRepository) FindUsersByComplexCriteria(ctx context.Context,
 	criteria SearchCriteria, pagination Pagination, sortOrder SortOrder) (
-	[]*User,
-	int,
-	error,
-) {
+	[]*User, int, error) {
 
 	return nil, 0, nil
 }
@@ -65,11 +63,8 @@ type ComplexInterface interface {
 		compressionLevel int) ([]byte, error)
 
 	ValidateAndTransform(input InputType, rules []ValidationRule,
-		transformers []Transformer) (
-		OutputType,
-		[]ValidationError,
-		error,
-	)
+		transformers []Transformer) (OutputType, []ValidationError,
+		error)
 }
 
 // Example 9: Deeply nested function types in parameters
@@ -85,19 +80,16 @@ func processWithCallbacks(ctx context.Context,
 func calculateOptimalResourceAllocationStrategy(
 	initialResourceAllocationMap map[string]ResourceAllocation,
 	resourceConstraintConfiguration ResourceConstraintConfig,
-	optimizationParameters OptimizationParams) (
-	OptimizedAllocationResult,
-	AllocationMetrics,
-	error,
-) {
+	optimizationParameters OptimizationParams) (OptimizedAllocationResult,
+	AllocationMetrics, error) {
 
 	return OptimizedAllocationResult{}, AllocationMetrics{}, nil
 }
 
 // Example 11: Generic function with constraints
 func TransformCollection[T any, R any, C ~[]T](collection C,
-	transformer func(T) R, filter func(T) bool,
-	aggregator func([]R) R) (R, error) {
+	transformer func(T) R, filter func(T) bool, aggregator func([]R) R) (R,
+	error) {
 
 	var zero R
 
@@ -109,11 +101,8 @@ func (s *ServiceOrchestrator) ExecuteDistributedTransaction(ctx context.Context,
 	txCoordinator TransactionCoordinator,
 	participants []TransactionParticipant,
 	compensationHandler CompensationHandler,
-	timeoutConfig TimeoutConfiguration) (
-	*TransactionResult,
-	*TransactionMetrics,
-	error,
-) {
+	timeoutConfig TimeoutConfiguration) (*TransactionResult,
+	*TransactionMetrics, error) {
 
 	return nil, nil, nil
 }
@@ -128,10 +117,7 @@ func createMiddlewareChain(logger Logger, metrics MetricsCollector,
 // Example 14: Variadic function with complex parameter
 func mergeConfigurations(base *Configuration,
 	overrides ...func(*Configuration) (*Configuration, error)) (
-	*Configuration,
-	[]ConfigurationWarning,
-	error,
-) {
+	*Configuration, []ConfigurationWarning, error) {
 
 	return nil, nil, nil
 }
@@ -144,20 +130,13 @@ type ComplexServiceInterface interface {
 	ProcessBatchRequest(ctx context.Context, requests []*BatchRequest,
 		options BatchProcessingOptions,
 		progressCallback func(processed int, total int, currentItem *BatchRequest)) (
-		*BatchResponse,
-		*BatchProcessingStats,
-		error,
-	)
+		*BatchResponse, *BatchProcessingStats, error)
 
 	ValidateAndTransformWithRetry(input *ComplexInput,
 		validationRules []ValidationRule,
 		transformationPipeline []TransformationStep,
-		retryConfig RetryConfiguration) (
-		*ComplexOutput,
-		*ValidationReport,
-		*TransformationMetrics,
-		error,
-	)
+		retryConfig RetryConfiguration) (*ComplexOutput,
+		*ValidationReport, *TransformationMetrics, error)
 }
 
 // Example 16: Channel parameters
@@ -171,9 +150,7 @@ func streamProcessor(input <-chan *DataPacket, output chan<- *ProcessedPacket,
 func aggregateMetrics(metrics map[MetricKey]map[time.Time][]MetricValue,
 	aggregationWindow time.Duration,
 	aggregationFuncs map[string]func([]MetricValue) MetricValue) (
-	map[MetricKey]AggregatedMetric,
-	error,
-) {
+	map[MetricKey]AggregatedMetric, error) {
 
 	return nil, nil
 }
@@ -183,11 +160,13 @@ func processInlineConfig(config struct {
 	Timeout     time.Duration
 	MaxRetries  int
 	EnableCache bool
-}, handler func(cfg struct {
-	Timeout     time.Duration
-	MaxRetries  int
-	EnableCache bool
-}) error) error {
+}, handler func(
+	cfg struct {
+		Timeout     time.Duration
+		MaxRetries  int
+		EnableCache bool
+	},
+) error) error {
 	return nil
 }
 
@@ -200,13 +179,10 @@ func (r *RepositoryManager[T, K]) FindByComplexQuery(ctx context.Context,
 }
 
 // Example 20: Function with only return values that are long
-func getComprehensiveSystemStatus() (
-	systemHealth SystemHealthStatus,
+func getComprehensiveSystemStatus() (systemHealth SystemHealthStatus,
 	resourceUtilization ResourceUtilizationMetrics,
 	activeConnections ConnectionPoolStats,
-	pendingOperations OperationQueueStats,
-	errorRates ErrorRateMetrics,
-) {
+	pendingOperations OperationQueueStats, errorRates ErrorRateMetrics) {
 
 	return
 }

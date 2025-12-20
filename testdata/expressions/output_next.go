@@ -1,3 +1,4 @@
+// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -11,7 +12,6 @@ func example1(userIsAuthenticated, userHasPermission, accountIsLocked,
 
 	if userIsAuthenticated && userHasPermission && !accountIsLocked &&
 		sessionIsValid || isAdminOverride {
-
 		doSomething()
 	}
 }
@@ -19,6 +19,7 @@ func example1(userIsAuthenticated, userHasPermission, accountIsLocked,
 // Example 2: Long assignment with binary operators
 func example2(user, data, sig interface{}, bypassEnabled bool) bool {
 	isValid := checkPermission(user) && validateInput(data) &&
+
 		verifySignature(sig) || bypassEnabled
 
 	return isValid
@@ -26,11 +27,9 @@ func example2(user, data, sig interface{}, bypassEnabled bool) bool {
 
 // Example 3: Method chain
 func example3() {
-	result := client.
-		WithTimeout(30*time.Second).
-		WithRetry(3).
-		WithHeaders(headers).
-		Execute(ctx, request)
+	result := client.WithTimeout(30*time.Second).WithRetry(3).WithHeaders(
+		headers,
+	).Execute(ctx, request)
 	_ = result
 }
 
@@ -39,7 +38,6 @@ func example4(val int) {
 	switch val {
 	case TypeA, TypeB, TypeC, TypeD, TypeE, TypeF, TypeG, TypeH, TypeI,
 		TypeJ, TypeK:
-
 		doSomething()
 	}
 }
@@ -50,7 +48,6 @@ func example5(items []int, stopRequested bool, ctx context.Context, retryCount,
 
 	for i := 0; i < len(items) && !stopRequested && ctx.Err() == nil &&
 		retryCount < maxRetries; i++ {
-
 		process(items[i])
 	}
 }
@@ -92,7 +89,9 @@ func example11(f *formatter, trimmedLongVariable string, inSwitch,
 	inInterface int) {
 
 	lineType := f.classifyLine(
-		trimmedLongVariable, inSwitch > 0, inInterface > 0,
+		trimmedLongVariable,
+		inSwitch > 0,
+		inInterface > 0,
 	)
 	_ = lineType
 }
@@ -103,11 +102,8 @@ func example12(alpha, beta, gamma int) {
 		if beta > 0 {
 			if gamma > 0 {
 				if len(
-					fmt.Sprintf(
-						"%d%d%d", alpha, beta, gamma,
-					),
+					fmt.Sprintf("%d%d%d", alpha, beta, gamma),
 				) > 10 {
-
 					doSomething()
 				}
 			}
@@ -135,6 +131,7 @@ func (clientType) WithTimeout(time.Duration) clientType { return clientType{} }
 func (clientType) WithRetry(int) clientType             { return clientType{} }
 func (clientType) WithHeaders(interface{}) clientType   { return clientType{} }
 func (clientType) Execute(context.Context, interface{}) interface{} {
+
 	return nil
 }
 

@@ -1,3 +1,4 @@
+// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -40,7 +41,6 @@ func example2() error {
 		log.Debugf("Something happened here that we need to log: %v",
 			longVariableNameHere)
 	}
-
 	return nil
 }
 
@@ -94,16 +94,12 @@ func example7TabbedIndent() {
 // - Exercises continuation alignment to leading whitespace, not after "return".
 func example8ReturnPrefix(x int) int {
 	if x > 0 {
-
 		// Using fmt.Sprintf to keep this an expression for formatting
 		// purposes.
-		return len(
-			fmt.Sprintf("Returning something with a long "+
-				"descriptive message that probably wraps "+
-				"nicely %d %d %d", x, x+1, x+2),
-		)
+		return len(fmt.Sprintf("Returning something with a long "+
+			"descriptive message that probably wraps nicely %d "+
+			"%d %d", x, x+1, x+2))
 	}
-
 	return 0
 }
 
@@ -135,10 +131,7 @@ func example11Comments(a, b int) {
 // - Only explicit targets are reformatted.
 func example12NonTargets(mylog interface{ Infof(string, ...interface{}) }) {
 	mylog.Infof("should remain untouched by formatter: %s %d", "x", 1)
-	log.Info(
-		"non-f variant should be ignored, even if long long long " +
-			"long long long long long long long",
-	)
+	log.Info("non-f variant should be ignored, even if long long long long long long long long long long")
 }
 
 // example13: Multiple calls on one line.
@@ -192,8 +185,8 @@ func example18Parens() {
 //     concatenation joins.
 //   - Ensures boundary handling does not collapse or duplicate spaces.
 func example19MultiSpaces() {
-	log.Infof("This  message   contains    multiple   spaces that should  "+
-		" be preserved  across wrapping and joining when formatted "+
+	log.Infof("This  message   contains    multiple   spaces that should "+
+		"  be preserved  across wrapping and joining when formatted "+
 		"properly with numbers %d and %d", 1, 2)
 }
 
@@ -244,7 +237,6 @@ func example24ReturnErr(x int) error {
 			"and that is not allowed in this context; please "+
 			"choose a different value", x)
 	}
-
 	return nil
 }
 
@@ -262,9 +254,9 @@ func example25DeepNesting(vals []int, threshold int) {
 						"continuation lines", i, j)
 				} else {
 					log.Warnf("Alternate path i=%d j=%d "+
-						"with another long message to "+
-						"exercise the formatter and "+
-						"ensure continuity", i, j)
+						"with another long message "+
+						"to exercise the formatter "+
+						"and ensure continuity", i, j)
 				}
 			}
 		}
@@ -293,9 +285,8 @@ func example28BranchReturn(flag bool, name string) string {
 		return fmt.Sprintf("Flag true for name=%s with an extended "+
 			"tail that should wrap correctly here as well", name)
 	}
-
-	return fmt.Sprintf("Flag false for name=%s with a similarly long tail "+
-		"requiring a wrap", name)
+	return fmt.Sprintf("Flag false for name=%s with a similarly long "+
+		"tail requiring a wrap", name)
 }
 
 // example29: defer and goroutine with targeted calls.
@@ -303,8 +294,8 @@ func example28BranchReturn(flag bool, name string) string {
 func example29DeferGo(i int) {
 	defer log.Infof("Deferred logging for i=%d with a long enough "+
 		"sentence to need wrapping and still look good", i)
-	go log.Warnf("Goroutine warning for i=%d including some more words to "+
-		"force wrapping on continuation", i)
+	go log.Warnf("Goroutine warning for i=%d including some more words "+
+		"to force wrapping on continuation", i)
 }
 
 // example30: switch-case with long messages.
@@ -315,11 +306,9 @@ func example30Switch(v int) {
 		log.Tracef("Value is zero which triggers a verbose " +
 			"explanation that continues across multiple lines " +
 			"for clarity")
-
 	case 1:
 		log.Tracef("Value one encountered; this message should also " +
 			"wrap correctly under switch-case indentation")
-
 	default:
 		log.Errorf("Unexpected value %d requiring attention with a "+
 			"description that certainly should be wrapped", v)
@@ -362,14 +351,14 @@ func example35RawOverflow() {
 // example36: Nested targeted call deeply, with long head and long tail.
 func example36DeepNested() {
 	log.Infof("Head %s", fmt.Sprintf("Nested %s", fmt.Sprintf("Inner %s",
-		fmt.Sprintf("Leaf %d %d %d %d and then some text that "+
-			"will wrap", 1, 2, 3, 4))))
+		fmt.Sprintf("Leaf %d %d %d %d and then some text that will "+
+			"wrap", 1, 2, 3, 4))))
 }
 
 // example37: Percent verbs near boundary.
 func example37Percents(x, y int) {
-	log.Infof("Values %%d= %d and %%d= %d placed near the boundary "+
-		"for packing", x, y)
+	log.Infof("Values %%d= %d and %%d= %d placed near the boundary for "+
+		"packing", x, y)
 }
 
 // example38: Escaped quotes and backslashes.
@@ -386,8 +375,8 @@ func example39Comments() {
 
 // example40: Multiple expressions after wrapped text; ensure lookahead break.
 func example40Lookahead(a, b, c int) {
-	log.Infof("This header will wrap because it is too long to fit on one "+
-		"line with the following expressions:", a, b, c)
+	log.Infof("This header will wrap because it is too long to fit on "+
+		"one line with the following expressions:", a, b, c)
 }
 
 // example41: Long fmt.Sprintf in return in nested position.
