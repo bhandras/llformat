@@ -11,6 +11,14 @@ import (
 	"github.com/lightninglabs/llformat/text"
 )
 
+func isSelectorChainCallStartOnLine(src []byte, start int) bool {
+	i := start - 1
+	for i >= 0 && (src[i] == ' ' || src[i] == '\t') {
+		i--
+	}
+	return i >= 0 && src[i] == '.'
+}
+
 type compactCallCandidate struct {
 	start int
 	end   int
@@ -77,7 +85,62 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 		}
 
 		// Legacy fallback formatting for non-target calls.
+		span := src[c.start:c.end]
+		// Avoid rewriting calls that contain inline comments; rewriting these can
+		// cause non-idempotent comment attachment across pipeline runs.
+		if spanHasCommentOutsideStrings(span) {
+			out.Write(span)
+			pos = c.end
+			continue
+		}
 		indentPrefix := string(indentBytes)
+		trimmedPrefix := strings.TrimSpace(indentPrefix)
+		allowedByPrefix := trimmedPrefix == "" ||
+			strings.HasSuffix(trimmedPrefix, ":=") ||
+			strings.HasSuffix(trimmedPrefix, "=") ||
+			strings.HasSuffix(trimmedPrefix, "return") ||
+			strings.HasSuffix(trimmedPrefix, "go") ||
+			strings.HasSuffix(trimmedPrefix, "defer")
+		if !allowedByPrefix && isSelectorChainCallStartOnLine(src, c.start) {
+			allowedByPrefix = true
+		}
+		if !allowedByPrefix {
+			// Consume the call but leave it unchanged; this matches the scan-based
+			// fallback behavior (which skips nested target calls inside other calls).
+			out.Write(span)
+			pos = c.end
+			continue
+		}
+
+		if fallbackNonTargetsExcludeSelectors {
+			// Exclude selector calls, including method-chain calls where the call
+			// start is the selector ident (e.g. ".Execute(") so the callee span
+			// itself contains no '.'.
+			if isSelectorChainCallStartOnLine(src, c.start) {
+				out.Write(span)
+				pos = c.end
+				continue
+			}
+			callee := strings.TrimSpace(string(src[c.start:c.lparen]))
+			if callNameContainsAny(callee, fallbackNonTargetsExcludes) {
+				out.Write(span)
+				pos = c.end
+				continue
+			}
+			if strings.Contains(callee, ".") {
+				out.Write(span)
+				pos = c.end
+				continue
+			}
+		} else {
+			callee := strings.TrimSpace(string(src[c.start:c.lparen]))
+			if callNameContainsAny(callee, fallbackNonTargetsExcludes) {
+				out.Write(span)
+				pos = c.end
+				continue
+			}
+		}
+
 		tp := strings.TrimSpace(indentPrefix)
 		if tp == ")" || tp == ")." {
 			indentPrefix = string(text.LeadingWhitespace(src, lineStart))
@@ -89,7 +152,7 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 		currentLineLen := visualLen(indentPrefix) + singleLineLen
 		needsWrap := currentLineLen > columnLimit
 		if needsWrap && !isChainedShortCall(src, c.start, c.end) {
-			formatted := formatCallPackedMultiLine(src[c.start:c.end], string(wsIndent), string(wsIndent), true)
+			formatted := formatCallPackedMultiLine(span, string(wsIndent), string(wsIndent), true)
 			out.WriteString(formatted)
 			pos = c.end
 			continue
@@ -97,7 +160,7 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 
 		// Consume the call but leave it unchanged; this matches the scan-based
 		// fallback behavior (which skips nested target calls inside other calls).
-		out.Write(src[c.start:c.end])
+		out.Write(span)
 		pos = c.end
 	}
 

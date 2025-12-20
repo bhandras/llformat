@@ -45,12 +45,28 @@ func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOpti
 
 func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.LogCalls != StageModeDSL {
+		// The legacy compact-calls stage historically includes a fallback that
+		// can rewrite long non-target calls into a packed multiline style.
+		//
+		// When the pipeline explicitly opts into a DSL multiline-call style, let
+		// the multiline stage own generic call formatting to avoid stage fighting
+		// and to preserve inline comment handling guarantees.
+		enableFallback := !(plan.MultiLineCalls == StageModeDSL && opts.Style.DSLMultiLineStyle != "")
+
+		useAST := opts.Legacy.CompactCallUseASTSelect
+		if enableFallback {
+			useAST = true
+		}
+
 		return NewCompactCallFormatter(Config{
-			ColumnLimit:     cfg.ColumnLimit,
-			TabStop:         cfg.TabStop,
-			UseASTSelection: opts.Legacy.CompactCallUseASTSelect,
-			SkipGofmt:       true,
-			ParseSafe:       opts.Legacy.CompactCallParseSafe,
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+			Excludes:    opts.Style.Excludes,
+			FallbackNonTargets:                 enableFallback,
+			FallbackNonTargetsExcludeSelectors: enableFallback,
+			UseASTSelection:                    useAST,
+			SkipGofmt:                          true,
+			ParseSafe:                          opts.Legacy.CompactCallParseSafe,
 		})
 	}
 

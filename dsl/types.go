@@ -69,6 +69,14 @@ type Context struct {
 	Source      []byte
 	ColumnLimit int
 	TabStop     int
+	// Parseable reports whether ctx.Source parsed without syntax errors when the
+	// engine built this Context for the current iteration.
+	//
+	// The DSL engine uses this to decide whether to enforce parseability checks
+	// on candidate rewrites: when the input is already syntactically invalid,
+	// we still want to allow whitespace/layout rewrites to run (to support
+	// legacy fixtures that are intentionally unparseable).
+	Parseable bool
 
 	// ForbiddenSpans holds the union of spans that this engine instance should
 	// not rewrite. It is populated by the outer pipeline when ownership
@@ -104,6 +112,7 @@ func NewContext(fset *token.FileSet, source []byte, columnLimit, tabStop int) *C
 		Source:      source,
 		ColumnLimit: columnLimit,
 		TabStop:     tabStop,
+		Parseable:   true,
 		atomicNodes: make(map[ast.Node]bool),
 	}
 }

@@ -370,7 +370,10 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 			Priority: 50,
 			Action: &ReflowCallAction{
 				Target:   "rhs",
-				Strategy: StrategyOnePerLine,
+				// Prefer a packed style for simple argument lists so we can keep
+				// multiple short args on the same continuation line when they fit.
+				// Fall back to one-per-line when any arg is already multiline.
+				Strategy: StrategyAdaptive,
 			},
 		},
 
@@ -718,11 +721,19 @@ type MultiLineCallOptions struct {
 	// - "" (default): one argument per line (forced break)
 	// - "pairs": group args as (a, b) pairs when possible
 	CallArgsGrouping string
+
+	// DisableBreakBeforeCallOnLongMultiAssignPrefix disables a heuristic in the
+	// packed multiline call action that prefers breaking before a call (keeping
+	// it single-line) when the only overflow is caused by a long multi-assignment
+	// prefix. Some profiles intentionally prefer formatting the call itself as
+	// multiline instead.
+	DisableBreakBeforeCallOnLongMultiAssignPrefix bool
 }
 
 // MultiLineCallRulesWithOptions returns MultiLineCallRules with explicit options.
 func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...PackedMultiLineFormatFunc) []Rule {
 	action := &PackedMultiLineCallAction{Target: "node"}
+	action.DisableBreakBeforeCallOnLongMultiAssignPrefix = opts.DisableBreakBeforeCallOnLongMultiAssignPrefix
 	if len(formatFunc) > 0 && formatFunc[0] != nil {
 		action.FormatFunc = formatFunc[0]
 	}
@@ -734,6 +745,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 		Target:           "node",
 		FormatFunc:       action.FormatFunc,
 		OnlyIfSingleLine: true,
+		DisableBreakBeforeCallOnLongMultiAssignPrefix: opts.DisableBreakBeforeCallOnLongMultiAssignPrefix,
 	}
 
 	longCallConds := []Condition{
@@ -920,6 +932,23 @@ func LegacyMultiLineScanRulesWithOptions(opts MultiLineCallOptions, scanFunc Leg
 			Action: &LegacyMultiLineScanAction{
 				Excludes: opts.Excludes,
 				ScanFunc: scanFunc,
+			},
+		},
+	}
+}
+
+// LegacyCompactCallRules delegates the compact-call stage to a legacy formatter.
+// This exists to preserve parity with the legacy pipeline while running under
+// the DSL engine.
+func LegacyCompactCallRules(formatFunc LegacyCompactCallFormatFunc) []Rule {
+	return []Rule{
+		{
+			Name:     "legacy_compact_calls_format",
+			Pattern:  &NodePattern{Type: "File"},
+			When:     &TrueCond{},
+			Priority: 75,
+			Action: &LegacyCompactCallFormatAction{
+				FormatFunc: formatFunc,
 			},
 		},
 	}

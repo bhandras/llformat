@@ -95,12 +95,13 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 	for iter := 0; iter < maxIters; iter++ {
 		// Parse current source
 		fset := token.NewFileSet()
-		file, err := parser.ParseFile(fset, "", result, parser.ParseComments)
-		if err != nil {
+		file, err := parser.ParseFile(fset, "", result, parser.AllErrors|parser.ParseComments)
+		if file == nil {
 			// If we can't parse, we can still try to apply file-scoped
 			// scan/delegation rules that don't require an AST (e.g. legacy
 			// comment formatting).
 			ctx := NewContext(token.NewFileSet(), result, e.ColumnLimit, e.TabStop)
+			ctx.Parseable = false
 			ctx.ForbiddenSpans = e.ForbiddenSpans
 			modified, changed := e.applyOneFileRuleWithoutAST(iter+1, ctx)
 			if !changed {
@@ -144,6 +145,7 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		}
 
 		ctx := NewContext(fset, result, e.ColumnLimit, e.TabStop)
+		ctx.Parseable = err == nil
 		ctx.ForbiddenSpans = e.ForbiddenSpans
 
 		// First pass: apply atomic markers (high priority keep_together rules)
@@ -247,10 +249,11 @@ func (e *Engine) estimateMaxIterations(src []byte) int {
 	// If the file isn't parseable, auto-iteration can't estimate safely. The
 	// caller may still have file-level fallback rules, so allow a single pass.
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.ParseComments)
-	if err != nil || file == nil {
+	file, err := parser.ParseFile(fset, "", src, parser.AllErrors|parser.ParseComments)
+	if file == nil {
 		return 1
 	}
+	_ = err
 
 	nodeTypes := e.ruleNodeTypes()
 	if len(nodeTypes) == 0 {
@@ -735,12 +738,19 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 		if err != nil {
 			return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
 		}
-		// Never accept a transformation that produces syntactically invalid Go.
-		// This ensures the DSL engine won't “brick” a file even if a rule is
-		// imperfect or interacts badly with semicolon insertion.
-		fset := token.NewFileSet()
-		if _, err := parser.ParseFile(fset, "", applied, parser.ParseComments); err != nil {
-			return nil, false, false, "edit_action=parse_failed=" + err.Error()
+		// Never accept a transformation that produces syntactically invalid Go
+		// when the input was parseable. This ensures the DSL engine won't "brick"
+		// a file even if a rule is imperfect or interacts badly with semicolon
+		// insertion.
+		//
+		// However, some legacy fixtures are intentionally unparseable and are
+		// still expected to be formatted by scanner-based rules. In those cases,
+		// we allow transformations that keep the file unparseable.
+		if ctx.Parseable {
+			fset := token.NewFileSet()
+			if _, err := parser.ParseFile(fset, "", applied, parser.ParseComments); err != nil {
+				return nil, false, false, "edit_action=parse_failed=" + err.Error()
+			}
 		}
 		return applied, true, true, ""
 	}
@@ -753,9 +763,11 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 	if ctx.editOverlapsForbidden(start, endBefore) {
 		return nil, false, false, "blocked_by_ownership"
 	}
-	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "", modified, parser.ParseComments); err != nil {
-		return nil, false, false, "action=parse_failed=" + err.Error()
+	if ctx.Parseable {
+		fset := token.NewFileSet()
+		if _, err := parser.ParseFile(fset, "", modified, parser.ParseComments); err != nil {
+			return nil, false, false, "action=parse_failed=" + err.Error()
+		}
 	}
 	return modified, true, true, ""
 }

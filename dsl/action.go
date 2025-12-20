@@ -338,18 +338,41 @@ func formatCallLeftPack(call *ast.CallExpr, indent string, ctx *Context) string 
 func formatCallAdaptive(call *ast.CallExpr, indent string, ctx *Context) string {
 	// Check if any argument is multi-line
 	hasMultiLine := false
+	hasComplex := false
 	for _, arg := range call.Args {
 		argSrc := renderNode(arg, ctx.Fset)
 		if strings.Contains(argSrc, "\n") {
 			hasMultiLine = true
 			break
 		}
+		if !isSimpleCallArg(arg) {
+			hasComplex = true
+		}
 	}
 
-	if hasMultiLine {
+	// Prefer one-per-line when args are already multiline or contain "complex"
+	// expressions (binary ops, calls, composites, etc). This mirrors the legacy
+	// fixtures which keep complex argument expressions visually separate.
+	if hasMultiLine || hasComplex {
 		return formatCallOnePerLine(call, indent, ctx)
 	}
 	return formatCallLeftPack(call, indent, ctx)
+}
+
+func isSimpleCallArg(arg ast.Expr) bool {
+	switch a := arg.(type) {
+	case *ast.Ident, *ast.BasicLit, *ast.SelectorExpr:
+		return true
+	case *ast.StarExpr:
+		return isSimpleCallArg(a.X)
+	case *ast.UnaryExpr:
+		// Treat common unary wrappers (&x, -1) as simple when their operand is.
+		return isSimpleCallArg(a.X)
+	case *ast.ParenExpr:
+		return isSimpleCallArg(a.X)
+	default:
+		return false
+	}
 }
 
 // BreakAfterAction inserts a line break after a node.
@@ -1566,6 +1589,15 @@ type PackedMultiLineCallAction struct {
 	// logic. If nil, a simplified fallback is used.
 	FormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
 
+	// DisableBreakBeforeCallOnLongMultiAssignPrefix disables a readability
+	// heuristic that prefers breaking before a call (keeping it single-line)
+	// when the only overflow is caused by a long multi-assignment prefix.
+	//
+	// Some modes (e.g. "next") intentionally prefer preserving the assignment
+	// shape by formatting the call itself as multiline rather than detaching the
+	// call from the assignment with a newline.
+	DisableBreakBeforeCallOnLongMultiAssignPrefix bool
+
 	// OnlyIfSingleLine restricts this action to calls that are currently rendered
 	// on a single line in the source span. This is useful as a fallback when a
 	// layout-based formatter "owns" the multiline shape and we only want the
@@ -1599,6 +1631,28 @@ type LegacyMultiLineScanFunc func(src []byte, colLimit, tabStop int, excludes []
 type LegacyMultiLineScanAction struct {
 	Excludes []string
 	ScanFunc LegacyMultiLineScanFunc
+}
+
+// LegacyCompactCallFormatFunc formats compact call targets (and optionally
+// fallback non-targets) in src and reports whether it changed anything.
+type LegacyCompactCallFormatFunc func(src []byte, colLimit, tabStop int) ([]byte, bool)
+
+// LegacyCompactCallFormatAction delegates compact-call formatting to an injected
+// legacy formatter implementation.
+type LegacyCompactCallFormatAction struct {
+	FormatFunc LegacyCompactCallFormatFunc
+}
+
+// Execute implements Action for LegacyCompactCallFormatAction.
+func (a *LegacyCompactCallFormatAction) Execute(_ Captures, ctx *Context) ([]byte, bool) {
+	if a.FormatFunc == nil {
+		return nil, false
+	}
+	out, changed := a.FormatFunc(ctx.Source, ctx.ColumnLimit, ctx.TabStop)
+	if !changed {
+		return nil, false
+	}
+	return out, true
 }
 
 // Execute implements Action for LegacyMultiLineScanAction.
@@ -1867,39 +1921,41 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	//     arg,
 	//   )
 	// is a net readability loss.
-	ls := lineStart(ctx.Source, start)
-	prefixLine := string(ctx.Source[ls:start])
-	trimmedPrefix := strings.TrimSpace(prefixLine)
-	trimmedPrefixNoWS := strings.TrimRightFunc(prefixLine, unicode.IsSpace)
-	isAssignmentPrefix := strings.HasSuffix(trimmedPrefixNoWS, ":=") ||
-		(strings.HasSuffix(trimmedPrefixNoWS, "=") &&
-			!strings.HasSuffix(trimmedPrefixNoWS, "==") &&
-			!strings.HasSuffix(trimmedPrefixNoWS, "!=") &&
-			!strings.HasSuffix(trimmedPrefixNoWS, "<=") &&
-			!strings.HasSuffix(trimmedPrefixNoWS, ">="))
-	isMultiAssignPrefix := isAssignmentPrefix && strings.Contains(trimmedPrefix, ",")
-	if isMultiAssignPrefix {
-		contIndent := wsIndent + "\t"
-		collapsed := strings.Join(strings.Fields(callText), " ")
-		callFitsOnContLine := visualLen(contIndent, ctx.TabStop)+visualLen(collapsed, ctx.TabStop) <= ctx.ColumnLimit
-		if callFitsOnContLine {
-			replaceStart := start
-			for replaceStart > ls && (ctx.Source[replaceStart-1] == ' ' || ctx.Source[replaceStart-1] == '\t') {
-				replaceStart--
-			}
-			if replaceStart < start {
-				var b EditBuilder
-				b.Replace(replaceStart, start, []byte("\n"+contIndent))
-				// If the call was already multiline, collapse it to a single line now
-				// that it has moved to a clean continuation line.
-				if strings.Contains(callText, "\n") {
-					b.Replace(start, end, []byte(collapsed))
+	if !a.DisableBreakBeforeCallOnLongMultiAssignPrefix {
+		ls := lineStart(ctx.Source, start)
+		prefixLine := string(ctx.Source[ls:start])
+		trimmedPrefix := strings.TrimSpace(prefixLine)
+		trimmedPrefixNoWS := strings.TrimRightFunc(prefixLine, unicode.IsSpace)
+		isAssignmentPrefix := strings.HasSuffix(trimmedPrefixNoWS, ":=") ||
+			(strings.HasSuffix(trimmedPrefixNoWS, "=") &&
+				!strings.HasSuffix(trimmedPrefixNoWS, "==") &&
+				!strings.HasSuffix(trimmedPrefixNoWS, "!=") &&
+				!strings.HasSuffix(trimmedPrefixNoWS, "<=") &&
+				!strings.HasSuffix(trimmedPrefixNoWS, ">="))
+		isMultiAssignPrefix := isAssignmentPrefix && strings.Contains(trimmedPrefix, ",")
+		if isMultiAssignPrefix && len(call.Args) == 1 {
+			contIndent := wsIndent + "\t"
+			collapsed := strings.Join(strings.Fields(callText), " ")
+			callFitsOnContLine := visualLen(contIndent, ctx.TabStop)+visualLen(collapsed, ctx.TabStop) <= ctx.ColumnLimit
+			if callFitsOnContLine {
+				replaceStart := start
+				for replaceStart > ls && (ctx.Source[replaceStart-1] == ' ' || ctx.Source[replaceStart-1] == '\t') {
+					replaceStart--
 				}
-				out, changed, err := b.Apply(ctx.Source)
-				if err != nil {
-					return nil, false
+				if replaceStart < start {
+					var b EditBuilder
+					b.Replace(replaceStart, start, []byte("\n"+contIndent))
+					// If the call was already multiline, collapse it to a single line now
+					// that it has moved to a clean continuation line.
+					if strings.Contains(callText, "\n") {
+						b.Replace(start, end, []byte(collapsed))
+					}
+					out, changed, err := b.Apply(ctx.Source)
+					if err != nil {
+						return nil, false
+					}
+					return out, changed
 				}
-				return out, changed
 			}
 		}
 	}
@@ -1977,7 +2033,10 @@ func (a *OnePerLineMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]
 		return nil, false
 	}
 
-	formatted := formatCallOnePerLine(call, wsIndent, ctx)
+	// Despite the name, use an adaptive strategy: pack simple argument lists
+	// tightly, but fall back to one-per-line when any argument is already
+	// multiline.
+	formatted := formatCallAdaptive(call, wsIndent, ctx)
 	if formatted == string(original) {
 		return nil, false
 	}
@@ -2188,37 +2247,44 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	signature := strings.TrimSpace(string(ctx.Source[start : bracePos+1]))
 	wsIndent := ctx.IndentAt(node)
 
-	// For function literals assigned inline (e.g. `x := func(...) ... {`), the
-	// effective available width for the `func` signature is reduced by the
-	// prefix before the `func` keyword. Treat `wsIndent` as the baseline
-	// indentation and subtract the extra visual width contributed by `prefix`
-	// (minus `wsIndent`) from the column budget passed to signature formatting.
-	effectiveColLimit := ctx.ColumnLimit
-	prefixWidth := visualLen(prefix, ctx.TabStop)
-	wsIndentWidth := visualLen(wsIndent, ctx.TabStop)
-	hadPrefixBudgetReduction := false
-	// If the prefix alone already overflows the column limit, breaking the
-	// signature based on a severely reduced budget tends to produce very ugly
-	// output (and can't actually bring the combined line under the limit anyway).
-	// In that case, keep the signature formatting consistent with normal
-	// function signatures by not reducing the budget.
-	prefixTrimmed := strings.TrimRight(prefix, " \t")
-	if visualLen(prefixTrimmed, ctx.TabStop) < ctx.ColumnLimit && prefixWidth > wsIndentWidth {
-		hadPrefixBudgetReduction = true
-		effectiveColLimit -= prefixWidth - wsIndentWidth
-		if effectiveColLimit < 20 {
-			effectiveColLimit = 20
-		}
-	}
-
 	var formatted string
 	var needsBlank bool
+	signatureForFormat := signature
+	// For function literals assigned inline (e.g. `x := func(...) ... {`) or used
+	// as composite-literal fields (e.g. `Field: func(...) {`), the available
+	// width of the first line is affected by the prefix before the `func`
+	// keyword.
+	//
+	// Do not model this by reducing the column limit globally: continuation
+	// lines do not include the prefix, and reducing the budget can cause
+	// needless breaking (e.g. splitting small return lists).
+	//
+	// Instead, include the prefix in the formatted string we pass to the
+	// signature formatter, then strip it back out before applying the edit.
+	prefixSuffix := strings.TrimPrefix(prefix, wsIndent)
+	prefixWidth := visualLen(prefix, ctx.TabStop)
+	wsIndentWidth := visualLen(wsIndent, ctx.TabStop)
+	prefixTrimmed := strings.TrimRight(prefix, " \t")
+	// If the prefix alone already overflows the column limit, modeling it in the
+	// signature formatter cannot bring the combined line under the limit, but it
+	// can make the signature itself look much worse (e.g. forcing `func(` onto a
+	// new line). In that case, keep the signature formatting consistent by
+	// ignoring the prefix for width calculations.
+	hasSyntheticPrefix := prefixSuffix != "" &&
+		prefixWidth > wsIndentWidth &&
+		visualLen(prefixTrimmed, ctx.TabStop) < ctx.ColumnLimit
+	if hasSyntheticPrefix {
+		signatureForFormat = prefixSuffix + signature
+	}
 	if a.FormatFunc != nil {
 		// FormatFunc expects `indent` to be the leading whitespace indentation,
 		// not the full prefix before `func`.
-		formatted, needsBlank = a.FormatFunc(signature, wsIndent, effectiveColLimit, ctx.TabStop)
+		formatted, needsBlank = a.FormatFunc(signatureForFormat, wsIndent, ctx.ColumnLimit, ctx.TabStop)
 	} else {
-		formatted, _ = formatSignatureSimple(signature, wsIndent, effectiveColLimit, ctx.TabStop)
+		formatted, _ = formatSignatureSimple(signatureForFormat, wsIndent, ctx.ColumnLimit, ctx.TabStop)
+	}
+	if hasSyntheticPrefix {
+		formatted = stripLeadingNonWhitespaceUpToFuncKeyword(formatted, wsIndent)
 	}
 
 	// Reattach the original prefix (e.g. `x := `) to the first line.
@@ -2231,7 +2297,6 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		formatted = prefix + strings.TrimPrefix(formatted, wsIndent)
 	}
 
-	_ = hadPrefixBudgetReduction
 	_ = isFieldPrefix
 
 	// For function literals, treat "signature is multiline" as requiring the
@@ -2308,6 +2373,34 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		return nil, false
 	}
 	return out, true
+}
+
+func stripLeadingNonWhitespaceUpToFuncKeyword(formatted, wsIndent string) string {
+	// We include the prefix before `func` in the formatted signature to model
+	// first-line width constraints, but the FuncLit edit span starts at the `func`
+	// keyword. Strip the prefix back out by removing everything between the
+	// indentation and the final `func` keyword on the first line.
+	//
+	// Using the last `func` occurrence avoids false positives for prefixes like
+	// `somefunc := func(...) {`.
+	nl := strings.IndexByte(formatted, '\n')
+	first := formatted
+	rest := ""
+	if nl >= 0 {
+		first = formatted[:nl]
+		rest = formatted[nl:]
+	}
+
+	firstNoIndent := strings.TrimPrefix(first, wsIndent)
+	idx := strings.LastIndex(firstNoIndent, "func")
+	if idx < 0 {
+		return formatted
+	}
+
+	// Keep the indentation intact so downstream code can still strip it when
+	// reattaching the original prefix.
+	first = wsIndent + firstNoIndent[idx:]
+	return first + rest
 }
 
 func filterNonEmptyTrimmedStrings(items []string) []string {

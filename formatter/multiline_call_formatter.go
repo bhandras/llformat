@@ -208,6 +208,16 @@ func (f *MultiLineCallFormatter) formatOneCallInSourceScan(src []byte) ([]byte, 
 		// Look for function calls (only if we haven't already made a change)
 		if !changed {
 			if callInfo := f.findFunctionCallAt(src, i); callInfo != nil {
+				// Do not rewrite calls that are already multiline. This stage is
+				// intended to expand long single-line calls; touching already
+				// multiline calls can cause oscillation with other stages (e.g. a
+				// packed-call formatter that introduces newlines).
+				if bytes.Contains(src[callInfo.start:callInfo.end], []byte{'\n'}) {
+					out.Write(src[callInfo.start:callInfo.end])
+					i = callInfo.end
+					continue
+				}
+
 				// Check if this function should be excluded
 				if f.shouldExclude(callInfo.funcName) {
 					out.Write(src[callInfo.start:callInfo.end])
@@ -442,7 +452,7 @@ func (f *MultiLineCallFormatter) formatAsMultiLine(callBytes []byte, wsIndent st
 			b.WriteString(strings.TrimSpace(line))
 		}
 
-		// Add comma after each argument except potentially the last
+		// Add comma after each argument
 		b.WriteString(",")
 
 		// Add newline

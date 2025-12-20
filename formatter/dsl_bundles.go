@@ -19,6 +19,34 @@ func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
 // This uses the legacy call formatter implementation to ensure parity.
 func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
 	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
+	if profile == "parity" {
+		// For parity, preserve the legacy compact-calls stage behavior exactly,
+		// including scan/AST selection quirks.
+		return dsl.LegacyCompactCallRules(func(src []byte, colLimit, tabStop int) ([]byte, bool) {
+			// Enable fallback packing unless the pipeline has explicitly opted
+			// into a DSL multiline-call style; in that case the multiline stage
+			// should own call formatting behavior (including comment handling).
+			enableFallback := opts.Style.DSLMultiLineStyle == ""
+
+			useAST := opts.Legacy.CompactCallUseASTSelect
+			// When fallback is enabled, prefer AST-based selection to avoid scan
+			// mis-detecting non-call constructs as "calls".
+			if enableFallback {
+				useAST = true
+			}
+
+			return FormatCompactCallsInSource(src, Config{
+				ColumnLimit: colLimit,
+				TabStop:     tabStop,
+				ParseSafe:   opts.Legacy.CompactCallParseSafe,
+				Excludes:    opts.Style.Excludes,
+
+				FallbackNonTargets:                 enableFallback,
+				FallbackNonTargetsExcludeSelectors: enableFallback,
+				UseASTSelection:                    useAST,
+			})
+		})
+	}
 	// Both "modern" and "next" opt into suffix-only matching for selectors so
 	// custom loggers (e.g. `rpcSLog.Errorf`) are formatted the same way as
 	// `log.Errorf`/`fmt.Errorf`.
@@ -165,18 +193,24 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		)
 	case "packed":
 		rules = dsl.PackedMultiLineOnlyRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
+			dsl.MultiLineCallOptions{
+				Excludes: opts.Style.Excludes,
+			},
 			packedFallback,
 		)
 	case "packed-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
+			dsl.MultiLineCallOptions{
+				Excludes: opts.Style.Excludes,
+			},
 			packedFallback,
 		)
 	case "layout-args":
 		// Try layout-based argument breaking, fall back to packed multiline.
 		rules = dsl.MultiLineCallRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes, CallArgsStyle: "layout"},
+			dsl.MultiLineCallOptions{
+				Excludes: opts.Style.Excludes, CallArgsStyle: "layout",
+			},
 			packedFallback,
 		)
 	case "layout-args-groups-pairs":
@@ -192,7 +226,9 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		)
 	case "packed-chain-layout", "layout-chain":
 		rules = dsl.MultiLineCallRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes, MethodChainStyle: "layout"},
+			dsl.MultiLineCallOptions{
+				Excludes: opts.Style.Excludes, MethodChainStyle: "layout",
+			},
 			packedFallback,
 		)
 	case "layout-all":

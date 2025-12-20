@@ -202,6 +202,14 @@ func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo
 		return src, false
 	}
 
+	// Avoid rewriting lines that contain inline comments. The legacy expression
+	// formatter operates by byte edits and gofmt normalization; touching comment
+	// adjacency inside argument lists can lead to non-idempotent outputs where a
+	// subsequent run re-attaches the comment to a different token.
+	if lineHasCommentOutsideStrings([]byte(line)) {
+		return src, false
+	}
+
 	// Skip function/method signatures (these need different handling)
 	if strings.HasPrefix(trimmed, "func ") && strings.HasSuffix(strings.TrimSpace(line), "{") {
 		return src, false
@@ -272,6 +280,21 @@ func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo
 	}
 
 	return result.Bytes(), true
+}
+
+func lineHasCommentOutsideStrings(b []byte) bool {
+	i := 0
+	for i < len(b) {
+		if scanner.IsStringStart(b, i) {
+			i = scanner.ScanString(b, i)
+			continue
+		}
+		if scanner.IsLineCommentStart(b, i) || scanner.IsBlockCommentStart(b, i) {
+			return true
+		}
+		i++
+	}
+	return false
 }
 
 // findBreakPoint finds the best position to break a long line.

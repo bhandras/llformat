@@ -247,12 +247,124 @@ func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (s
 	// the leading indent: callers for interface methods pass `indent` and already
 	// include the right whitespace in `signature`.
 	formatted := f.breakSignature(signature, indent)
+	formatted = collapseMultilineParenReturnListIfFits(formatted, colLimit, tabStop)
 	needsBlank := hasNewlineOutsideBraces(formatted)
 	return formatted, needsBlank
 }
 
+func collapseMultilineParenReturnListIfFits(signature string, colLimit, tabStop int) string {
+	// If a parenthesized return list was broken across multiple lines, try to
+	// collapse it back onto the `) (` line when it fits.
+	//
+	// Example target:
+	//   func(x T,
+	//     y U) (Out,
+	//     error) {
+	// =>
+	//   func(x T,
+	//     y U) (Out, error) {
+	lines := strings.Split(signature, "\n")
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		trimmed := strings.TrimRight(line, " \t")
+		openIdx := strings.LastIndex(trimmed, ") (")
+		if openIdx < 0 {
+			continue
+		}
+		// Require the `) (` to be the end of the non-whitespace prefix of this
+		// line. We allow return content after it (e.g. `) (Out,`), but we must not
+		// be in the middle of something else.
+		prefix := trimmed[:openIdx+len(") (")]
+		afterOpen := strings.TrimSpace(trimmed[openIdx+len(") ("):])
+
+		var retParts []string
+		if afterOpen != "" {
+			retParts = append(retParts, afterOpen)
+		}
+
+		closeLine := -1
+		closeIdx := -1
+		tail := ""
+
+		// Consume subsequent lines until we find the close paren.
+		for j := i + 1; j < len(lines); j++ {
+			part := strings.TrimLeft(lines[j], " \t")
+			if k := strings.IndexByte(part, ')'); k >= 0 {
+				closeLine = j
+				closeIdx = k
+				front := strings.TrimSpace(part[:k])
+				if front != "" {
+					retParts = append(retParts, front)
+				}
+				tail = part[k:] // includes ')', plus anything after it (` {`, etc)
+				break
+			}
+			if part != "" {
+				retParts = append(retParts, strings.TrimSpace(part))
+			}
+		}
+		if closeLine == -1 || closeIdx == -1 {
+			continue
+		}
+
+		ret := strings.Join(retParts, " ")
+		ret = strings.TrimSpace(ret)
+		if ret == "" {
+			continue
+		}
+		// Only collapse simple return lists; avoid nested types that require a
+		// real parser (function types, composite literal types, etc).
+		if strings.ContainsAny(ret, "{}") || strings.Contains(ret, "func(") {
+			continue
+		}
+		// Normalize comma spacing.
+		ret = strings.Join(strings.Fields(ret), " ")
+		ret = strings.ReplaceAll(ret, " ,", ",")
+		ret = strings.ReplaceAll(ret, ",", ", ")
+		ret = strings.Join(strings.Fields(ret), " ")
+
+		candidate := prefix + ret + tail
+		if width.VisualLenWithTab(candidate, tabStop) > colLimit {
+			continue
+		}
+
+		// Replace lines[i..closeLine] with a single collapsed line.
+		newLines := append([]string{}, lines[:i]...)
+		newLines = append(newLines, candidate)
+		newLines = append(newLines, lines[closeLine+1:]...)
+		return strings.Join(newLines, "\n")
+	}
+
+	return signature
+}
+
 func isFuncLitSignature(signature string) bool {
 	trimmed := strings.TrimSpace(signature)
+	// Signatures passed to the formatter may include non-whitespace prefixes
+	// before the `func` keyword (e.g. `Field: func(...) {` or `x := func(...) {`)
+	// when we want to model the first-line width constraints. Locate the `func`
+	// keyword and classify based on the substring starting there.
+	if !strings.HasPrefix(trimmed, "func") {
+		funcIdx := -1
+		for i := 0; i+4 <= len(trimmed); i++ {
+			if trimmed[i] != 'f' || trimmed[i:i+4] != "func" {
+				continue
+			}
+			// Word boundary: avoid matching `somefunc` or `funcX`.
+			if i > 0 && isIdentChar(trimmed[i-1]) {
+				continue
+			}
+			if i+4 < len(trimmed) && isIdentChar(trimmed[i+4]) {
+				continue
+			}
+			funcIdx = i
+			break
+		}
+		if funcIdx >= 0 {
+			trimmed = strings.TrimSpace(trimmed[funcIdx:])
+		}
+	}
+
 	if strings.HasPrefix(trimmed, "func(") {
 		return true
 	}
@@ -813,9 +925,21 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	// - function declarations without a receiver
 	// - interface methods
 	// but not for receiver methods, where breaking results is often clearer.
-	isFuncDeclNoRecv := strings.HasPrefix(sig, "func ") && !strings.HasPrefix(sig, "func (")
-	isFuncLit := isFuncLitSignature(sig)
-	isInterfaceMethod := !strings.HasPrefix(strings.TrimSpace(sig), "func")
+	trimmedSig := strings.TrimSpace(sig)
+	hasFuncKeyword := strings.Contains(trimmedSig, "func")
+	// When a signature includes a prefix before `func` (e.g. `Field: func...`),
+	// classify using the substring starting at `func` so heuristics don't treat
+	// it like an interface method.
+	sigAtFunc := trimmedSig
+	if hasFuncKeyword && !strings.HasPrefix(sigAtFunc, "func") {
+		if idx := strings.Index(sigAtFunc, "func"); idx >= 0 {
+			sigAtFunc = strings.TrimSpace(sigAtFunc[idx:])
+		}
+	}
+
+	isFuncDeclNoRecv := strings.HasPrefix(sigAtFunc, "func ") && !strings.HasPrefix(sigAtFunc, "func (")
+	isInterfaceMethod := !hasFuncKeyword
+	isFuncLit := isFuncLitSignature(sigAtFunc)
 	// Function literals are common in call-arg position; for readability we
 	// prefer keeping their parameter list intact and breaking the return list
 	// instead (matching the "next" golden spec).

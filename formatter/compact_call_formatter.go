@@ -27,9 +27,21 @@ type Config struct {
 	ColumnLimit int
 	TabStop     int
 	Targets     []string
+	// Excludes is a list of substrings; if any matches the callee name of a
+	// non-target call, fallback formatting will skip that call. This mirrors the
+	// legacy multiline-call exclude semantics (strings.Contains).
+	//
+	// Note: This only applies to the fallback formatter (FallbackNonTargets);
+	// targeted calls (Targets) are still formatted as usual.
+	Excludes []string
 	// FallbackNonTargets enables formatting of non-targeted function calls
 	// that exceed the column limit using a packed multi-line style.
 	FallbackNonTargets bool
+	// FallbackNonTargetsExcludeSelectors disables fallback formatting for
+	// selector calls (e.g. `pkg.Func(...)` or `x.Method(...)`). This can be
+	// useful in pipelines that want selector calls handled by a dedicated
+	// multiline stage instead.
+	FallbackNonTargetsExcludeSelectors bool
 
 	// UseASTSelection switches this legacy call formatter from scan-based call
 	// detection to AST-based call selection. The formatting logic remains the
@@ -95,6 +107,29 @@ func (f *CompactCallFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
 
 		if f.cfg.FallbackNonTargets {
 			if start, end := findGenericCallAt(src, i); end > start {
+				// Avoid claiming ownership of calls that contain inline comments;
+				// rewriting those can cause non-idempotent comment attachment across
+				// pipeline runs.
+				span := src[start:end]
+				if spanHasCommentOutsideStrings(span) {
+					i = end
+					continue
+				}
+				// Keep ownership consistent with formatting selection: excluded calls
+				// should not be considered owned by this stage.
+				if openRel := bytes.IndexByte(src[start:end], '('); openRel > 0 {
+					callee := strings.TrimSpace(string(src[start : start+openRel]))
+					if callNameContainsAny(callee, f.cfg.Excludes) {
+						i = end
+						continue
+					}
+					if f.cfg.FallbackNonTargetsExcludeSelectors {
+						if isSelectorChainCallStart(src, start) || strings.Contains(callee, ".") {
+							i = end
+							continue
+						}
+					}
+				}
 				owned = append(owned, llast.OffsetSpan{Start: start, End: end})
 				i = end
 				continue
@@ -125,6 +160,8 @@ func NewCompactCallFormatter(cfg Config) *CompactCallFormatter {
 var columnLimit = 80
 var tabStop = 8
 var fallbackNonTargets = false
+var fallbackNonTargetsExcludeSelectors = false
+var fallbackNonTargetsExcludes []string
 var skipGofmt = false
 
 func defaultTargets() []string {
@@ -132,6 +169,28 @@ func defaultTargets() []string {
 		"log.Infof(", "log.Debugf(", "log.Tracef(", "log.Errorf(", "log.Warnf(",
 		"fmt.Printf(", "fmt.Sprintf(", "fmt.Errorf(",
 	}
+}
+
+// FormatCompactCallsInSource applies the compact-call stage formatting to src
+// using cfg and reports whether it changed anything.
+//
+// This exists so DSL parity stages can delegate to the legacy implementation
+// without importing the formatter package from the dsl package.
+func FormatCompactCallsInSource(src []byte, cfg Config) ([]byte, bool) {
+	if cfg.ColumnLimit <= 0 {
+		cfg.ColumnLimit = DefaultColumnLimit
+	}
+	if cfg.TabStop <= 0 {
+		cfg.TabStop = DefaultTabStop
+	}
+	if len(cfg.Targets) == 0 {
+		cfg.Targets = defaultTargets()
+	}
+	// Pipelines run gofmt at the end; keep compact-call stage gofmt-free.
+	cfg.SkipGofmt = true
+
+	out := NewCompactCallFormatter(cfg).FormatFile(src)
+	return out, !bytes.Equal(out, src)
 }
 
 // FormatFile applies formatting with default config and default targets. This
@@ -159,6 +218,8 @@ func (f *CompactCallFormatter) FormatFile(src []byte) []byte {
 		tabStop = f.cfg.TabStop
 	}
 	fallbackNonTargets = f.cfg.FallbackNonTargets
+	fallbackNonTargetsExcludeSelectors = f.cfg.FallbackNonTargetsExcludeSelectors
+	fallbackNonTargetsExcludes = append([]string{}, f.cfg.Excludes...)
 	skipGofmt = f.cfg.SkipGofmt
 	currentTargets = f.cfg.Targets
 
@@ -230,11 +291,75 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 			// If enabled, try fallback formatting for non-target calls.
 			if fallbackNonTargets {
 				if start, end := findGenericCallAt(src, i); end > start {
+					span := src[start:end]
+					// Avoid rewriting calls that contain inline comments; these are
+					// better left unchanged to preserve comment attachment.
+					if spanHasCommentOutsideStrings(span) {
+						out.Write(span)
+						i = end
+						continue
+					}
+					if openRel := bytes.IndexByte(src[start:end], '('); openRel > 0 {
+						callee := strings.TrimSpace(string(src[start : start+openRel]))
+						if callNameContainsAny(callee, fallbackNonTargetsExcludes) {
+							out.Write(span)
+							i = end
+							continue
+						}
+					}
+					if fallbackNonTargetsExcludeSelectors {
+						// Exclude both explicit selector callees (`pkg.Func`) and
+						// method-chain selector calls (`x.Foo().Bar(...)`), which the
+						// legacy scan-based matcher starts at `Bar` and therefore does
+						// not include the '.' in the callee text.
+						if isSelectorChainCallStart(src, start) {
+							out.Write(span)
+							i = end
+							continue
+						}
+						if openRel := bytes.IndexByte(src[start:end], '('); openRel > 0 {
+							callee := strings.TrimSpace(string(src[start : start+openRel]))
+							if strings.Contains(callee, ".") {
+								out.Write(span)
+								i = end
+								continue
+							}
+						}
+					}
 					// Evaluate whether the call should be wrapped. Consider both
 					// an estimated single-line width (collapsing whitespace) and
 					// whether it already spans multiple lines.
 					lineStart := text.LastLineStart(src, start)
 					indentPrefix := string(src[lineStart:start])
+					// Avoid formatting nested calls within larger expressions. For
+					// example, in:
+					//   a && b && verifySignature(sig) || c
+					// we want the expression stage to handle breaking rather than
+					// rewriting the call itself.
+					//
+					// This fallback is intended for statement-level calls such as:
+					// - assignment RHS: `x := foo(...)`, `x = foo(...)`
+					// - return/go/defer: `return foo(...)`, `go foo(...)`, `defer foo(...)`
+					// - standalone call: `foo(...)`
+					trimmedPrefix := strings.TrimSpace(indentPrefix)
+					allowedByPrefix := trimmedPrefix == "" ||
+						strings.HasSuffix(trimmedPrefix, ":=") ||
+						strings.HasSuffix(trimmedPrefix, "=") ||
+						strings.HasSuffix(trimmedPrefix, "return") ||
+						strings.HasSuffix(trimmedPrefix, "go") ||
+						strings.HasSuffix(trimmedPrefix, "defer")
+					// Allow selector calls inside method chains like:
+					//   db.Query(...).Where(...).OrderBy(...).Limit(...)
+					// where the call's prefix is an expression rather than a statement
+					// introducer.
+					if !allowedByPrefix && isSelectorChainCallStart(src, start) {
+						allowedByPrefix = true
+					}
+					if !allowedByPrefix {
+						out.Write(span)
+						i = end
+						continue
+					}
 					// Heuristic: when the call is part of a short method chain
 					// right after a closing paren, ignore the preceding ')'
 					// and optional '.' for width calculation so short calls
@@ -259,7 +384,7 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 						continue
 					}
 					// Keep as-is when within limit.
-					out.Write(src[start:end])
+					out.Write(span)
 					i = end
 					continue
 				}
@@ -346,6 +471,14 @@ func isChainedShortCall(src []byte, start, end int) bool {
 	return false
 }
 
+func isSelectorChainCallStart(src []byte, start int) bool {
+	i := start - 1
+	for i >= 0 && (src[i] == ' ' || src[i] == '\t') {
+		i--
+	}
+	return i >= 0 && src[i] == '.'
+}
+
 // findGenericCallAt attempts to find a function call starting at position i.
 // It matches identifiers (including selectors like pkg.Func) immediately
 // followed by '(', and excludes function/method declarations.
@@ -402,6 +535,36 @@ func isFunctionDefinitionAt(src []byte, i int) bool {
 			return true
 		}
 		k--
+	}
+	return false
+}
+
+func callNameContainsAny(name string, subs []string) bool {
+	if name == "" || len(subs) == 0 {
+		return false
+	}
+	for _, sub := range subs {
+		if sub == "" {
+			continue
+		}
+		if strings.Contains(name, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func spanHasCommentOutsideStrings(b []byte) bool {
+	i := 0
+	for i < len(b) {
+		if scanner.IsStringStart(b, i) {
+			i = scanner.ScanString(b, i)
+			continue
+		}
+		if scanner.IsLineCommentStart(b, i) || scanner.IsBlockCommentStart(b, i) {
+			return true
+		}
+		i++
 	}
 	return false
 }
