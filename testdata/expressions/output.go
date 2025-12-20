@@ -110,6 +110,18 @@ func example12(alpha, beta, gamma int) {
 	}
 }
 
+func example13() {
+	superVeryLongArgumentSoWeSplit := "This is a long string parameter "
+	veryveryLongArgument2 := "that should be split into multiple lines "
+	_, someInteger, someVariable := testFn(
+		veryveryLongArgument2, superVeryLongArgumentSoWeSplit,
+	)
+}
+
+func testFn(param1, param2 string) (string, int, error) {
+	return param1 + param2, 0, nil
+}
+
 // Stubs to make the file compile
 type formatter struct{}
 
