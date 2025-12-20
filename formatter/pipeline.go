@@ -1,6 +1,8 @@
 package formatter
 
 import (
+	"bytes"
+	"crypto/sha256"
 	formatstd "go/format"
 )
 
@@ -137,6 +139,15 @@ type PipelineConfig struct {
 	// When set, it overrides Mode/DSLCallPolicy-derived StagePlan selection.
 	// This is intended for controlled experiments and debugging.
 	StagePlanOverride *StagePlan
+
+	// MaxPipelineIterations controls how many full pipeline passes are allowed.
+	// When > 0, the pipeline will run stages + gofmt repeatedly until the output
+	// stabilizes (no changes) or a cycle is detected.
+	//
+	// When 0, a profile default is used:
+	// - next: 3
+	// - others: 1
+	MaxPipelineIterations int
 }
 
 // Pipeline orchestrates all formatters in sequence and runs gofmt once at the end.
@@ -475,11 +486,51 @@ func (p *Pipeline) Config() BaseConfig {
 
 // Format applies all formatters in sequence and runs gofmt at the end.
 func (p *Pipeline) Format(src []byte) []byte {
-	out := src
+	maxIters := p.cfg.MaxPipelineIterations
+	if maxIters <= 0 {
+		maxIters = 1
+	}
+	if maxIters < 1 {
+		maxIters = 1
+	}
 
-	// Execute stages in order
-	for _, stage := range p.stages {
-		if stage.Formatter != nil {
+	// Default behavior: a single pipeline pass + one final gofmt run.
+	// This preserves the golden fixtures and existing expectations.
+	if maxIters == 1 {
+		out := src
+
+		for _, stage := range p.stages {
+			if stage.Formatter == nil {
+				continue
+			}
+			if p.cfg.UseOwnershipRegistry {
+				reg := BuildOwnershipRegistry(out, p.stages)
+				if aware, ok := stage.Formatter.(OwnershipAware); ok {
+					aware.SetOwnershipRegistry(reg)
+				}
+			} else if aware, ok := stage.Formatter.(OwnershipAware); ok {
+				aware.SetOwnershipRegistry(nil)
+			}
+			out = stage.Formatter.FormatFile(out)
+		}
+
+		if formatted, err := formatstd.Source(out); err == nil {
+			return formatted
+		}
+		return out
+	}
+
+	out := src
+	seen := make(map[[32]byte]struct{}, maxIters+1)
+
+	for iter := 0; iter < maxIters; iter++ {
+		before := out
+
+		// Execute stages in order.
+		for _, stage := range p.stages {
+			if stage.Formatter == nil {
+				continue
+			}
 			if p.cfg.UseOwnershipRegistry {
 				// Ownership is computed over the current snapshot and includes
 				// all stages that declare ownership. This prevents non-call
@@ -495,11 +546,27 @@ func (p *Pipeline) Format(src []byte) []byte {
 			}
 			out = stage.Formatter.FormatFile(out)
 		}
+
+		// gofmt after each full pass so that multi-pass convergence matches
+		// user behavior (running llformat multiple times uses a gofmt-normalized
+		// file as the next input).
+		if formatted, err := formatstd.Source(out); err == nil {
+			out = formatted
+		}
+
+		if bytes.Equal(out, before) {
+			break
+		}
+
+		sum := sha256.Sum256(out)
+		if _, ok := seen[sum]; ok {
+			// Cycle detected (e.g. two stages fight). Stop at the last produced
+			// output to avoid an infinite loop. Subsequent runs will repeat the
+			// same trajectory and land in the same stable stopping point.
+			break
+		}
+		seen[sum] = struct{}{}
 	}
 
-	// Final stage: Run gofmt once
-	if formatted, err := formatstd.Source(out); err == nil {
-		return formatted
-	}
 	return out
 }
