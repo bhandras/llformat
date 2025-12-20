@@ -1201,6 +1201,22 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 		commentSuffix = " " + strings.TrimLeft(trailingComment, " \t")
 	}
 
+	// In the "next" profile we want interface methods to follow the same
+	// signature-breaking behavior as regular function signatures (including
+	// preferring to break params before partially breaking short return lists).
+	//
+	// The legacy interface-method formatter historically had its own logic and
+	// can end up with awkward edge cases like a comma exactly on the column
+	// boundary:
+	//   M(a, b) ([]T,
+	//     error)
+	//
+	// When CanonicalMultilineSigLists is enabled (next profile), delegate to the
+	// main signature formatter to keep behavior consistent across contexts.
+	if f.cfg.CanonicalMultilineSigLists {
+		return f.breakSignature(sig, indent) + commentSuffix
+	}
+
 	// Check if it already fits
 	if width.VisualLenWithTab(indent+sig+commentSuffix, f.cfg.TabStop) <= f.cfg.ColumnLimit {
 		return indent + sig + commentSuffix

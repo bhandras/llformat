@@ -142,8 +142,9 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Signatures != StageModeDSL {
 		return NewFuncSigFormatter(FuncSigConfig{
-			ColumnLimit: cfg.ColumnLimit,
-			TabStop:     cfg.TabStop,
+			ColumnLimit:                cfg.ColumnLimit,
+			TabStop:                    cfg.TabStop,
+			CanonicalMultilineSigLists: normalizedRuleProfile(opts.Selection.RuleProfile) == "next",
 		})
 	}
 
