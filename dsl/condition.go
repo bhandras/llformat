@@ -757,6 +757,41 @@ func compareInt(value int, op string, threshold int) bool {
 	}
 }
 
+// MaxSpanLineWidthCond checks the maximum visual width of any line spanned by a
+// node's source range (including continuation lines for multiline constructs).
+//
+// This is useful for cases where:
+// - the node starts on a short line (so LineWidthCond is a false negative), and
+// - collapsing whitespace produces a short estimate (so CollapsedWidthCond is a
+//   false negative), but
+// - an indented continuation line still exceeds the column limit.
+type MaxSpanLineWidthCond struct {
+	Target string
+	Op     string
+	Value  int // If 0, uses ctx.ColumnLimit
+}
+
+func (c *MaxSpanLineWidthCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil {
+		return false
+	}
+	start := ctx.Fset.Position(node.Pos()).Offset
+	end := ctx.Fset.Position(node.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return false
+	}
+
+	width := maxVisualLineLenInSpan(ctx.Source, start, end, ctx.TabStop)
+
+	threshold := c.Value
+	if threshold == 0 {
+		threshold = ctx.ColumnLimit
+	}
+
+	return compareInt(width, c.Op, threshold)
+}
+
 // IsOutermostBinaryExprCond checks if this binary expression is not a child of
 // another binary expression with the same operator type. This prevents matching
 // inner nodes in chains like "a && b && c".

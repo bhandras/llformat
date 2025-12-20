@@ -204,6 +204,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				// formatting the call itself as packed multiline rather than
 				// detaching it from `:=`.
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)
@@ -212,6 +213,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{
 				Excludes: opts.Style.Excludes,
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)
@@ -221,6 +223,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{
 				Excludes: opts.Style.Excludes, CallArgsStyle: "layout",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)
@@ -233,6 +236,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)
@@ -241,6 +245,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{
 				Excludes: opts.Style.Excludes, MethodChainStyle: "layout",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)
@@ -252,6 +257,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				MethodChainStyle: "layout",
 				CallArgsStyle:    "layout",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)
@@ -263,6 +269,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                    profile == "next",
 			},
 			packedFallback,
 		)

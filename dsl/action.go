@@ -1901,13 +1901,33 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	}
 
 	// Check if call fits on one line - if so, skip formatting
-	// Collapse whitespace to estimate single-line width
 	callText := string(original)
-	currentLineLen := collapsedLineLenAt(ctx.Source, start, callText, ctx.TabStop)
-
-	if currentLineLen <= ctx.ColumnLimit {
-		// Call fits on one line, no need to wrap
-		return nil, false
+	if strings.Contains(callText, "\n") {
+		// For already-multiline calls, we must be careful:
+		// - A collapsed single-line estimate can be a false negative: indentation
+		//   on continuation lines can push a specific line over the limit even
+		//   when the collapsed form fits.
+		// - Conversely, only checking the existing per-line widths can be a false
+		//   positive for "should wrap" decisions: earlier formatting stages (e.g.
+		//   string splitting) can introduce newlines inside a still-too-long call,
+		//   making each individual line fit while the canonical single-line call
+		//   would still exceed the limit. In those cases we still want to apply
+		//   packed multiline call formatting to enforce the house style.
+		//
+		// So: treat the call as fitting only if BOTH the collapsed single-line
+		// estimate fits AND no continuation line currently exceeds the limit.
+		collapsedLen := collapsedLineLenAt(ctx.Source, start, callText, ctx.TabStop)
+		maxLen := maxVisualLineLenInSpan(ctx.Source, start, end, ctx.TabStop)
+		if collapsedLen <= ctx.ColumnLimit && maxLen <= ctx.ColumnLimit {
+			return nil, false
+		}
+	} else {
+		// Collapse whitespace to estimate single-line width.
+		currentLineLen := collapsedLineLenAt(ctx.Source, start, callText, ctx.TabStop)
+		if currentLineLen <= ctx.ColumnLimit {
+			// Call fits on one line, no need to wrap.
+			return nil, false
+		}
 	}
 
 	// If the call itself would fit on a clean continuation line, and the line

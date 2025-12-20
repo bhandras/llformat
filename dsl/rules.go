@@ -736,6 +736,14 @@ type MultiLineCallOptions struct {
 	// prefix. Some profiles intentionally prefer formatting the call itself as
 	// multiline instead.
 	DisableBreakBeforeCallOnLongMultiAssignPrefix bool
+
+	// CheckMaxSpanLineWidth enables detection of overlong continuation lines for
+	// already-multiline calls. This is useful in styles that want to enforce
+	// column limits even when a call's first line and collapsed width appear to
+	// fit.
+	//
+	// This is intentionally opt-in to avoid changing legacy/parity behavior.
+	CheckMaxSpanLineWidth bool
 }
 
 // MultiLineCallRulesWithOptions returns MultiLineCallRules with explicit options.
@@ -771,6 +779,13 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 		// Avoid rewriting calls that contain inline comments; AST-based rendering
 		// would drop them.
 		&NotCond{Cond: &HasAnyCommentCond{Target: "node"}},
+	}
+	if opts.CheckMaxSpanLineWidth {
+		// For already-multiline calls, LineWidthCond and CollapsedWidthCond can be
+		// false negatives when a continuation line overflows due to indentation.
+		longCallConds[0].(*OrCond).Conds = append(longCallConds[0].(*OrCond).Conds,
+			&MaxSpanLineWidthCond{Target: "node", Op: ">", Value: 0},
+		)
 	}
 	// When layout is enabled, avoid independently rewriting receiver calls inside
 	// method chains. Those are better handled by the outer method chain / call
@@ -868,16 +883,21 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions, formatFunc .
 		action.FormatFunc = formatFunc[0]
 	}
 
+	spanWidthConds := []Condition{
+		&LineWidthCond{Target: "node", Op: ">", Value: 0},
+		&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
+	}
+	if opts.CheckMaxSpanLineWidth {
+		spanWidthConds = append(spanWidthConds, &MaxSpanLineWidthCond{Target: "node", Op: ">", Value: 0})
+	}
+
 	return []Rule{
 		{
 			Name:    "long_call_expr_packed",
 			Pattern: &NodePattern{Type: "CallExpr"},
 			When: &AndCond{
 				Conds: []Condition{
-					&OrCond{Conds: []Condition{
-						&LineWidthCond{Target: "node", Op: ">", Value: 0},
-						&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
-					}},
+					&OrCond{Conds: spanWidthConds},
 					&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
 					&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
 					&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
