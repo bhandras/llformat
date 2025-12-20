@@ -21,5 +21,10 @@ install: build
 unit test:
 	$(GO) test -v ./...
 
+.PHONY: gen-next-goldens
+gen-next-goldens: build
+	@echo "Generating next outputs into .next_goldens/ (not committed)..."
+	@$(GO) run ./tools/gen_next_goldens
+
 clean:
 	rm -rf $(BIN_DIR)

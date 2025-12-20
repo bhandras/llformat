@@ -1,5 +1,6 @@
 # Build outputs
 bin/
+.next_goldens/
 
 # Go build/test artifacts
 *.test
@@ -13,4 +14,3 @@ bin/
 # Optional local caches
 .gocache/
 .gomodcache/
-
