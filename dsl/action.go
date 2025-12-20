@@ -2164,6 +2164,11 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		formatted, _ = formatSignatureSimple(signature, wsIndent, effectiveColLimit, ctx.TabStop)
 	}
 
+	// If the signature was forced to break due only to the non-whitespace prefix
+	// before `func` (common in composite literals: `Field: func(...) ... {`),
+	// prefer breaking before the `func` keyword (onto a continuation line) rather
+	// than breaking inside the signature. This keeps `func(...) (a, b) {` packed
+	// like normal function signatures.
 	// Reattach the original prefix (e.g. `x := `) to the first line.
 	if nl := strings.IndexByte(formatted, '\n'); nl >= 0 {
 		first := formatted[:nl]
@@ -2187,7 +2192,7 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	// we don't drift from the next golden fixtures for function declarations and
 	// other func literals.
 	if hadPrefixBudgetReduction {
-		if canon, ok := canonicalizeParenReturnListInSignature(formatted, wsIndent); ok {
+		if canon, ok := canonicalizeParenReturnListInSignature(formatted, wsIndent, ctx.ColumnLimit, ctx.TabStop); ok {
 			formatted = canon
 		}
 	}
@@ -2268,7 +2273,7 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	return out, true
 }
 
-func canonicalizeParenReturnListInSignature(signature, baseIndent string) (string, bool) {
+func canonicalizeParenReturnListInSignature(signature, baseIndent string, colLimit, tabStop int) (string, bool) {
 	// Find the parameter list first, then check for a parenthesized return list.
 	// We only rewrite multiline return lists where more than one return value is
 	// packed onto the same line.
@@ -2317,23 +2322,38 @@ func canonicalizeParenReturnListInSignature(signature, baseIndent string) (strin
 	b.Grow(len(signature) + len(parts)*4)
 	b.WriteString(signature[:retOpen])
 	b.WriteString("(\n")
-	// Keep small return lists packed on a single line, matching the signature
-	// formatter's usual behavior for `func(...) (a, b) {` return lists.
-	//
-	// We still include a trailing comma because the return list is multiline.
-	if len(parts) == 2 {
-		b.WriteString(contIndent)
-		b.WriteString(strings.TrimSpace(parts[0]))
-		b.WriteString(", ")
-		b.WriteString(strings.TrimSpace(parts[1]))
-		b.WriteString(",\n")
-	} else {
-		for _, p := range parts {
-			b.WriteString(contIndent)
-			b.WriteString(strings.TrimSpace(p))
-			b.WriteString(",\n")
+	// Pack return types similarly to call-arg packing: keep as many as fit on a
+	// line, then wrap.
+	cur := contIndent
+	curLen := visualLen(cur, tabStop)
+	b.WriteString(cur)
+	firstOnLine := true
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
 		}
+		sep := ", "
+		if firstOnLine {
+			sep = ""
+		}
+		next := sep + p
+		nextLen := curLen + visualLen(next, tabStop)
+		if !firstOnLine && nextLen > colLimit {
+			// End current line with a trailing comma, start a new one.
+			b.WriteString(",\n")
+			b.WriteString(contIndent)
+			curLen = visualLen(contIndent, tabStop)
+			firstOnLine = true
+			sep = ""
+			next = p
+		}
+		b.WriteString(sep)
+		b.WriteString(p)
+		curLen = curLen + visualLen(sep+p, tabStop)
+		firstOnLine = false
 	}
+	b.WriteString(",\n")
 	b.WriteString(baseIndent)
 	b.WriteByte(')')
 	b.WriteString(signature[retClose+1:])
