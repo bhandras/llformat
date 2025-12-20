@@ -44,10 +44,11 @@ func main() {
 		allowDSLCallArgs              bool
 		autoDSLCallArgs               bool
 		printPlan                     bool
+		fixpointIters                 int
 	)
 
 	printUsage := func() {
-		fmt.Fprintln(os.Stderr, "usage: llformat [--next] [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--print-plan] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [--next] [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--fixpoint-iters N] [--print-plan] <path>")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "flags:")
 		fmt.Fprintln(os.Stderr, "  --next                    enable the \"next\" formatter pipeline (recommended)")
@@ -56,6 +57,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  --tab N                   tab stop width for column calculations (default 8)")
 		fmt.Fprintln(os.Stderr, "  --wrap-inline-comments    hoist trailing inline comments above for wrapping")
 		fmt.Fprintln(os.Stderr, "  --multiline-exclude FUNCS comma-separated function names to exclude from multiline formatting")
+		fmt.Fprintln(os.Stderr, "  --fixpoint-iters N         repeat full pipeline until stable (0=auto; next defaults to 3)")
 		fmt.Fprintln(os.Stderr, "  --print-plan              print resolved pipeline plan and exit")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "note: additional legacy/experimental flags exist but are intentionally undocumented")
@@ -96,6 +98,7 @@ func main() {
 	flag.BoolVar(&allowDSLCallArgs, "dsl-allow-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments (DSL mode only, experimental)")
 	flag.BoolVar(&autoDSLCallArgs, "dsl-auto-call-args", false, "allow DSL expression formatter to break long logical chains inside call arguments only for calls excluded from multiline formatting (DSL mode only, experimental)")
 	flag.BoolVar(&printPlan, "print-plan", false, "print resolved pipeline plan and exit")
+	flag.IntVar(&fixpointIters, "fixpoint-iters", 0, "repeat full pipeline until stable (0=auto; next defaults to 3)")
 	flag.Parse()
 
 	if nextMode {
@@ -156,6 +159,26 @@ func main() {
 		policy = ""
 	}
 
+	// CLI fixpoint defaults:
+	// - In next mode we prefer a small bounded fixpoint search so users don't
+	//   have to run llformat multiple times on large files.
+	// - In other modes default to one pass (historical behavior).
+	//
+	// The pipeline itself remains single-pass by default to preserve golden
+	// fixtures; the CLI opts into fixpoint for next unless explicitly overridden.
+	autoFixpointIters := 0
+	if !useLegacy && mode == "next" {
+		autoFixpointIters = 3
+	}
+	if fixpointIters < 0 {
+		fmt.Fprintln(os.Stderr, "invalid flags: --fixpoint-iters must be >= 0")
+		printUsage()
+		os.Exit(2)
+	}
+	if fixpointIters == 0 {
+		fixpointIters = autoFixpointIters
+	}
+
 	cfg := formatter.PipelineConfig{
 		Mode:                          mode,
 		ColumnLimit:                   colLimit,
@@ -184,6 +207,7 @@ func main() {
 		TraceDSLReasons:               traceDSLReasons && !useLegacy,
 		AllowDSLCallArgs:              allowDSLCallArgs && !useLegacy,
 		AutoDSLCallArgs:               autoDSLCallArgs && !useLegacy,
+		MaxPipelineIterations:         fixpointIters,
 	}
 
 	if err := formatter.ValidatePipelineConfig(cfg); err != nil {
