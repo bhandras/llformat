@@ -36,6 +36,20 @@ type FuncSigConfig struct {
 	// PreferInlineSmallReturnList prefers keeping small parenthesized return
 	// lists (e.g. `([]T, error)`) on one line by breaking parameters earlier.
 	PreferInlineSmallReturnList bool
+
+	// BreakLongFuncTypeParams enables breaking of function-typed parameters when
+	// their inner parameter list exceeds the column limit (even when there is no
+	// nested struct type).
+	//
+	// This is intentionally opt-in to preserve legacy fixtures; it is used by
+	// the "next" profile to improve readability of long callback signatures.
+	BreakLongFuncTypeParams bool
+
+	// FormatInlineStructParams forces signature reflow when parameters include
+	// inline struct types with semicolons (which gofmt will expand into multiline
+	// blocks). This is intentionally opt-in because it can be a readability-only
+	// change even when no single line exceeds the column limit.
+	FormatInlineStructParams bool
 }
 
 // FuncSigFormatter formats long function signatures by breaking them across lines.
@@ -168,8 +182,16 @@ func FormatFuncSignatureLegacy(signature, indent string, colLimit, tabStop int) 
 	})
 	formatted := f.breakSignature(signature, indent)
 	// needsBlank in the DSL action is used only to decide whether to insert an
-	// extra blank line after the opening brace.
-	needsBlank := strings.Count(formatted, "\n") > 0
+	// extra blank line after the opening brace. Only treat "top-level" signature
+	// breaks as requiring an extra blank line; embedded multiline types (struct
+	// blocks, etc) should not force additional spacing.
+	needsBlank := hasNewlineOutsideBraces(formatted)
+	// Legacy: when multiline content comes only from nested multiline function
+	// types (e.g. `handler func(\n...`), inserting an extra blank line in the
+	// body is usually too much vertical whitespace.
+	if strings.Contains(formatted, "func(\n") {
+		needsBlank = false
+	}
 	return formatted, needsBlank
 }
 
@@ -188,30 +210,129 @@ func FormatFuncSignatureLegacy(signature, indent string, colLimit, tabStop int) 
 //	func f() (*T, error) {
 func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (string, bool) {
 	f := NewFuncSigFormatter(FuncSigConfig{
-		ColumnLimit:                colLimit,
-		TabStop:                    tabStop,
-		CanonicalMultilineSigLists:  true,
-		ReserveTrailingComma:        true,
+		ColumnLimit: colLimit,
+		TabStop:     tabStop,
+		// "next" uses a greedy/packed style for multiline param/result lists.
+		// Avoid gofmt-like canonicalization to match the "next" golden spec.
+		CanonicalMultilineSigLists: false,
+		ReserveTrailingComma:       true,
+		// Prefer keeping very small return lists inline by breaking parameters
+		// earlier (when feasible).
 		PreferInlineSmallReturnList: true,
+		BreakLongFuncTypeParams:     true,
+		FormatInlineStructParams:    true,
 	})
 
 	// When the signature already contains newlines, prefer to collapse it if it
 	// fits. This is safe for the "next" profile and handles common patterns where
 	// return lists were manually split but are short.
+	//
+	// However, do not collapse signatures that contain struct blocks: collapsing
+	// those tends to erase readability-driven formatting (and gofmt will expand
+	// struct types again anyway).
 	if strings.Contains(signature, "\n") {
-		collapsed := collapseSignatureWhitespace(signature)
-		collapsed = tightenSignatureParens(collapsed)
-		if width.VisualLenWithTab(indent+collapsed, tabStop) <= colLimit {
-			return indent + collapsed, false
+		if !strings.Contains(signature, "struct") && !hasInlineStructWithSemicolons(signature) {
+			collapsed := collapseSignatureWhitespace(signature)
+			collapsed = tightenSignatureParens(collapsed)
+			if width.VisualLenWithTab(indent+collapsed, tabStop) <= colLimit {
+				return indent + collapsed, false
+			}
+			// Even if it doesn't fit, collapsing whitespace makes subsequent breaking
+			// decisions more consistent.
+			signature = collapsed
 		}
-		// Even if it doesn't fit, collapsing whitespace makes subsequent breaking
-		// decisions more consistent.
-		signature = collapsed
 	}
 
+	// If this isn't a function decl signature, do not try to "tighten" around
+	// the leading indent: callers for interface methods pass `indent` and already
+	// include the right whitespace in `signature`.
 	formatted := f.breakSignature(signature, indent)
-	needsBlank := strings.Count(formatted, "\n") > 0
+	needsBlank := hasNewlineOutsideBraces(formatted)
 	return formatted, needsBlank
+}
+
+func isFuncLitSignature(signature string) bool {
+	trimmed := strings.TrimSpace(signature)
+	if strings.HasPrefix(trimmed, "func(") {
+		return true
+	}
+	if !strings.HasPrefix(trimmed, "func (") {
+		return false
+	}
+
+	// `func (` can either be a function literal or a method receiver. Distinguish
+	// by checking whether the first paren group is followed by `ident(`.
+	open := strings.IndexByte(trimmed, '(')
+	if open < 0 {
+		return false
+	}
+	f := NewFuncSigFormatter(FuncSigConfig{ColumnLimit: 80, TabStop: 8})
+	close := f.findMatchingParen(trimmed, open)
+	if close < 0 || close+1 >= len(trimmed) {
+		return true
+	}
+
+	rest := strings.TrimLeft(trimmed[close+1:], " \t")
+	if rest == "" {
+		return true
+	}
+	// Read an identifier.
+	i := 0
+	if !isIdentStart(rest[0]) {
+		return true
+	}
+	i++
+	for i < len(rest) && isIdentChar(rest[i]) {
+		i++
+	}
+	rest = rest[i:]
+	rest = strings.TrimLeft(rest, " \t")
+	return !(len(rest) > 0 && rest[0] == '(')
+}
+
+// hasNewlineOutsideBraces reports whether s contains a newline at brace nesting
+// depth 0. This is used to decide whether to insert an extra blank line after a
+// signature's opening brace: only line breaks in the outer signature lists
+// should trigger that spacing, not multiline embedded types (e.g. `struct { ... }`).
+func hasNewlineOutsideBraces(s string) bool {
+	braceDepth := 0
+	inString := byte(0)
+	escaped := false
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		if inString != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == '\\' && inString == '"' {
+				escaped = true
+				continue
+			}
+			if c == inString {
+				inString = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '`', '\'':
+			inString = c
+		case '{':
+			braceDepth++
+		case '}':
+			if braceDepth > 0 {
+				braceDepth--
+			}
+		case '\n':
+			if braceDepth == 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func collapseSignatureWhitespace(sig string) string {
@@ -558,6 +679,9 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			needsFormatting = true
 		}
 	}
+	if !needsFormatting && f.cfg.FormatInlineStructParams && hasInlineStructWithSemicolons(sig) {
+		needsFormatting = true
+	}
 	if !needsFormatting {
 		return indent + sig
 	}
@@ -639,6 +763,16 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	paramList := f.splitParams(params)
 	paramList = filterNonEmptyTrimmed(paramList)
 
+	forceParamListNewline := false
+	if f.cfg.FormatInlineStructParams {
+		for _, p := range paramList {
+			if strings.Contains(p, "\n") || hasInlineStructWithSemicolons(p) {
+				forceParamListNewline = true
+				break
+			}
+		}
+	}
+
 	// Calculate trailing for last param
 	// For params, we only consider ") (" as trailing if there are returns that might need to break
 	hasBrace := strings.TrimSpace(afterReturns) == "{" || strings.HasPrefix(strings.TrimSpace(afterReturns), "{")
@@ -675,7 +809,18 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	//
 	// and also helps avoid edge cases where a trailing comma ends up exactly on
 	// the column boundary.
-	if f.cfg.PreferInlineSmallReturnList && hasParenReturns && len(paramList) > 1 && isSmallParenReturnList(returns) {
+	// Keep this conservative: apply it for
+	// - function declarations without a receiver
+	// - interface methods
+	// but not for receiver methods, where breaking results is often clearer.
+	isFuncDeclNoRecv := strings.HasPrefix(sig, "func ") && !strings.HasPrefix(sig, "func (")
+	isFuncLit := isFuncLitSignature(sig)
+	isInterfaceMethod := !strings.HasPrefix(strings.TrimSpace(sig), "func")
+	// Function literals are common in call-arg position; for readability we
+	// prefer keeping their parameter list intact and breaking the return list
+	// instead (matching the "next" golden spec).
+	shouldPreferInlineReturns := (isFuncDeclNoRecv || isInterfaceMethod) && !isFuncLit
+	if f.cfg.PreferInlineSmallReturnList && shouldPreferInlineReturns && hasParenReturns && len(paramList) > 1 && isSmallParenReturnList(returns) {
 		trailingMinimal = trailingFull
 	}
 
@@ -695,9 +840,10 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 		paramToWrite := param
 		isFuncParam := strings.Contains(param, "func(")
 		needsFuncBreak := false
-		if isFuncParam && f.funcParamNeedsBreaking(param, contIndent) {
+		currentLineIndent := leadingWhitespace(currentLine)
+		if isFuncParam && f.funcParamNeedsBreaking(param, currentLineIndent) {
 			needsFuncBreak = true
-			paramToWrite = f.formatFuncTypeParam(param, contIndent)
+			paramToWrite = f.formatFuncTypeParam(param, currentLineIndent)
 		}
 
 		testAdd := separator + param
@@ -725,6 +871,19 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 		}
 
 		if needsFuncBreak {
+			// If the function-typed parameter itself needs multiline formatting,
+			// keep it on its own line (unless the current line ends with `}` which
+			// commonly indicates an inline struct param that will expand and should
+			// keep `}, handler func(` on the same line after gofmt).
+			if i > 0 && strings.Contains(paramToWrite, "\n") && !strings.HasSuffix(strings.TrimSpace(currentLine), "}") {
+				result.WriteByte(',')
+				result.WriteByte('\n')
+				result.WriteString(contIndent)
+				result.WriteString(paramToWrite)
+				currentLine = lastLine(paramToWrite)
+				continue
+			}
+
 			// For func params that need internal breaking, try to keep the func header
 			// inline (e.g., ", handler func(") and only break the internal params
 			if i > 0 {
@@ -732,11 +891,22 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			}
 			result.WriteString(paramToWrite)
 			if strings.Contains(paramToWrite, "\n") {
-				// Get the last line of the formatted param to track current position
-				lines := strings.Split(paramToWrite, "\n")
-				currentLine = lines[len(lines)-1]
+				currentLine = lastLine(paramToWrite)
 			} else {
 				currentLine = currentLine + ", " + paramToWrite
+			}
+		} else if forceParamListNewline && i == 0 {
+			// Inline struct types (with semicolons) will become multiline after
+			// gofmt; start the parameter list on a fresh line so the expanded
+			// struct block is indented cleanly and follow-up params can pack on
+			// the same continuation line.
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(paramToWrite)
+			if strings.Contains(paramToWrite, "\n") {
+				currentLine = lastLine(paramToWrite)
+			} else {
+				currentLine = contIndent + paramToWrite
 			}
 		} else if width.VisualLenWithTab(lineToCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
 			// Need to break - put param on new line
@@ -746,13 +916,21 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			result.WriteByte('\n')
 			result.WriteString(contIndent)
 			result.WriteString(paramToWrite)
-			currentLine = contIndent + paramToWrite
+			if strings.Contains(paramToWrite, "\n") {
+				currentLine = lastLine(paramToWrite)
+			} else {
+				currentLine = contIndent + paramToWrite
+			}
 		} else {
 			if i > 0 {
 				result.WriteString(", ")
 			}
 			result.WriteString(paramToWrite)
-			currentLine = testLine
+			if strings.Contains(paramToWrite, "\n") {
+				currentLine = lastLine(paramToWrite)
+			} else {
+				currentLine = testLine
+			}
 		}
 	}
 
@@ -959,6 +1137,36 @@ func isSmallParenReturnList(returns string) bool {
 	return len(parts) <= 2
 }
 
+func leadingWhitespace(s string) string {
+	if s == "" {
+		return ""
+	}
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	return s[:i]
+}
+
+func lastLine(s string) string {
+	if s == "" {
+		return ""
+	}
+	if idx := strings.LastIndexByte(s, '\n'); idx >= 0 {
+		return s[idx+1:]
+	}
+	return s
+}
+
+func hasInlineStructWithSemicolons(s string) bool {
+	// This is intentionally a lightweight heuristic; we are only looking for the
+	// gofmt-expands-inline-struct-types pattern `struct{ a; b; }` (or `struct {`).
+	if !strings.Contains(s, ";") {
+		return false
+	}
+	return strings.Contains(s, "struct{") || strings.Contains(s, "struct {")
+}
+
 // findMatchingParen finds the index of the closing paren matching the one at start.
 func (f *FuncSigFormatter) findMatchingParen(s string, start int) int {
 	if start >= len(s) || s[start] != '(' {
@@ -1026,7 +1234,34 @@ func (f *FuncSigFormatter) funcParamNeedsBreaking(param, baseIndent string) bool
 	// Check if the param itself exceeds the limit when placed on a continuation line
 	testLine := baseIndent + param
 	if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.cfg.ColumnLimit {
-		// Only break if it's a func type with complex params
+		// In next-profile mode, allow breaking long function-typed parameters
+		// even when they do not contain nested struct types, but avoid breaking
+		// the inner parameter list for function types that already have explicit
+		// return types: those tend to look worse when we break both the inner
+		// params and the outer signature.
+		if f.cfg.BreakLongFuncTypeParams {
+			if strings.Contains(param, "func(") {
+				funcIdx := strings.Index(param, "func(")
+				if funcIdx >= 0 {
+					rest := param[funcIdx+4:] // starts with "("
+					if len(rest) > 0 && rest[0] == '(' {
+						end := f.findMatchingParen(rest, 0)
+						if end >= 0 && end+1 < len(rest) {
+							afterParams := strings.TrimSpace(rest[end+1:])
+							// Has explicit results (e.g. `error` or `(T, error)`):
+							// don't break inner params unless we are forced by an
+							// inline struct (handled above).
+							if afterParams != "" {
+								return false
+							}
+						}
+					}
+				}
+			}
+			return true
+		}
+
+		// Legacy behavior: only break if it's a func type with complex params.
 		if strings.Contains(param, "func(") && strings.Contains(param, "struct") {
 			return true
 		}
@@ -1102,30 +1337,91 @@ func (f *FuncSigFormatter) formatFuncTypeParam(param, baseIndent string) string 
 		return param // Fits on one line and no multiline content
 	}
 
-	// Need to break the inner function params
-	// Inner params use one tab indent (same as outer signature continuation)
-	innerIndent := "\t"
-	closingIndent := ""
-
-	var result strings.Builder
-	result.WriteString(prefix)
-	result.WriteString("(\n")
-
-	// Put each param on its own line with trailing comma
+	// Decide whether to force a canonical multiline shape. This is required for
+	// inline struct params, because splitting across lines without a trailing
+	// comma is not parseable.
+	forceCanonical := false
 	for _, p := range innerList {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
-		result.WriteString(innerIndent)
-		result.WriteString(p)
-		result.WriteString(",\n")
+		if hasInlineStructWithSemicolons(p) || strings.Contains(p, "\n") {
+			forceCanonical = true
+			break
+		}
 	}
 
-	result.WriteString(closingIndent)
+	var result strings.Builder
+	result.WriteString(prefix)
+	if forceCanonical {
+		contIndent := baseIndent + "\t"
+		result.WriteString("(\n")
+		for _, p := range innerList {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			result.WriteString(contIndent)
+			result.WriteString(p)
+			result.WriteString(",\n")
+		}
+		result.WriteString(baseIndent)
+		result.WriteString(")")
+		result.WriteString(afterParams)
+		return result.String()
+	}
+
+	// If this function type already has explicit results, prefer keeping its
+	// inner parameter list intact. Breaking both the inner params and the outer
+	// signature often produces a noisier result than leaving the inner list
+	// packed and breaking only at the outer signature boundary.
+	if strings.TrimSpace(afterParams) != "" {
+		return param
+	}
+
+	// Greedy/packed breaking: keep as many inner params as fit on the same line,
+	// breaking only when needed (partial break style).
+	contIndent := baseIndent + "\t"
+	result.WriteString("(")
+	currentLine := baseIndent + prefix + "("
+
+	for i, p := range innerList {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		sep := ""
+		if i > 0 {
+			sep = ", "
+		}
+
+		testLine := currentLine + sep + p
+		testCheck := testLine
+		if i == len(innerList)-1 {
+			testCheck += ")" + afterParams
+		}
+
+		if i > 0 && width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
+			// Break before this param; ensure previous param had its comma.
+			result.WriteByte(',')
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(p)
+			currentLine = contIndent + p
+			continue
+		}
+
+		if i > 0 {
+			result.WriteString(", ")
+			currentLine += ", "
+		}
+		result.WriteString(p)
+		currentLine += p
+	}
+
 	result.WriteString(")")
 	result.WriteString(afterParams)
-
 	return result.String()
 }
 
@@ -1422,7 +1718,12 @@ func FormatFuncSignature(signature, indent string, colLimit, tabStop int) (strin
 	}}
 
 	formatted := f.breakSignature(signature, indent)
-	isMultiLine := strings.Count(formatted, "\n") > 0
+	isMultiLine := hasNewlineOutsideBraces(formatted)
+	// Legacy: avoid adding a blank line after signatures whose multiline content
+	// comes only from nested multiline function types.
+	if strings.Contains(formatted, "func(\n") {
+		isMultiLine = false
+	}
 
 	return formatted, isMultiLine
 }
@@ -1443,5 +1744,77 @@ func FormatInterfaceMethod(method, indent string, colLimit, tabStop int) string 
 // FormatFuncSignatureNext.
 func FormatInterfaceMethodNext(method, indent string, colLimit, tabStop int) string {
 	formatted, _ := FormatFuncSignatureNext(method, indent, colLimit, tabStop)
+	if canon, ok := canonicalizeInterfaceMethodParenReturnList(formatted, indent, tabStop); ok {
+		return canon
+	}
 	return formatted
+}
+
+func canonicalizeInterfaceMethodParenReturnList(methodSig, indent string, tabStop int) (string, bool) {
+	// Only apply to interface methods that already have a multiline,
+	// parenthesized return list. Keep this conservative to avoid drifting from
+	// the next golden fixtures (which currently expect a packed style for many
+	// signatures).
+	//
+	// The next signature tests require canonical multiline results for "long"
+	// two-item return lists like:
+	//   M() (map[K]V,
+	//     error)
+	// => rewrite to:
+	//   M() (
+	//     map[K]V,
+	//     error,
+	//   )
+	f := NewFuncSigFormatter(FuncSigConfig{ColumnLimit: 80, TabStop: tabStop})
+
+	paramsOpen := strings.IndexByte(methodSig, '(')
+	if paramsOpen < 0 {
+		return "", false
+	}
+	paramsClose := f.findMatchingParen(methodSig, paramsOpen)
+	if paramsClose < 0 {
+		return "", false
+	}
+
+	i := paramsClose + 1
+	for i < len(methodSig) && (methodSig[i] == ' ' || methodSig[i] == '\t' || methodSig[i] == '\n') {
+		i++
+	}
+	if i >= len(methodSig) || methodSig[i] != '(' {
+		return "", false
+	}
+	retOpen := i
+	retClose := f.findMatchingParen(methodSig, retOpen)
+	if retClose < 0 {
+		return "", false
+	}
+
+	retContent := strings.TrimSpace(methodSig[retOpen+1 : retClose])
+	if !strings.Contains(retContent, "\n") {
+		return "", false
+	}
+
+	parts := filterNonEmptyTrimmed(scanner.SplitTopLevel(retContent))
+	if len(parts) != 2 {
+		return "", false
+	}
+
+	contIndent := indent + "\t"
+	var b strings.Builder
+	b.Grow(len(methodSig) + len(parts)*4)
+	b.WriteString(methodSig[:retOpen])
+	b.WriteString("(\n")
+	for _, p := range parts {
+		b.WriteString(contIndent)
+		b.WriteString(strings.TrimSpace(p))
+		b.WriteString(",\n")
+	}
+	b.WriteString(indent)
+	b.WriteByte(')')
+	b.WriteString(methodSig[retClose+1:])
+	out := b.String()
+	if out == methodSig {
+		return "", false
+	}
+	return out, true
 }

@@ -745,6 +745,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions, formatFunc ...Pack
 			&CollapsedWidthCond{Target: "node", Op: ">", Value: 0},
 		}},
 		&NotCond{Cond: &IsLogOrPrintfCallCond{Target: "node", MatchAnySelectorPrefix: true}},
+		&NotCond{Cond: &IsNonFLogCallCond{Target: "node"}},
 		&NotCond{Cond: &IsMethodChainCond{Target: "node", MinCalls: 2}},
 		&NotCond{Cond: &IsCallFuncContainsAnyCond{Target: "node", Names: opts.Excludes}},
 		// Avoid rewriting calls that contain inline comments; AST-based rendering
@@ -1101,7 +1102,15 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				Conds: []Condition{
 					&LineWidthCond{Target: "node", Op: ">", Value: 0},
 					&IsStringConcatCond{Target: "node"},
-					&ExprEditSafeCond{Target: "node"},
+					// Call-argument formatting is owned by call stages (log/printf and
+					// multiline call rules). Avoid rewriting string concatenations inside
+					// call arguments to prevent surprising changes in non-target calls.
+					&NotCond{Cond: &IsInCallArgsCond{Target: "node"}},
+					&ExprEditSafeCond{
+						Target:            "node",
+						CallArgsPolicy:    callArgsPolicy,
+						CallArgsAllowlist: opts.CallArgsAllowlist,
+					},
 				},
 			},
 			Priority: 25,

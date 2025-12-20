@@ -29,6 +29,12 @@ const (
 	exprDocKindCallArg
 )
 
+type segment struct {
+	name     string
+	args     []ast.Expr
+	ellipsis bool
+}
+
 // exprDoc is a small AST-to-layout.Doc builder for a limited subset of Go
 // expressions.
 //
@@ -242,11 +248,6 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 
 	// Method chains are a series of CallExpr nodes whose Fun is a SelectorExpr
 	// and whose receiver is another CallExpr (except for the first).
-	type segment struct {
-		name     string
-		args     []ast.Expr
-		ellipsis bool
-	}
 
 	var segs []segment
 	cur := call
@@ -281,83 +282,110 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 	var docs []layout.Doc
 	docs = append(docs, layout.T(renderNode(base, ctx.Fset)))
 	for _, seg := range segs {
-		docs = append(docs, layout.T("."), layout.SL(), layout.T(seg.name))
-		docs = append(docs, layout.T("("))
-
-		// In call-arg context, allow formatting the per-segment argument lists
-		// using the same layout approach as generic calls.
-		if kind == exprDocKindCallArg && len(seg.args) > 0 {
-			var argDocs []layout.Doc
-			for i, arg := range seg.args {
-				argText := renderNode(arg, ctx.Fset)
-				if hasAnyComment(argText) {
-					return nil, false
-				}
-
-				// If the arg already contains newlines (e.g. produced by a previous
-				// layout pass), only proceed if we can represent it structurally. This
-				// avoids mixing “preformatted” spans with stringified fallbacks.
-				if info, ok := exprDocWithKind(arg, ctx, kind); ok {
-					d := info.Doc
-					if info.NeedsContinuationIndent {
-						d = layout.N("\t", d)
-					}
-					if i > 0 {
-						argDocs = append(argDocs, layout.T(","), layout.L())
-					}
-					argDocs = append(argDocs, d)
-					continue
-				}
-
-				if strings.Contains(argText, "\n") {
-					return nil, false
-				}
-
-				if i > 0 {
-					argDocs = append(argDocs, layout.T(","), layout.L())
-				}
-				argDocs = append(argDocs, layout.T(argText))
-			}
-
-			// Handle ellipsis call syntax: f(args...)
-			if seg.ellipsis && len(argDocs) > 0 {
-				argDocs[len(argDocs)-1] = layout.C(argDocs[len(argDocs)-1], layout.T("..."))
-			}
-
-			argsGroup := layout.G(layout.C(
-				layout.SL(),
-				layout.C(argDocs...),
-			))
-
-			docs = append(docs, layout.N("\t", argsGroup))
-			// Keep `)` tightly coupled to the last token of the last argument to
-			// avoid semicolon-insertion hazards. In particular, avoid producing a
-			// line that starts with `)` after an identifier/literal on the previous
-			// line (which would make the source unparseable).
-			docs = append(docs, layout.T(")"))
-			continue
+		docs = append(docs, layout.T("."), layout.SL())
+		segDoc, ok := methodChainSegmentDoc(seg, ctx, kind)
+		if !ok {
+			return nil, false
 		}
-
-		// Default behavior (top-level / parity): keep argument lists on one line.
-		if len(seg.args) > 0 {
-			for i, arg := range seg.args {
-				argText := renderNode(arg, ctx.Fset)
-				if strings.Contains(argText, "\n") {
-					return nil, false
-				}
-				if i > 0 {
-					docs = append(docs, layout.T(", "))
-				}
-				docs = append(docs, layout.T(argText))
-			}
-			if seg.ellipsis && len(seg.args) > 0 {
-				docs = append(docs, layout.T("..."))
-			}
-		}
-		docs = append(docs, layout.T(")"))
+		docs = append(docs, segDoc)
 	}
 
 	return layout.G(layout.C(docs...)), true
+}
+
+func methodChainSegmentDoc(seg segment, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+	// Each segment is its own group so it can render flat even when the overall
+	// chain breaks at dots.
+	var body []layout.Doc
+	body = append(body, layout.T(seg.name), layout.T("("))
+
+	if len(seg.args) == 0 {
+		body = append(body, layout.T(")"))
+		return layout.G(layout.C(body...)), true
+	}
+
+	// Prefer structured docs for supported expression forms so nested expressions
+	// can lay out cleanly within the argument list.
+	var flatArgs []layout.Doc
+	var brokenArgs []layout.Doc
+	forceBreakArgs := false
+
+	for i, arg := range seg.args {
+		argText := renderNode(arg, ctx.Fset)
+		if hasAnyComment(argText) {
+			return nil, false
+		}
+
+		// For method chains, always build call-arg docs for arguments when
+		// possible. This lets segments like Configure(Config{...}) break their
+		// argument list independently from the chain breaking at dots.
+		var argDoc layout.Doc
+		if info, ok := exprDocWithKind(arg, ctx, exprDocKindCallArg); ok {
+			argDoc = indentExprDocIfNeeded(info)
+		} else {
+			if strings.Contains(argText, "\n") {
+				return nil, false
+			}
+			argDoc = layout.T(argText)
+		}
+
+		// Prefer breaking argument lists in method-chain segments when they
+		// contain a struct-like composite literal. This keeps segments like:
+		//   client.Configure(Config{...}).Execute(...)
+		// readable and avoids "just barely fits" single-line chains.
+		if lit, ok := arg.(*ast.CompositeLit); ok && isStructLikeCompositeLit(lit) && len(lit.Elts) >= 2 {
+			forceBreakArgs = true
+		}
+
+		if i > 0 {
+			flatArgs = append(flatArgs, layout.T(", "))
+			brokenArgs = append(brokenArgs, layout.T(","), layout.L())
+		}
+		flatArgs = append(flatArgs, argDoc)
+		brokenArgs = append(brokenArgs, argDoc)
+	}
+
+	// Handle ellipsis call syntax: f(args...)
+	if seg.ellipsis {
+		if len(flatArgs) > 0 {
+			flatArgs[len(flatArgs)-1] = layout.C(flatArgs[len(flatArgs)-1], layout.T("..."))
+		}
+		if len(brokenArgs) > 0 {
+			brokenArgs[len(brokenArgs)-1] = layout.C(brokenArgs[len(brokenArgs)-1], layout.T("..."))
+		}
+	}
+
+	flat := layout.C(flatArgs...)
+
+	// broken:
+	//   name(
+	//       a,
+	//       b,
+	//   )
+	//
+	// The closing `)` is emitted outside the nested block so it aligns with the
+	// segment indentation. This is important for method chains, where we want:
+	//   ...\n\tname(\n\t\targ,\n\t).\n\tNext(...)
+	broken := layout.C(
+		layout.N("\t", layout.C(
+			layout.L(),
+			layout.C(brokenArgs...),
+			layout.T(","),
+		)),
+		layout.L(),
+	)
+
+	// In flat mode, keep args inline. In broken mode, put each arg on its own
+	// line with a trailing comma, then place `)` on its own line aligned to the
+	// segment indentation. This shape is semicolon-safe because the line before
+	// `)` ends with a comma.
+	var argsDoc layout.Doc = layout.IB(broken, flat)
+	if forceBreakArgs {
+		argsDoc = layout.C(layout.FB(), argsDoc)
+	}
+	body = append(body, layout.G(argsDoc))
+	body = append(body, layout.T(")"))
+	return layout.G(layout.C(body...)), true
 }
 
 func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
@@ -528,11 +556,25 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 		eltDocs = append(eltDocs, layout.T(eltText))
 	}
 
-	body := layout.G(layout.C(
+	forceBreak := false
+	if kind == exprDocKindCallArg && isStructLikeCompositeLit(lit) && len(lit.Elts) >= 2 {
+		// Prefer multiline struct literals in call-arg position even when they
+		// technically fit, to avoid awkward "barely fits" cases in method chains.
+		forceBreak = true
+	}
+
+	var bodyDocs []layout.Doc
+	// When the overall composite literal is forced multiline (e.g. struct-like
+	// literals in call-arg position), also force the element list to break so we
+	// produce one-element-per-line with a trailing comma.
+	if forceBreak {
+		bodyDocs = append(bodyDocs, layout.FB())
+	}
+	bodyDocs = append(bodyDocs,
 		layout.SL(),
 		layout.C(eltDocs...),
-		layout.IB(layout.T(","), layout.T("")),
-	))
+	)
+	body := layout.G(layout.C(bodyDocs...))
 
 	// flat:  T{a, b}
 	// break:
@@ -540,13 +582,26 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 	//       a,
 	//       b,
 	//   }
-	return layout.G(layout.C(
+
+	var prefix []layout.Doc
+	if forceBreak {
+		prefix = append(prefix, layout.FB())
+	}
+
+	// Emit the trailing comma using the outer group's break/flat mode so we
+	// never end up with:
+	//   T{a,\n}
+	// (which is not a valid composite literal: newlines must follow commas).
+	trailingComma := layout.IB(layout.T(","), layout.T(""))
+
+	return layout.G(layout.C(append(prefix,
 		typeDoc,
 		layout.T("{"),
 		layout.N("\t", body),
+		trailingComma,
 		layout.SL(),
 		layout.T("}"),
-	)), true
+	)...)), true
 }
 
 func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
@@ -577,6 +632,29 @@ func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context, kind exprDocKind) (layo
 		layout.T(": "),
 		layout.N("\t", valueDoc),
 	)), true
+}
+
+func isStructLikeCompositeLit(lit *ast.CompositeLit) bool {
+	if lit == nil || len(lit.Elts) == 0 {
+		return false
+	}
+	// Skip map literals explicitly.
+	if _, ok := lit.Type.(*ast.MapType); ok {
+		return false
+	}
+	// A "struct-like" literal is a keyed literal where all keys are identifiers
+	// (field names). This avoids forcing multiline on map literals with complex
+	// keys, while still catching typical `T{Field: ...}` forms.
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			return false
+		}
+		if _, ok := kv.Key.(*ast.Ident); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {

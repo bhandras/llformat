@@ -19,6 +19,9 @@ func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
 // This uses the legacy call formatter implementation to ensure parity.
 func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
 	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
+	// Both "modern" and "next" opt into suffix-only matching for selectors so
+	// custom loggers (e.g. `rpcSLog.Errorf`) are formatted the same way as
+	// `log.Errorf`/`fmt.Errorf`.
 	matchAnyPrefix := profile == "modern" || profile == "next"
 
 	formatFunc := FormatCallGreedy
@@ -97,6 +100,27 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 			SelectorChainStyle:   selectorChainStyle,
 		})
 	}
+	// The "next" profile also splits long single string literals used as call
+	// arguments into concatenations. This is intentionally separate from the
+	// string-concat reflow rule (which only rewrites existing concatenations).
+	if profile == "next" {
+		// In next mode, the "expression" stage also owns formatting for composite
+		// literals and single-line function literals, since they frequently appear
+		// inside call args and long lines.
+		exprRules = append(exprRules,
+			dsl.ExpandFuncLitBodyRules()...,
+		)
+		exprRules = append(exprRules,
+			dsl.ExpandCompositeLitRules()...,
+		)
+		exprRules = append(exprRules, dsl.SplitLongStringLiteralRules(dsl.SplitLongStringLiteralOptions{
+			// Unlike the printf/logcall formatter, generic string splitting should
+			// be willing to create short tails (e.g. "%v: %w") to preserve the
+			// most natural wrap point.
+			MinTailLen: 0,
+		})...)
+	}
+
 	return exprRules
 }
 
@@ -109,9 +133,9 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 		case "modern":
 			style = "packed-chain-layout"
 		case "next":
-			// The "next" profile is opinionated: for non-log/printf calls, prefer
-			// packed multiline formatting (fits => keep; overflow => multiline with
-			// tightly packed args) as the default.
+			// The "next" profile defaults to packed multiline call formatting only.
+			// Method-chain breaking is handled by the expression stage (and can be
+			// explicitly enabled here via `--dsl-multiline-style`).
 			style = "packed"
 		default:
 			style = "legacy"

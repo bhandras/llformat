@@ -1141,6 +1141,16 @@ var logPrintfPatterns = []string{
 	"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
 }
 
+// IsNonFLogCallCond checks if a call expression is a non-printf-style logging
+// call such as `log.Info(...)`.
+//
+// This is used to keep the generic multiline-call formatter from rewriting
+// these calls. The log/printf formatter intentionally targets only the `*f`
+// variants, and some repos rely on the non-`f` variants being left alone.
+type IsNonFLogCallCond struct {
+	Target string
+}
+
 // Eval implements Condition for IsLogOrPrintfCallCond.
 func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
@@ -1159,7 +1169,7 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 			// Support dot-imported variants (e.g. `Infof(...)`) when enabled.
 			return isLogPrintfName(fun.Name)
 		case *ast.SelectorExpr:
-			return isLogPrintfName(fun.Sel.Name)
+			return fun.Sel != nil && isLogPrintfName(fun.Sel.Name)
 		default:
 			return false
 		}
@@ -1187,6 +1197,37 @@ func isLogPrintfName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func isNonFLogName(name string) bool {
+	switch name {
+	case "Info", "Debug", "Trace", "Error", "Warn", "Fatal", "Panic":
+		return true
+	default:
+		return false
+	}
+}
+
+// Eval implements Condition for IsNonFLogCallCond.
+func (c *IsNonFLogCallCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil {
+		return false
+	}
+
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel == nil || sel.Sel == nil {
+		return false
+	}
+	if !isNonFLogName(sel.Sel.Name) {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok || ident == nil {
+		return false
+	}
+	return ident.Name == "log"
 }
 
 // getFuncName extracts the function name from a call expression.

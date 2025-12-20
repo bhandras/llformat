@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	formatstd "go/format"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"strings"
 	"unicode"
@@ -552,7 +553,6 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 					b.WriteString(split)
 					curLen = curLenAfterWrite(split)
 					first = false
-					prevWasMultiline, prevWasCall = false, false
 					continue
 				}
 				// Not first: decide placement.
@@ -562,7 +562,6 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 					b.WriteString(", ")
 					b.WriteString(plain)
 					curLen = advanceCols(curLen+2, plain)
-					prevWasMultiline, prevWasCall = false, false
 				} else {
 					// Decide whether to keep it whole on a fresh line or split.
 					effectiveWidth := stringWidth
@@ -581,7 +580,6 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 						b.WriteString(plain)
 						curLen = contIndentLen + firstLineLen(plain)
 						first = false
-						prevWasMultiline, prevWasCall = false, false
 						continue
 					}
 					// 3) Finally, split across multiple lines.
@@ -592,10 +590,8 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 						b.WriteString(tentative)
 						if strings.Contains(tentative, "\n") {
 							curLen = lastLineLen(tentative)
-							prevWasMultiline, prevWasCall = false, false
 						} else {
 							curLen += need
-							prevWasMultiline, prevWasCall = false, false
 						}
 					} else {
 						b.WriteByte(',')
@@ -605,7 +601,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 						split := buildSplitQuoted(text, contIndentLen, contIndent, effectiveWidth)
 						b.WriteString(split)
 						curLen = curLenAfterWrite(split)
-						prevWasMultiline, prevWasCall = false, false
+						prevWasMultiline = false
 					}
 				}
 				first = false
@@ -653,7 +649,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string, trailin
 					b.WriteString(a)
 					curLen = advanceCols(curLen+2, a)
 				}
-				prevWasMultiline, prevWasCall = false, false
+				prevWasMultiline = false
 				continue
 			}
 			nested := formatCallPackedMultiLine([]byte(a), contIndent, contIndent, true)
@@ -852,17 +848,52 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 
 	curLen := contIndentLen
 	first := true
-	prevWasMultiline := false
-	prevWasCall := false
 	seenMultilineCall := false
 	seenMultilineComposite := false
+
+	// When a call consists only of function literal arguments (e.g.
+	// `handle(func() error { ... }, func() error { ... })`), prefer expanding
+	// each func literal body into a multiline block for readability.
+	//
+	// For mixed-argument calls, keep func literals inline so packed layouts
+	// remain stable (see testdata/multiline/output_next.go).
+	allFuncLitArgs := true
+	seenNonEmpty := false
+	for _, raw := range args {
+		a := strings.TrimSpace(raw)
+		if a == "" {
+			continue
+		}
+		seenNonEmpty = true
+		e, err := parser.ParseExpr(a)
+		if err != nil {
+			allFuncLitArgs = false
+			break
+		}
+		if _, ok := e.(*ast.FuncLit); !ok {
+			allFuncLitArgs = false
+			break
+		}
+	}
+	if !seenNonEmpty {
+		allFuncLitArgs = false
+	}
 
 	for idx, raw := range args {
 		a := strings.TrimSpace(raw)
 		if a == "" {
 			continue
 		}
-		forcedBreak := !first && prevWasMultiline && prevWasCall
+		if allFuncLitArgs {
+			if expanded, ok := expandFuncLitArgBodyNext(a, contIndent); ok {
+				a = expanded
+			}
+		}
+		trimmedArg := strings.TrimSpace(a)
+		curIsFuncLit := strings.HasPrefix(trimmedArg, "func(") || strings.HasPrefix(trimmedArg, "func ")
+		// Always start function literals on a fresh line to avoid awkward
+		// `}, func(...) { ... }` packing.
+		forcedBreak := !first && curIsFuncLit
 		// When we keep `make(` + first arg inline, prefer one-arg-per-line for the
 		// remaining args to avoid packing `0, len(...)` on the same line.
 		if firstArgInline && !first {
@@ -892,7 +923,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 					b.WriteString(split)
 					curLen = curLenAfterWrite(split)
 					first = false
-					prevWasMultiline, prevWasCall = false, false
 					continue
 				}
 
@@ -901,7 +931,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 					b.WriteString(", ")
 					b.WriteString(plain)
 					curLen = advanceCols(curLen+2, plain)
-					prevWasMultiline, prevWasCall = false, false
 				} else {
 					effectiveWidth := stringWidth
 					if !hasMore && advanceCols(contIndentLen, plain) <= effectiveWidth {
@@ -911,7 +940,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 						b.WriteString(plain)
 						curLen = contIndentLen + firstLineLen(plain)
 						first = false
-						prevWasMultiline, prevWasCall = false, false
 						continue
 					}
 
@@ -922,10 +950,8 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 						b.WriteString(tentative)
 						if strings.Contains(tentative, "\n") {
 							curLen = lastLineLen(tentative)
-							prevWasMultiline, prevWasCall = false, false
 						} else {
 							curLen += need
-							prevWasMultiline, prevWasCall = false, false
 						}
 					} else {
 						b.WriteByte(',')
@@ -935,7 +961,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 						split := buildSplitQuotedForCallArg(text, contIndentLen, contIndent, effectiveWidth, hasMore)
 						b.WriteString(split)
 						curLen = curLenAfterWrite(split)
-						prevWasMultiline, prevWasCall = false, false
 					}
 				}
 				first = false
@@ -982,7 +1007,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 					b.WriteString(a)
 					curLen = advanceCols(curLen+2, a)
 				}
-				prevWasMultiline, prevWasCall = false, false
 				continue
 			}
 
@@ -999,10 +1023,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 					b.WriteString(nested)
 					curLen = curLenAfterWrite(nested)
 					first = false
-					nestedMulti := strings.Contains(nested, "\n")
-					prevWasMultiline = nestedMulti
-					prevWasCall = true
-					if nestedMulti {
+					if strings.Contains(nested, "\n") {
 						seenMultilineCall = true
 					}
 					continue
@@ -1015,10 +1036,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 					b.WriteString(nested)
 					curLen = curLenAfterWrite(nested)
 					first = false
-					nestedMulti := strings.Contains(nested, "\n")
-					prevWasMultiline = nestedMulti
-					prevWasCall = true
-					if nestedMulti {
+					if strings.Contains(nested, "\n") {
 						seenMultilineCall = true
 					}
 					continue
@@ -1029,10 +1047,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 				b.WriteString(nested)
 				curLen = curLenAfterWrite(nested)
 				first = false
-				nestedMulti := strings.Contains(nested, "\n")
-				prevWasMultiline = nestedMulti
-				prevWasCall = true
-				if nestedMulti {
+				if strings.Contains(nested, "\n") {
 					seenMultilineCall = true
 				}
 				continue
@@ -1044,10 +1059,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 			b.WriteString(a)
 			curLen = curLenAfterWrite(a)
 			first = false
-			argMulti := strings.Contains(a, "\n")
-			prevWasMultiline = argMulti
-			prevWasCall = false
-			if argMulti {
+			if strings.Contains(a, "\n") {
 				seenMultilineComposite = true
 			}
 			continue
@@ -1076,8 +1088,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 		if argIsMultiline {
 			seenMultilineComposite = true
 		}
-		prevWasMultiline = argIsMultiline
-		prevWasCall = false
 	}
 
 	if trailingComma {
@@ -1088,6 +1098,60 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 	b.WriteString(closingIndent)
 	b.WriteByte(')')
 	return b.String()
+}
+
+func expandFuncLitArgBodyNext(arg string, argIndent string) (string, bool) {
+	fset := token.NewFileSet()
+	expr, err := parser.ParseExprFrom(fset, "", arg, parser.AllErrors)
+	if err != nil {
+		return "", false
+	}
+	fn, ok := expr.(*ast.FuncLit)
+	if !ok || fn == nil || fn.Body == nil || !fn.Body.Lbrace.IsValid() || !fn.Body.Rbrace.IsValid() {
+		return "", false
+	}
+
+	lbrace := fset.Position(fn.Body.Lbrace).Offset
+	rbrace := fset.Position(fn.Body.Rbrace).Offset
+	if lbrace < 0 || rbrace < 0 || lbrace >= rbrace || rbrace >= len(arg) {
+		return "", false
+	}
+
+	origBody := arg[lbrace : rbrace+1]
+	if strings.Contains(origBody, "\n") {
+		return "", false
+	}
+	if len(fn.Body.List) == 0 {
+		return "", false
+	}
+
+	stmtIndent := argIndent + "\t"
+	var out strings.Builder
+	out.WriteString("{\n")
+	for _, stmt := range fn.Body.List {
+		if stmt == nil {
+			continue
+		}
+		var buf bytes.Buffer
+		_ = printer.Fprint(&buf, fset, stmt)
+		stmtText := strings.TrimSpace(buf.String())
+		if stmtText == "" {
+			continue
+		}
+		out.WriteString(stmtIndent)
+		out.WriteString(stmtText)
+		out.WriteByte('\n')
+	}
+	out.WriteString(argIndent)
+	out.WriteByte('}')
+
+	head := arg[:lbrace]
+	tail := arg[rbrace+1:]
+	repl := head + out.String() + tail
+	if repl == arg {
+		return "", false
+	}
+	return repl, true
 }
 
 // callHasAlwaysMultilineComposite reports whether the call expression's
@@ -1858,6 +1922,21 @@ func containsFormatVerb(s string) bool {
 	return false
 }
 
+func countFormatVerbs(s string) int {
+	count := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] != '%' {
+			continue
+		}
+		if i+1 < len(s) && s[i+1] == '%' {
+			i++
+			continue
+		}
+		count++
+	}
+	return count
+}
+
 func looksLikeTinyFormatVerbTail(s string) bool {
 	if s == "" {
 		return false
@@ -1933,6 +2012,12 @@ func isTinyTail(s string, minTailLen int) bool {
 		return false
 	}
 	trimmed := strings.TrimLeft(s, " \t")
+	// For printf-style strings, allow short tails that contain multiple format
+	// verbs (e.g. "%v: %w") since these are often meaningful enough to stand
+	// alone. Still avoid tiny single-verb tails like "%v" or "is %v".
+	if countFormatVerbs(trimmed) >= 2 {
+		return false
+	}
 	return len(trimmed) > 0 && len(trimmed) < minTailLen
 }
 

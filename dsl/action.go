@@ -1474,7 +1474,7 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool)
 	original := ctx.Source[start:end]
 	wsIndent := ctx.IndentAt(call)
 
-	// Find the base length (visual width from line start to call start)
+	// Find the base length (visual width from line start to call start).
 	baseLen := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
 	var formatted string
@@ -2145,7 +2145,9 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	effectiveColLimit := ctx.ColumnLimit
 	prefixWidth := visualLen(prefix, ctx.TabStop)
 	wsIndentWidth := visualLen(wsIndent, ctx.TabStop)
+	hadPrefixBudgetReduction := false
 	if prefixWidth > wsIndentWidth {
+		hadPrefixBudgetReduction = true
 		effectiveColLimit -= prefixWidth - wsIndentWidth
 		if effectiveColLimit < 20 {
 			effectiveColLimit = 20
@@ -2170,6 +2172,34 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		formatted = first + rest
 	} else {
 		formatted = prefix + strings.TrimPrefix(formatted, wsIndent)
+	}
+
+	// When a function literal's signature is forced to break due to a long
+	// assignment prefix (e.g. `veryLongName := func(...) ...`), prefer a gofmt-
+	// like multiline return list:
+	//   func(...) (
+	//     a,
+	//     b,
+	//   )
+	// rather than packing multiple results onto the same continuation line.
+	//
+	// This is intentionally limited to the "budget reduced by prefix" case so
+	// we don't drift from the next golden fixtures for function declarations and
+	// other func literals.
+	if hadPrefixBudgetReduction {
+		if canon, ok := canonicalizeParenReturnListInSignature(formatted, wsIndent); ok {
+			formatted = canon
+		}
+	}
+
+	// For function literals, treat "signature is multiline" as requiring the
+	// readability blank line after the opening brace, regardless of how the
+	// injected signature formatter computes needsBlank. The native signature
+	// formatters can conservatively return needsBlank=false for multiline breaks
+	// that occur inside parenthesized return lists, but the "next" golden spec
+	// expects the blank line for multiline func-literal signatures.
+	if strings.Contains(formatted, "\n") {
+		needsBlank = true
 	}
 
 	signatureUnchanged := formatted == prefix+signature
@@ -2238,6 +2268,125 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	return out, true
 }
 
+func canonicalizeParenReturnListInSignature(signature, baseIndent string) (string, bool) {
+	// Find the parameter list first, then check for a parenthesized return list.
+	// We only rewrite multiline return lists where more than one return value is
+	// packed onto the same line.
+	funcIdx := strings.Index(signature, "func")
+	if funcIdx < 0 {
+		return "", false
+	}
+
+	paramsOpen := strings.IndexByte(signature[funcIdx:], '(')
+	if paramsOpen < 0 {
+		return "", false
+	}
+	paramsOpen += funcIdx
+	paramsClose := findMatchingParenOutsideStrings(signature, paramsOpen)
+	if paramsClose < 0 {
+		return "", false
+	}
+
+	i := paramsClose + 1
+	for i < len(signature) && (signature[i] == ' ' || signature[i] == '\t' || signature[i] == '\n') {
+		i++
+	}
+	if i >= len(signature) || signature[i] != '(' {
+		return "", false
+	}
+	retOpen := i
+	retClose := findMatchingParenOutsideStrings(signature, retOpen)
+	if retClose < 0 {
+		return "", false
+	}
+
+	rawRetContent := signature[retOpen+1 : retClose]
+	if !strings.Contains(rawRetContent, "\n") {
+		return "", false
+	}
+
+	retContent := strings.TrimSpace(rawRetContent)
+	parts := scanner.SplitTopLevel(retContent)
+	parts = filterNonEmptyTrimmedStrings(parts)
+	if len(parts) <= 1 {
+		return "", false
+	}
+
+	contIndent := baseIndent + "\t"
+	var b strings.Builder
+	b.Grow(len(signature) + len(parts)*4)
+	b.WriteString(signature[:retOpen])
+	b.WriteString("(\n")
+	for _, p := range parts {
+		b.WriteString(contIndent)
+		b.WriteString(strings.TrimSpace(p))
+		b.WriteString(",\n")
+	}
+	b.WriteString(baseIndent)
+	b.WriteByte(')')
+	b.WriteString(signature[retClose+1:])
+	out := b.String()
+	if out == signature {
+		return "", false
+	}
+	return out, true
+}
+
+func filterNonEmptyTrimmedStrings(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func findMatchingParenOutsideStrings(s string, open int) int {
+	if open < 0 || open >= len(s) || s[open] != '(' {
+		return -1
+	}
+	depth := 0
+	inString := byte(0)
+	escaped := false
+	for i := open; i < len(s); i++ {
+		c := s[i]
+
+		if inString != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if c == '\\' && inString == '"' {
+				escaped = true
+				continue
+			}
+			if c == inString {
+				inString = 0
+			}
+			continue
+		}
+
+		switch c {
+		case '"', '\'', '`':
+			inString = c
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+			if depth < 0 {
+				return -1
+			}
+		}
+	}
+	return -1
+}
+
 // Execute implements Action for BreakFuncSignatureAction.
 func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	node := resolveTarget(caps, a.Target)
@@ -2282,11 +2431,9 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 		lineStart--
 	}
 
-	// If multi-line and there's content after the brace, add blank line
-	// But skip blank line if the signature already has nested multiline content
-	// (e.g., func types with multiline struct params) - adding more space would be excessive
-	hasNestedMultiline := strings.Contains(formatted, "func(\n")
-	if needsBlank && !hasNestedMultiline {
+	// If multi-line and there's content after the brace, add a blank line for
+	// readability.
+	if needsBlank {
 		// Check if next non-whitespace is a newline
 		pos := afterBrace
 		for pos < len(ctx.Source) && (ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {

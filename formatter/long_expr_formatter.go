@@ -247,6 +247,13 @@ func (f *LongExprFormatter) breakLongLineWithForbidden(src []byte, info lineInfo
 
 	beforeBreak := strings.TrimRight(line[:breakAfterIdx], " \t")
 	afterBreak := line[afterIdx:]
+	// If there is nothing after the break operator, this line is already
+	// "broken" (or the operator is dangling at end-of-line). Inserting another
+	// newline would create an empty continuation line that later stages (and
+	// gofmt) will preserve as a blank line.
+	if strings.TrimSpace(afterBreak) == "" {
+		return src, false
+	}
 
 	// Build new content with break
 	var newContent strings.Builder
