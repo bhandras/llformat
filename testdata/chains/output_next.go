@@ -1,4 +1,3 @@
-// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -12,7 +11,8 @@ import (
 
 // Example 1: Simple method chain that exceeds line limit
 func methodChain1() {
-	result := client.WithTimeout(30*time.Second).
+	result := client.
+		WithTimeout(30*time.Second).
 		WithRetry(3).
 		WithHeaders(headers).
 		Execute(ctx, request)
@@ -21,7 +21,8 @@ func methodChain1() {
 
 // Example 2: Method chain with long method names
 func methodChain2() {
-	result := builder.SetVeryLongConfigurationOption(true).
+	result := builder.
+		SetVeryLongConfigurationOption(true).
 		EnableAnotherFeatureFlag(false).
 		ConfigureAdvancedSettings(opts).
 		Build()
@@ -37,7 +38,8 @@ func methodChain3(update *NodeUpdate) {
 
 // Example 4: Deeply nested method chain
 func methodChain4() {
-	result := factory.CreateBuilder().
+	result := factory.
+		CreateBuilder().
 		WithOption1(val1).
 		WithOption2(val2).
 		WithOption3(val3).
@@ -49,18 +51,21 @@ func methodChain4() {
 
 // Example 5: Method chain with struct literal argument
 func methodChain5() {
-	result := client.Configure(
-		Config{
-			Timeout:        30 * time.Second,
-			MaxConnections: 3,
-		},
-	).Execute(ctx, nil)
+	result := client.
+		Configure(
+			Config{
+				Timeout:        30 * time.Second,
+				MaxConnections: 3,
+			},
+		).
+		Execute(ctx, nil)
 	_ = result
 }
 
 // Example 6: Method chain returning error
 func methodChain6() error {
-	return processor.Initialize(ctx).
+	return processor.
+		Initialize(ctx).
 		LoadConfig(configPath).
 		ValidateInputs(inputs).
 		ProcessAll().
@@ -93,7 +98,8 @@ func structLiteral2() {
 			MaxConnections: 100,
 			EnableTLS:      true,
 			CertPath:       "/path/to/cert",
-		})
+		},
+	)
 	_ = server
 }
 
@@ -236,6 +242,7 @@ func appendExample2(items []string) []string {
 func complexIf1(cache *Cache) {
 	if cache.Get(key).IsValid() && cache.Get(key).NotExpired() &&
 		cache.Get(key).HasPermission(user) {
+
 		process()
 	}
 }
@@ -354,12 +361,10 @@ func (clientType) WithRetry(int) clientType {
 }
 
 func (clientType) WithHeaders(interface{}) clientType {
-
 	return clientType{}
 }
 
 func (clientType) Execute(context.Context, interface{}) interface{} {
-
 	return nil
 }
 
@@ -380,12 +385,10 @@ func (builderType) EnableAnotherFeatureFlag(bool) builderType {
 }
 
 func (builderType) ConfigureAdvancedSettings(interface{}) builderType {
-
 	return builderType{}
 }
 
 func (builderType) Build() interface{} {
-
 	return nil
 }
 
@@ -410,22 +413,18 @@ func (factoryType) CreateBuilder() factoryType {
 }
 
 func (factoryType) WithOption1(interface{}) factoryType {
-
 	return factoryType{}
 }
 
 func (factoryType) WithOption2(interface{}) factoryType {
-
 	return factoryType{}
 }
 
 func (factoryType) WithOption3(interface{}) factoryType {
-
 	return factoryType{}
 }
 
 func (factoryType) WithOption4(interface{}) factoryType {
-
 	return factoryType{}
 }
 
@@ -434,7 +433,6 @@ func (factoryType) Finalize() factoryType {
 }
 
 func (factoryType) Build() interface{} {
-
 	return nil
 }
 
@@ -451,7 +449,6 @@ func (processorType) LoadConfig(string) processorType {
 }
 
 func (processorType) ValidateInputs(interface{}) processorType {
-
 	return processorType{}
 }
 
@@ -565,7 +562,6 @@ func (*CacheEntry) NotExpired() bool {
 }
 
 func (*CacheEntry) HasPermission(interface{}) bool {
-
 	return false
 }
 
@@ -599,7 +595,6 @@ var srvrLog logType
 type Estimator struct{}
 
 func (*Estimator) Config() interface{} {
-
 	return nil
 }
 

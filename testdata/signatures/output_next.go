@@ -1,4 +1,3 @@
-// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import (
@@ -88,8 +87,8 @@ func calculateOptimalResourceAllocationStrategy(
 
 // Example 11: Generic function with constraints
 func TransformCollection[T any, R any, C ~[]T](collection C,
-	transformer func(T) R, filter func(T) bool, aggregator func([]R) R) (R,
-	error) {
+	transformer func(T) R, filter func(T) bool,
+	aggregator func([]R) R) (R, error) {
 
 	var zero R
 
@@ -129,8 +128,9 @@ type ComplexServiceInterface interface {
 
 	ProcessBatchRequest(ctx context.Context, requests []*BatchRequest,
 		options BatchProcessingOptions,
-		progressCallback func(processed int, total int, currentItem *BatchRequest)) (
-		*BatchResponse, *BatchProcessingStats, error)
+		progressCallback func(processed int, total int,
+			currentItem *BatchRequest)) (*BatchResponse,
+		*BatchProcessingStats, error)
 
 	ValidateAndTransformWithRetry(input *ComplexInput,
 		validationRules []ValidationRule,
@@ -156,17 +156,19 @@ func aggregateMetrics(metrics map[MetricKey]map[time.Time][]MetricValue,
 }
 
 // Example 18: Struct literal types in signature
-func processInlineConfig(config struct {
-	Timeout     time.Duration
-	MaxRetries  int
-	EnableCache bool
-}, handler func(
-	cfg struct {
+func processInlineConfig(
+	config struct {
 		Timeout     time.Duration
 		MaxRetries  int
 		EnableCache bool
-	},
-) error) error {
+	}, handler func(
+		cfg struct {
+			Timeout     time.Duration
+			MaxRetries  int
+			EnableCache bool
+		},
+	) error) error {
+
 	return nil
 }
 
