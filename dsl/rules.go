@@ -654,6 +654,13 @@ type LogPrintfOptions struct {
 	// MatchAnySelectorPrefix enables suffix-only matching for selector calls.
 	// See IsLogOrPrintfCallCond.MatchAnySelectorPrefix for details.
 	MatchAnySelectorPrefix bool
+
+	// IncludeNonFStringCalls enables matching a small subset of non-`*f` log
+	// calls (e.g. `logger.Error("...")`) when the first argument is a string.
+	//
+	// This is intended for the "next" profile only; it expands the set of
+	// targeted string calls beyond the printf-style patterns.
+	IncludeNonFStringCalls bool
 }
 
 // LogPrintfRules returns only the log/printf formatting rule.
@@ -679,6 +686,7 @@ func LogPrintfRulesWithOptions(opts LogPrintfOptions, formatFunc ...LeftFlowForm
 			When: &IsLogOrPrintfCallCond{
 				Target:                 "node",
 				MatchAnySelectorPrefix: opts.MatchAnySelectorPrefix,
+				IncludeNonFStringCalls: opts.IncludeNonFStringCalls,
 			},
 			Priority: 75,
 			Action:   action,

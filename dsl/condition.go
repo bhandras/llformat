@@ -1133,6 +1133,12 @@ type IsLogOrPrintfCallCond struct {
 	// "myLogger.Infof", "rpcLog.Errorf"). This is intentionally opt-in because
 	// some repos include custom loggers that should not be rewritten.
 	MatchAnySelectorPrefix bool
+
+	// IncludeNonFStringCalls enables matching a small subset of non-`*f` log
+	// calls (e.g. `logger.Error("...")`) when the first argument is a string.
+	// This is intended for "next" where string-call formatting is more broadly
+	// useful.
+	IncludeNonFStringCalls bool
 }
 
 // logPrintfPatterns are the function call patterns to match.
@@ -1169,6 +1175,27 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	// should use the same formatting behavior (e.g. errors.New("...")).
 	if getFuncName(call) == "errors.New" {
 		return true
+	}
+
+	// In "next", optionally treat some non-`*f` log calls as targeted string
+	// calls when their first argument is a string literal/concat. This captures
+	// patterns like:
+	//   rpcLog.Error("long message ...")
+	// without changing legacy/parity behavior.
+	if c.IncludeNonFStringCalls {
+		if len(call.Args) > 0 && isStringLit(call.Args[0]) {
+			switch fun := call.Fun.(type) {
+			case *ast.SelectorExpr:
+				if fun.Sel != nil && isNonFStringLogName(fun.Sel.Name) {
+					return true
+				}
+			case *ast.Ident:
+				// Support dot-imported variants (e.g. `Error(...)`) when enabled.
+				if isNonFStringLogName(fun.Name) {
+					return true
+				}
+			}
+		}
 	}
 
 	if c.MatchAnySelectorPrefix {
@@ -1210,6 +1237,18 @@ func isLogPrintfName(name string) bool {
 func isNonFLogName(name string) bool {
 	switch name {
 	case "Info", "Debug", "Trace", "Error", "Warn", "Fatal", "Panic":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNonFStringLogName(name string) bool {
+	// Keep this intentionally small and string-oriented; these are typically used
+	// as message-only calls. We intentionally do not include Fatal/Panic to avoid
+	// surprising changes in control-flow-adjacent code.
+	switch name {
+	case "Info", "Debug", "Trace", "Warn", "Error":
 		return true
 	default:
 		return false

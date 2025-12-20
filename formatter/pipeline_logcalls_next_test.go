@@ -110,6 +110,43 @@ func f() (any, error) {
 	require.Contains(t, out, "\"specified\")", "expected final segment to remain within the call")
 }
 
+func TestPipelineNext_LogCalls_FormatsNonFLoggerStringCalls(t *testing.T) {
+	// Some codebases use non-printf logging methods (`.Info/.Error`) but still
+	// want the same string splitting behavior as printf-style calls in next mode.
+	const in = `package p
+
+type Logger struct{}
+
+func (Logger) Error(...interface{}) {}
+
+var rpcSLog Logger
+
+func f() {
+	rpcSLog.Error("unable to fetch channel edges by channel ID %d: %v")
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    44,
+		TabStop:        8,
+		RuleProfile:    "next",
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, "rpcSLog.Error(", "must treat non-`*f` logger calls as targeted string calls in next profile")
+	require.NotContains(t, out, "rpcSLog.Error(\n", "must not produce a hanging-paren layout for non-`*f` logger calls")
+	require.Contains(t, out, "\"unable to fetch \" +\n\t\t\"channel edges by \" +\n\t\t\"channel ID",
+		"expected next-style string splitting (word-boundary aware) for non-`*f` logger calls")
+}
+
 func TestPipelineNext_LogCalls_FlowTrailingArgsWhenTheyFit(t *testing.T) {
 	const in = `package p
 

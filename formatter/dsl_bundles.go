@@ -64,7 +64,12 @@ func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
 	}
 
 	return dsl.LogPrintfRulesWithOptions(
-		dsl.LogPrintfOptions{MatchAnySelectorPrefix: matchAnyPrefix},
+		dsl.LogPrintfOptions{
+			MatchAnySelectorPrefix: matchAnyPrefix,
+			// In next we also want to format non-`*f` log calls that take a single
+			// string message (custom loggers commonly use `.Info/.Error`).
+			IncludeNonFStringCalls: profile == "next",
+		},
 		formatFunc,
 	)
 }
