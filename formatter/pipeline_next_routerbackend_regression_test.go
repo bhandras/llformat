@@ -83,11 +83,12 @@ func f(graph graphT) {
 
 	out := string(p.Format([]byte(in)))
 
-	// Func literal return lists should stay packed, but if the full single-line
-	// signature would overflow due to the composite literal field prefix,
-	// prefer breaking the parameter list instead of forcing multiline returns.
-	require.Contains(t, out, "FetchChannelCapacity: func(\n\t\t\tchanID uint64,\n\t\t) (btcutilAmount, error) {",
-		"expected func literal to keep return list packed and break params when needed")
+	// Prefer keeping params compact. If the field prefix causes overflow, wrap
+	// the return list instead of breaking a simple single-arg param list.
+	require.Contains(t, out, "FetchChannelCapacity: func(chanID uint64) (",
+		"expected single-arg closure params to stay on the same line as `func(`")
+	require.Contains(t, out, "FetchChannelCapacity: func(chanID uint64) (\n\t\t\tbtcutilAmount, error,\n\t\t) {",
+		"expected the return list to wrap under prefix pressure (keeping params compact)")
 	require.Contains(t, out, "FetchChannelEndpoints: func(chanID uint64) (int, int, error) {",
 		"expected func literal signature return list to be packed like normal signatures")
 
@@ -140,7 +141,6 @@ func f() {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out, "FetchChannelCapacityWithVeryLongFieldNameThatForcesBreakingBecauseOfPrefix: func(\n\t\t\tchanID uint64) (btcutilAmount, error) {",
-		"expected the signature to keep a packed return list under prefix pressure")
-	require.NotContains(t, out, "func(chanID uint64) (\n", "must not break the return list when it can remain packed")
+	require.Contains(t, out, "FetchChannelCapacityWithVeryLongFieldNameThatForcesBreakingBecauseOfPrefix: func(chanID uint64) (\n\t\t\tbtcutilAmount, error,\n\t\t) {",
+		"expected params to remain compact and the return list to wrap under prefix pressure")
 }

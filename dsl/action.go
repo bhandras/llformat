@@ -2181,6 +2181,8 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		lineStart--
 	}
 	prefix := string(ctx.Source[lineStart:start])
+	trimmedPrefix := strings.TrimSpace(prefix)
+	isFieldPrefix := strings.Contains(trimmedPrefix, ":") && !strings.Contains(trimmedPrefix, ":=")
 
 	// Extract the signature including the opening brace (starting at `func`).
 	signature := strings.TrimSpace(string(ctx.Source[start : bracePos+1]))
@@ -2213,12 +2215,43 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		formatted, _ = formatSignatureSimple(signature, wsIndent, effectiveColLimit, ctx.TabStop)
 	}
 
+	// Composite-literal field values (`Field: func(...) ... {`) are especially
+	// sensitive to prefix width. In practice we want to keep the parameter list
+	// as compact as possible (prefer `func(x T)` over `func(\n x T,\n)`), and if
+	// the overall line is too long then wrap the return list instead.
+	//
+	// This post-processing runs before we reattach the original `prefix`, so we
+	// can accurately reason about the combined line width.
+	if a.FormatFunc != nil {
+		if isFieldPrefix {
+			if collapsed, ok := collapseMultilineParamsInFuncSignature(formatted); ok {
+				// If collapsing params makes the first line too long due to the
+				// return list, expand the return list into a multiline paren form.
+				firstLine := collapsed
+				if nl := strings.IndexByte(firstLine, '\n'); nl >= 0 {
+					firstLine = firstLine[:nl]
+				}
+				combinedLine := strings.TrimRight(prefix, " \t") + strings.TrimPrefix(firstLine, wsIndent)
+				if visualLen(combinedLine, ctx.TabStop) > ctx.ColumnLimit {
+					if expanded, ok := expandParenReturnListToMultiline(collapsed, wsIndent); ok {
+						collapsed = expanded
+					}
+				}
+				formatted = collapsed
+			}
+		}
+	}
+
 	// When the signature is only multiline because of reduced first-line budget
 	// (e.g. a long composite-literal field prefix), prefer breaking the *params*
 	// rather than the return list. This keeps `) (a, b) {` packed like normal
 	// function signatures and avoids forcing `(\n a,\n b,\n)` in cases where the
 	// return list itself is short.
-	if hadPrefixBudgetReduction {
+	//
+	// Do not apply this preference for composite-literal field values, where it
+	// tends to break even simple single-arg param lists; for those, we prefer
+	// keeping params compact and wrapping the return list instead.
+	if hadPrefixBudgetReduction && !isFieldPrefix {
 		if updated, ok := preferMultilineParamsOverMultilineParenReturns(formatted, wsIndent); ok {
 			formatted = updated
 		}
@@ -2519,6 +2552,114 @@ func preferMultilineParamsOverMultilineParenReturns(signature, baseIndent string
 	b.WriteByte(')')
 	b.WriteString(" (")
 	b.WriteString(strings.Join(ret, ", "))
+	b.WriteByte(')')
+
+	tail := strings.TrimLeftFunc(signature[retClose+1:], unicode.IsSpace)
+	if tail != "" {
+		b.WriteByte(' ')
+		b.WriteString(tail)
+	}
+
+	out := b.String()
+	if out == signature {
+		return "", false
+	}
+	return out, true
+}
+
+func collapseMultilineParamsInFuncSignature(signature string) (string, bool) {
+	funcIdx := strings.Index(signature, "func")
+	if funcIdx < 0 {
+		return "", false
+	}
+
+	paramsOpen := strings.IndexByte(signature[funcIdx:], '(')
+	if paramsOpen < 0 {
+		return "", false
+	}
+	paramsOpen += funcIdx
+	paramsClose := findMatchingParenOutsideStrings(signature, paramsOpen)
+	if paramsClose < 0 {
+		return "", false
+	}
+
+	rawParams := signature[paramsOpen+1 : paramsClose]
+	if !strings.Contains(rawParams, "\n") {
+		return "", false
+	}
+
+	parts := filterNonEmptyTrimmedStrings(scanner.SplitTopLevel(strings.TrimSpace(rawParams)))
+	collapsed := "(" + strings.Join(parts, ", ") + ")"
+
+	pre := strings.TrimRightFunc(signature[:paramsOpen], unicode.IsSpace)
+	post := strings.TrimLeftFunc(signature[paramsClose+1:], unicode.IsSpace)
+	out := pre + collapsed
+	if post != "" {
+		out += " " + post
+	}
+
+	if out == signature {
+		return "", false
+	}
+	return out, true
+}
+
+func expandParenReturnListToMultiline(signature, baseIndent string) (string, bool) {
+	// Convert: `func(...) (A, B) {` into:
+	//   func(...) (
+	//     A,
+	//     B,
+	//   ) {
+	// This is used as a fallback when a field prefix makes the single-line form
+	// overflow, but we still want to keep params compact.
+	funcIdx := strings.Index(signature, "func")
+	if funcIdx < 0 {
+		return "", false
+	}
+
+	paramsOpen := strings.IndexByte(signature[funcIdx:], '(')
+	if paramsOpen < 0 {
+		return "", false
+	}
+	paramsOpen += funcIdx
+	paramsClose := findMatchingParenOutsideStrings(signature, paramsOpen)
+	if paramsClose < 0 {
+		return "", false
+	}
+
+	i := paramsClose + 1
+	for i < len(signature) && (signature[i] == ' ' || signature[i] == '\t' || signature[i] == '\n') {
+		i++
+	}
+	if i >= len(signature) || signature[i] != '(' {
+		return "", false
+	}
+	retOpen := i
+	retClose := findMatchingParenOutsideStrings(signature, retOpen)
+	if retClose < 0 {
+		return "", false
+	}
+
+	rawRet := strings.TrimSpace(signature[retOpen+1 : retClose])
+	if rawRet == "" || strings.Contains(rawRet, "\n") {
+		return "", false
+	}
+	parts := filterNonEmptyTrimmedStrings(scanner.SplitTopLevel(rawRet))
+	if len(parts) <= 1 {
+		return "", false
+	}
+
+	contIndent := baseIndent + "\t"
+	var b strings.Builder
+	b.Grow(len(signature) + len(parts)*4)
+	b.WriteString(strings.TrimRightFunc(signature[:retOpen], unicode.IsSpace))
+	b.WriteString("(\n")
+	for _, p := range parts {
+		b.WriteString(contIndent)
+		b.WriteString(p)
+		b.WriteString(",\n")
+	}
+	b.WriteString(baseIndent)
 	b.WriteByte(')')
 
 	tail := strings.TrimLeftFunc(signature[retClose+1:], unicode.IsSpace)
