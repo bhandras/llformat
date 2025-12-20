@@ -1855,6 +1855,47 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 		return nil, false
 	}
 
+	// If the call itself would fit on a clean continuation line, and the line
+	// overflow is caused by a long multi-assignment prefix, prefer breaking
+	// before the call rather than reflowing it into a multiline call.
+	//
+	// This targets cases like:
+	//   info, _, _, err := graph.FetchX(arg)
+	// where turning the call into:
+	//   graph.FetchX(
+	//     arg,
+	//   )
+	// is a net readability loss.
+	ls := lineStart(ctx.Source, start)
+	prefixLine := string(ctx.Source[ls:start])
+	trimmedPrefix := strings.TrimSpace(prefixLine)
+	isMultiAssignPrefix := strings.Contains(trimmedPrefix, ",")
+	if isMultiAssignPrefix {
+		contIndent := wsIndent + "\t"
+		collapsed := strings.Join(strings.Fields(callText), " ")
+		callFitsOnContLine := visualLen(contIndent, ctx.TabStop)+visualLen(collapsed, ctx.TabStop) <= ctx.ColumnLimit
+		if callFitsOnContLine {
+			replaceStart := start
+			for replaceStart > ls && (ctx.Source[replaceStart-1] == ' ' || ctx.Source[replaceStart-1] == '\t') {
+				replaceStart--
+			}
+			if replaceStart < start {
+				var b EditBuilder
+				b.Replace(replaceStart, start, []byte("\n"+contIndent))
+				// If the call was already multiline, collapse it to a single line now
+				// that it has moved to a clean continuation line.
+				if strings.Contains(callText, "\n") {
+					b.Replace(start, end, []byte(collapsed))
+				}
+				out, changed, err := b.Apply(ctx.Source)
+				if err != nil {
+					return nil, false
+				}
+				return out, changed
+			}
+		}
+	}
+
 	var formatted string
 	if a.FormatFunc != nil {
 		// Use the provided formatter (legacy formatter)
@@ -2169,6 +2210,31 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 	// prefer breaking before the `func` keyword (onto a continuation line) rather
 	// than breaking inside the signature. This keeps `func(...) (a, b) {` packed
 	// like normal function signatures.
+	if hadPrefixBudgetReduction && strings.Contains(formatted, "\n") && a.FormatFunc != nil {
+		trimmedPrefix := strings.TrimSpace(prefix)
+		isFieldPrefix := strings.Contains(trimmedPrefix, ":") && !strings.Contains(trimmedPrefix, ":=")
+		if isFieldPrefix {
+			contIndent := wsIndent + "\t"
+			alt, _ := a.FormatFunc(signature, contIndent, ctx.ColumnLimit, ctx.TabStop)
+			if !strings.Contains(alt, "\n") {
+				prefixTrimmed := strings.TrimRight(prefix, " \t")
+				combined := prefixTrimmed + "\n" + alt
+				afterBrace := bracePos + 1
+
+				out, err := ApplySingleEdit(ctx.Source, lineStart, afterBrace, []byte(combined))
+				if err != nil {
+					return nil, false
+				}
+				fset := token.NewFileSet()
+				if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+					return nil, false
+				}
+
+				return out, true
+			}
+		}
+	}
+
 	// Reattach the original prefix (e.g. `x := `) to the first line.
 	if nl := strings.IndexByte(formatted, '\n'); nl >= 0 {
 		first := formatted[:nl]
