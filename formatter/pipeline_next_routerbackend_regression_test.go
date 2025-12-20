@@ -83,9 +83,11 @@ func f(graph graphT) {
 
 	out := string(p.Format([]byte(in)))
 
-	// Func literal signatures should be packed when short.
-	require.Contains(t, out, "FetchChannelCapacity: func(chanID uint64) (btcutilAmount, error) {",
-		"expected func literal signature return list to be packed like normal signatures")
+	// Func literal return lists should stay packed, but if the full single-line
+	// signature would overflow due to the composite literal field prefix,
+	// prefer breaking the parameter list instead of forcing multiline returns.
+	require.Contains(t, out, "FetchChannelCapacity: func(\n\t\t\tchanID uint64,\n\t\t) (btcutilAmount, error) {",
+		"expected func literal to keep return list packed and break params when needed")
 	require.Contains(t, out, "FetchChannelEndpoints: func(chanID uint64) (int, int, error) {",
 		"expected func literal signature return list to be packed like normal signatures")
 
@@ -93,4 +95,52 @@ func f(graph graphT) {
 	// call args into a multiline call.
 	require.NotContains(t, out, "FetchChannelEdgesByID(\n", "must not reflow a one-arg call into multiline just because the prefix is long")
 	require.Contains(t, out, "graph.FetchChannelEdgesByID(chanID)", "expected the call to remain single-line")
+}
+
+func TestPipelineNext_Regressions_FuncLitFieldPrefix_OverflowsLine_BreakBeforeFunc(t *testing.T) {
+	// This matches the reported case where the func literal signature is short
+	// but the field name prefix pushes the overall line past the column limit.
+	//
+	// Note: the pipeline runs gofmt as the final stage, and gofmt will not keep
+	// a newline between `Field:` and `func(...) {`. For very long field names,
+	// we can't guarantee a hard column limit for the `Field: func(` line. The
+	// main goal here is to keep the signature itself packed and avoid
+	// introducing awkward multiline return lists due to prefix-width budget
+	// reduction.
+	const in = `package p
+
+type btcutilAmount int64
+
+type RouterBackend struct {
+	FetchChannelCapacityWithVeryLongFieldNameThatForcesBreakingBecauseOfPrefix func(chanID uint64) (btcutilAmount, error)
+}
+
+func f() {
+	_ = &RouterBackend{
+		FetchChannelCapacityWithVeryLongFieldNameThatForcesBreakingBecauseOfPrefix:      func(chanID uint64) (btcutilAmount, error) {
+			return 0, nil
+		},
+	}
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		RuleProfile:          "next",
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		UseDSLMultiLineCalls: false,
+		UseDSLLogCalls:       false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, "FetchChannelCapacityWithVeryLongFieldNameThatForcesBreakingBecauseOfPrefix: func(\n\t\t\tchanID uint64) (btcutilAmount, error) {",
+		"expected the signature to keep a packed return list under prefix pressure")
+	require.NotContains(t, out, "func(chanID uint64) (\n", "must not break the return list when it can remain packed")
 }

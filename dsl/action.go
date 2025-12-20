@@ -8,6 +8,7 @@ import (
 	"go/printer"
 	"go/token"
 	"strings"
+	"unicode"
 
 	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/dsl/layout"
@@ -1869,7 +1870,14 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) ([]byte
 	ls := lineStart(ctx.Source, start)
 	prefixLine := string(ctx.Source[ls:start])
 	trimmedPrefix := strings.TrimSpace(prefixLine)
-	isMultiAssignPrefix := strings.Contains(trimmedPrefix, ",")
+	trimmedPrefixNoWS := strings.TrimRightFunc(prefixLine, unicode.IsSpace)
+	isAssignmentPrefix := strings.HasSuffix(trimmedPrefixNoWS, ":=") ||
+		(strings.HasSuffix(trimmedPrefixNoWS, "=") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, "==") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, "!=") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, "<=") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, ">="))
+	isMultiAssignPrefix := isAssignmentPrefix && strings.Contains(trimmedPrefix, ",")
 	if isMultiAssignPrefix {
 		contIndent := wsIndent + "\t"
 		collapsed := strings.Join(strings.Fields(callText), " ")
@@ -2205,33 +2213,14 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		formatted, _ = formatSignatureSimple(signature, wsIndent, effectiveColLimit, ctx.TabStop)
 	}
 
-	// If the signature was forced to break due only to the non-whitespace prefix
-	// before `func` (common in composite literals: `Field: func(...) ... {`),
-	// prefer breaking before the `func` keyword (onto a continuation line) rather
-	// than breaking inside the signature. This keeps `func(...) (a, b) {` packed
-	// like normal function signatures.
-	if hadPrefixBudgetReduction && strings.Contains(formatted, "\n") && a.FormatFunc != nil {
-		trimmedPrefix := strings.TrimSpace(prefix)
-		isFieldPrefix := strings.Contains(trimmedPrefix, ":") && !strings.Contains(trimmedPrefix, ":=")
-		if isFieldPrefix {
-			contIndent := wsIndent + "\t"
-			alt, _ := a.FormatFunc(signature, contIndent, ctx.ColumnLimit, ctx.TabStop)
-			if !strings.Contains(alt, "\n") {
-				prefixTrimmed := strings.TrimRight(prefix, " \t")
-				combined := prefixTrimmed + "\n" + alt
-				afterBrace := bracePos + 1
-
-				out, err := ApplySingleEdit(ctx.Source, lineStart, afterBrace, []byte(combined))
-				if err != nil {
-					return nil, false
-				}
-				fset := token.NewFileSet()
-				if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
-					return nil, false
-				}
-
-				return out, true
-			}
+	// When the signature is only multiline because of reduced first-line budget
+	// (e.g. a long composite-literal field prefix), prefer breaking the *params*
+	// rather than the return list. This keeps `) (a, b) {` packed like normal
+	// function signatures and avoids forcing `(\n a,\n b,\n)` in cases where the
+	// return list itself is short.
+	if hadPrefixBudgetReduction {
+		if updated, ok := preferMultilineParamsOverMultilineParenReturns(formatted, wsIndent); ok {
+			formatted = updated
 		}
 	}
 
@@ -2383,6 +2372,37 @@ func canonicalizeParenReturnListInSignature(signature, baseIndent string, colLim
 		return "", false
 	}
 
+	// If the (potentially multiline) return list can be collapsed onto one line
+	// without exceeding the column limit, prefer that. This helps when the
+	// signature formatter was forced to break due to prefix budget reduction, but
+	// the return list itself is short.
+	{
+		collapsed := "(" + strings.Join(parts, ", ") + ")"
+		pre := strings.TrimRightFunc(signature[:retOpen], unicode.IsSpace)
+		candidate := pre + " " + collapsed + signature[retClose+1:]
+		if candidate != signature {
+			origMax := 0
+			for _, line := range strings.Split(signature, "\n") {
+				if w := visualLen(line, tabStop); w > origMax {
+					origMax = w
+				}
+			}
+			candidateMax := 0
+			for _, line := range strings.Split(candidate, "\n") {
+				if w := visualLen(line, tabStop); w > candidateMax {
+					candidateMax = w
+				}
+			}
+			// If the file already contains an unavoidable long line (e.g. a very
+			// long composite-literal field name), collapsing return types shouldn't
+			// be blocked by that. Accept the collapse if it fits within the column
+			// limit *or* does not make the signature's max line width worse.
+			if candidateMax <= colLimit || candidateMax <= origMax {
+				return candidate, true
+			}
+		}
+	}
+
 	contIndent := baseIndent + "\t"
 	var b strings.Builder
 	b.Grow(len(signature) + len(parts)*4)
@@ -2423,6 +2443,90 @@ func canonicalizeParenReturnListInSignature(signature, baseIndent string, colLim
 	b.WriteString(baseIndent)
 	b.WriteByte(')')
 	b.WriteString(signature[retClose+1:])
+	out := b.String()
+	if out == signature {
+		return "", false
+	}
+	return out, true
+}
+
+func preferMultilineParamsOverMultilineParenReturns(signature, baseIndent string) (string, bool) {
+	// Only applies to signatures that:
+	// - have a parenthesized return list
+	// - already have a multiline return list
+	// - have a single-line parameter list
+	funcIdx := strings.Index(signature, "func")
+	if funcIdx < 0 {
+		return "", false
+	}
+
+	paramsOpen := strings.IndexByte(signature[funcIdx:], '(')
+	if paramsOpen < 0 {
+		return "", false
+	}
+	paramsOpen += funcIdx
+	paramsClose := findMatchingParenOutsideStrings(signature, paramsOpen)
+	if paramsClose < 0 {
+		return "", false
+	}
+
+	paramsBody := signature[paramsOpen+1 : paramsClose]
+	if strings.Contains(paramsBody, "\n") {
+		return "", false
+	}
+
+	i := paramsClose + 1
+	for i < len(signature) && (signature[i] == ' ' || signature[i] == '\t' || signature[i] == '\n') {
+		i++
+	}
+	if i >= len(signature) || signature[i] != '(' {
+		return "", false
+	}
+
+	retOpen := i
+	retClose := findMatchingParenOutsideStrings(signature, retOpen)
+	if retClose < 0 {
+		return "", false
+	}
+
+	rawRetContent := signature[retOpen+1 : retClose]
+	if !strings.Contains(rawRetContent, "\n") {
+		return "", false
+	}
+
+	// Split params and returns at top level so we preserve user-written names,
+	// types, and pointer qualifiers.
+	params := filterNonEmptyTrimmedStrings(scanner.SplitTopLevel(paramsBody))
+	ret := filterNonEmptyTrimmedStrings(scanner.SplitTopLevel(strings.TrimSpace(rawRetContent)))
+	if len(ret) <= 1 {
+		// If it's only one return, let other rules decide whether to keep it
+		// parenthesized/multiline.
+		return "", false
+	}
+
+	paramIndent := baseIndent + "\t"
+
+	var b strings.Builder
+	b.Grow(len(signature) + len(params)*4)
+	b.WriteString(signature[:paramsOpen+1]) // includes "func("
+	b.WriteString("\n")
+	for _, p := range params {
+		b.WriteString(paramIndent)
+		b.WriteString(p)
+		b.WriteString(",\n")
+	}
+	b.WriteString(baseIndent)
+	b.WriteByte(')')
+	b.WriteString(" (")
+	b.WriteString(strings.Join(ret, ", "))
+	b.WriteByte(')')
+
+	tail := strings.TrimLeftFunc(signature[retClose+1:], unicode.IsSpace)
+	if tail != "" {
+		b.WriteByte(' ')
+		b.WriteString(tail)
+	}
+
 	out := b.String()
 	if out == signature {
 		return "", false
