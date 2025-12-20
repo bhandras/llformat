@@ -696,6 +696,15 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			lineWithTrailing = testLine
 		}
 
+		// In the "next" profile, when we break before the next parameter we
+		// append a comma to the current line. Reserve space for that comma so we
+		// don't end up with punctuation exactly on the column boundary (or a
+		// one-column overflow) due to a late comma insertion.
+		lineToCheck := lineWithTrailing
+		if f.cfg.CanonicalMultilineSigLists && !isLast {
+			lineToCheck = testLine + ","
+		}
+
 		if needsFuncBreak {
 			// For func params that need internal breaking, try to keep the func header
 			// inline (e.g., ", handler func(") and only break the internal params
@@ -710,7 +719,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			} else {
 				currentLine = currentLine + ", " + paramToWrite
 			}
-		} else if width.VisualLenWithTab(lineWithTrailing, f.cfg.TabStop) > f.cfg.ColumnLimit {
+		} else if width.VisualLenWithTab(lineToCheck, f.cfg.TabStop) > f.cfg.ColumnLimit {
 			// Need to break - put param on new line
 			if i > 0 {
 				result.WriteByte(',')
