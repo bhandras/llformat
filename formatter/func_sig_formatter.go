@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"bytes"
+	"go/token"
 	"strings"
 
 	"github.com/lightninglabs/llformat/scanner"
@@ -872,7 +873,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	// Break params
 	contIndent := indent + "\t"
 	currentLine := result.String()
-	paramList := f.splitParams(params)
+	paramList := f.splitFuncParamList(params)
 	paramList = filterNonEmptyTrimmed(paramList)
 
 	forceParamListNewline := false
@@ -1338,6 +1339,86 @@ func (f *FuncSigFormatter) splitParams(params string) []string {
 	return scanner.SplitTopLevel(params)
 }
 
+func (f *FuncSigFormatter) splitFuncParamList(params string) []string {
+	parts := filterNonEmptyTrimmed(scanner.SplitTopLevel(params))
+	if len(parts) <= 1 {
+		return parts
+	}
+
+	// In the "next" profile, treat identifier name lists that share a type as a
+	// single parameter group.
+	//
+	// Raw comma splitting will incorrectly split:
+	//   edgeInfo *T, c1, c2 *U
+	// into:
+	//   "edgeInfo *T", "c1", "c2 *U"
+	// which can yield ugly wraps like:
+	//   func(edgeInfo *T, c1,
+	//     c2 *U)
+	//
+	// But do NOT apply this to return lists: return elements are types, and
+	// merging would collapse `Result, error` into a single list element and
+	// change next goldens.
+	isNextLike := f.cfg.CanonicalMultilineSigLists ||
+		f.cfg.ReserveTrailingComma ||
+		f.cfg.PreferInlineSmallReturnList
+	if !isNextLike {
+		return parts
+	}
+
+	isBareName := func(s string) bool {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return false
+		}
+		return token.IsIdentifier(s)
+	}
+
+	isComplexSharedType := func(typePart string) bool {
+		typePart = strings.TrimSpace(typePart)
+		if typePart == "" {
+			return false
+		}
+		// Keep this deliberately narrow to preserve existing next goldens:
+		// prefer merging only for long, package-qualified pointer types (the
+		// common "c1, c2 *pkg.Type" callback pattern).
+		if strings.HasPrefix(typePart, "*") && strings.Contains(typePart, ".") {
+			return true
+		}
+		// Fallback for unusually long types where splitting inside the shared-type
+		// name list tends to look bad.
+		return len(typePart) >= 32
+	}
+
+	var merged []string
+	for i := 0; i < len(parts); i++ {
+		cur := strings.TrimSpace(parts[i])
+		if cur == "" {
+			continue
+		}
+
+		// Merge only the bare name immediately preceding the typed segment.
+		// This avoids breaking `c1, c2 *T` into `c1,` + `c2 *T` (ugly), while
+		// still allowing longer name lists like `a, b, c, d int` to be wrapped
+		// progressively (matching existing goldens).
+		if isBareName(cur) && i+1 < len(parts) {
+			next := strings.TrimSpace(parts[i+1])
+			if strings.IndexAny(next, " \t\n") >= 0 {
+				typePart := next[strings.IndexAny(next, " \t\n"):]
+				if isComplexSharedType(typePart) {
+					merged = append(merged, cur+", "+next)
+					i++
+					continue
+				}
+			}
+		}
+
+		merged = append(merged, cur)
+	}
+
+	return merged
+}
+
 // funcParamNeedsBreaking checks if a function-typed parameter needs to be broken
 // into multiple lines. This is true when the param contains a nested complex type
 // like struct{} that will be expanded by gofmt, or already contains multiline content.
@@ -1422,7 +1503,7 @@ func (f *FuncSigFormatter) formatFuncTypeParam(param, baseIndent string) string 
 	afterParams := rest[paramEnd+1:] // e.g., " error"
 
 	// Split inner params
-	innerList := f.splitParams(innerParams)
+	innerList := f.splitFuncParamList(innerParams)
 	if len(innerList) == 0 {
 		return param
 	}
