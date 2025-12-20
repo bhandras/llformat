@@ -804,47 +804,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 	var b strings.Builder
 	b.WriteString(head)
 	b.WriteByte('(')
-
-	// Special-case `make(T, ...)` to keep the type argument inline with `make(`.
-	// This improves readability for the common `make([]T, 0, n)` patterns and
-	// avoids the awkward:
-	//   make(
-	//       []T, ...
-	//   )
-	//
-	// We still force multiline output by inserting a newline right after the
-	// first argument's comma when there are additional arguments.
-	firstArgInline := false
-	firstArgIdx := -1
-	if strings.TrimSpace(head) == "make" {
-		for i := 0; i < len(args); i++ {
-			if strings.TrimSpace(args[i]) == "" {
-				continue
-			}
-			firstArgIdx = i
-			break
-		}
-		if firstArgIdx >= 0 {
-			hasAnother := false
-			for j := firstArgIdx + 1; j < len(args); j++ {
-				if strings.TrimSpace(args[j]) != "" {
-					hasAnother = true
-					break
-				}
-			}
-			firstArgInline = hasAnother
-		}
-	}
-	if firstArgInline {
-		firstArg := strings.TrimSpace(args[firstArgIdx])
-		b.WriteString(firstArg)
-		b.WriteByte(',')
-		b.WriteByte('\n')
-		// Continue formatting the remaining args.
-		args = args[firstArgIdx+1:]
-	} else {
-		b.WriteByte('\n')
-	}
+	b.WriteByte('\n')
 
 	curLen := contIndentLen
 	first := true
@@ -894,11 +854,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 		// Always start function literals on a fresh line to avoid awkward
 		// `}, func(...) { ... }` packing.
 		forcedBreak := !first && curIsFuncLit
-		// When we keep `make(` + first arg inline, prefer one-arg-per-line for the
-		// remaining args to avoid packing `0, len(...)` on the same line.
-		if firstArgInline && !first {
-			forcedBreak = true
-		}
 
 		if e, err := parser.ParseExpr(a); err == nil {
 			if text, ok := llast.FlattenStringExprAST(e); ok {
@@ -982,12 +937,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string, tra
 			fitsFresh := advanceCols(contIndentLen, a) <= lineWidth
 			hasAlways := callHasAlwaysMultilineComposite(a)
 			hasNested := llast.HasNestedCall(a)
-
-			// In the `make(T, ...)` special-case, don't pack additional args onto the
-			// same continuation line even if they would fit.
-			if firstArgInline && !first {
-				fits = false
-			}
 
 			if fits && !hasAlways && !hasNested {
 				if first {

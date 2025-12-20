@@ -89,14 +89,18 @@ func f() {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(t, out,
-		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg,\n\t\terror,\n\t) {",
+		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error,\n\t) {",
 		"expected the closure signature to break when the assignment prefix makes it exceed the column limit")
 	require.NotContains(t, out,
 		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
 		"must not keep the closure signature on a single line when it overflows due to its prefix")
 	require.Contains(t, out,
-		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg,\n\t\terror,\n\t) {\n\n\t\t_ = req",
+		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error,\n\t) {\n\n\t\t_ = req",
 		"expected a blank line after the opening brace for a multiline closure signature")
+
+	require.NotContains(t, out,
+		"\t\t*InitFundingMsg,\n\t\terror",
+		"must not force each return type onto its own line for closure signatures; keep them packed when possible")
 }
 
 func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineClosureSignature(t *testing.T) {

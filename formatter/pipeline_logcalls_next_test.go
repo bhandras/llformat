@@ -75,6 +75,41 @@ func f(err error) error {
 	require.NotContains(t, out, "\"%v\"", "must not split into a standalone \"%v\" literal")
 }
 
+func TestPipelineNext_LogCalls_FormatsErrorsNewLikePrintfCalls(t *testing.T) {
+	// errors.New isn't a printf-style call, but it benefits from the same
+	// "split long string without hanging-paren" behavior as other targeted
+	// calls in next mode.
+	const in = `package p
+
+import "errors"
+
+func f() (any, error) {
+	return nil, errors.New("either a Single or Multi channel backup must be specified")
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    55,
+		TabStop:        8,
+		RuleProfile:    "next",
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, "errors.New(", "must treat errors.New as a targeted string call in next profile")
+	require.NotContains(t, out, "errors.New(\n", "must not produce a hanging-paren layout for errors.New")
+	require.Contains(t, out, "\"either a Single or ", "expected string splitting to preserve word boundaries")
+	require.Contains(t, out, "\" +\n\t\t\"", "expected next-style string splitting for errors.New")
+	require.Contains(t, out, "\"specified\")", "expected final segment to remain within the call")
+}
+
 func TestPipelineNext_LogCalls_FlowTrailingArgsWhenTheyFit(t *testing.T) {
 	const in = `package p
 

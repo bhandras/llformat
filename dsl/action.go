@@ -2317,10 +2317,22 @@ func canonicalizeParenReturnListInSignature(signature, baseIndent string) (strin
 	b.Grow(len(signature) + len(parts)*4)
 	b.WriteString(signature[:retOpen])
 	b.WriteString("(\n")
-	for _, p := range parts {
+	// Keep small return lists packed on a single line, matching the signature
+	// formatter's usual behavior for `func(...) (a, b) {` return lists.
+	//
+	// We still include a trailing comma because the return list is multiline.
+	if len(parts) == 2 {
 		b.WriteString(contIndent)
-		b.WriteString(strings.TrimSpace(p))
+		b.WriteString(strings.TrimSpace(parts[0]))
+		b.WriteString(", ")
+		b.WriteString(strings.TrimSpace(parts[1]))
 		b.WriteString(",\n")
+	} else {
+		for _, p := range parts {
+			b.WriteString(contIndent)
+			b.WriteString(strings.TrimSpace(p))
+			b.WriteString(",\n")
+		}
 	}
 	b.WriteString(baseIndent)
 	b.WriteByte(')')

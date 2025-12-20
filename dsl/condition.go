@@ -1139,6 +1139,7 @@ type IsLogOrPrintfCallCond struct {
 var logPrintfPatterns = []string{
 	"log.Infof", "log.Debugf", "log.Tracef", "log.Errorf", "log.Warnf",
 	"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
+	"errors.New",
 }
 
 // IsNonFLogCallCond checks if a call expression is a non-printf-style logging
@@ -1161,6 +1162,13 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	call, ok := node.(*ast.CallExpr)
 	if !ok {
 		return false
+	}
+
+	// Even when MatchAnySelectorPrefix is enabled (suffix-only matching),
+	// explicitly recognize a small set of well-known non-`*f` string calls that
+	// should use the same formatting behavior (e.g. errors.New("...")).
+	if getFuncName(call) == "errors.New" {
+		return true
 	}
 
 	if c.MatchAnySelectorPrefix {
