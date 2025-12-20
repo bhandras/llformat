@@ -28,5 +28,9 @@ func (p OwnershipPolicy) ForbiddenSpans() llast.OffsetSpanSet {
 	if p.StageName == "" {
 		return p.Registry.AllOwned()
 	}
-	return p.Registry.AllOwnedExcept(p.StageName)
+
+	// Directional ownership: this stage should avoid rewriting within spans that
+	// later stages will format, but it is allowed to rewrite inside spans owned
+	// by earlier stages.
+	return p.Registry.AllOwnedAfter(p.StageName)
 }

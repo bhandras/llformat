@@ -73,6 +73,39 @@ func (r *OwnershipRegistry) ByStage(stageName string) (llast.OffsetSpanSet, bool
 	return s, ok
 }
 
+// AllOwnedAfter returns the union of owned spans declared by stages that run
+// after the provided stage name.
+//
+// This supports a directional ownership policy: earlier stages should avoid
+// rewriting spans that later stages "own", but later stages are allowed to
+// rewrite inside earlier-stage owned spans as part of the pipeline.
+func (r *OwnershipRegistry) AllOwnedAfter(stageName string) llast.OffsetSpanSet {
+	if r == nil {
+		return llast.OffsetSpanSet{}
+	}
+	if stageName == "" {
+		return r.allOwned
+	}
+
+	idx := -1
+	for i, name := range r.stageList {
+		if name == stageName {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		// Unknown stage name: conservatively treat all owned spans as forbidden.
+		return r.allOwned
+	}
+
+	var out llast.OffsetSpanSet
+	for i := idx + 1; i < len(r.stageList); i++ {
+		out = out.Union(r.byStage[r.stageList[i]])
+	}
+	return out
+}
+
 func (r *OwnershipRegistry) add(stageName string, spans llast.OffsetSpanSet) {
 	if r.byStage == nil {
 		r.byStage = make(map[string]llast.OffsetSpanSet)
