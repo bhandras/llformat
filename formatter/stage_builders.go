@@ -141,10 +141,16 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 
 func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Signatures != StageModeDSL {
+		profile := normalizedRuleProfile(opts.Selection.RuleProfile)
+		isNext := profile == "next"
 		return NewFuncSigFormatter(FuncSigConfig{
-			ColumnLimit:                cfg.ColumnLimit,
-			TabStop:                    cfg.TabStop,
-			CanonicalMultilineSigLists: normalizedRuleProfile(opts.Selection.RuleProfile) == "next",
+			ColumnLimit: cfg.ColumnLimit,
+			TabStop:     cfg.TabStop,
+			// Keep legacy fixtures stable: next-specific behavior is enabled only
+			// when the rule profile is explicitly "next".
+			CanonicalMultilineSigLists:  isNext,
+			ReserveTrailingComma:        isNext,
+			PreferInlineSmallReturnList: isNext,
 		})
 	}
 

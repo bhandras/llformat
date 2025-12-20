@@ -1545,6 +1545,18 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 		// String arg: split greedily
 		rest := a.text
 		hasTrailingArgs := i < len(normArgs)-1
+		avoidTinyVerbTail := opts.AvoidTinyFormatVerbTail && hasTrailingArgs && a.containsFormatVerb
+		minTailLen := opts.MinTailLen
+		if !hasTrailingArgs || !a.containsFormatVerb {
+			// MinTailLen is primarily a printf-style heuristic to avoid producing
+			// awkward tiny tails when there are trailing expression arguments to
+			// pack (e.g. starting a segment with "%v" or leaving only a few bytes).
+			//
+			// For plain strings with no trailing args, allowing a short final word
+			// segment (e.g. "cleanly") is typically better than forcing an earlier
+			// split point.
+			minTailLen = 0
+		}
 		// If the user explicitly wrote a concatenation expression (and we didn't
 		// preserve it as argExpr), avoid producing a tiny trailing verb segment
 		// by biasing toward breaking arguments instead of splitting awkwardly.
@@ -1670,11 +1682,11 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 			if opts.UseJoinAwareSpaceCut {
 				cut = lastQuotedSpaceBeforeWithJoin(curLen, rest, width, hasTrailingArgs)
 			}
-			if opts.AvoidTinyFormatVerbTail || opts.MinTailLen > 0 {
+			if avoidTinyVerbTail || minTailLen > 0 {
 				if opts.UseJoinAwareSpaceCut {
-					cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(curLen, rest, width, hasTrailingArgs, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
+					cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(curLen, rest, width, hasTrailingArgs, minTailLen, avoidTinyVerbTail)
 				} else {
-					cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
+					cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, minTailLen, avoidTinyVerbTail)
 				}
 			}
 
@@ -1695,11 +1707,11 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int, opts
 				if opts.UseJoinAwareSpaceCut {
 					cut = lastQuotedSpaceBeforeWithJoin(curLen, rest, width, hasTrailingArgs)
 				}
-				if opts.AvoidTinyFormatVerbTail || opts.MinTailLen > 0 {
+				if avoidTinyVerbTail || minTailLen > 0 {
 					if opts.UseJoinAwareSpaceCut {
-						cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(curLen, rest, width, hasTrailingArgs, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
+						cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(curLen, rest, width, hasTrailingArgs, minTailLen, avoidTinyVerbTail)
 					} else {
-						cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, opts.MinTailLen, opts.AvoidTinyFormatVerbTail)
+						cut = lastQuotedSpaceBeforeAvoidingTails(curLen, rest, width, minTailLen, avoidTinyVerbTail)
 					}
 				}
 			}
@@ -1854,22 +1866,62 @@ func looksLikeTinyFormatVerbTail(s string) bool {
 	if trimmed == "" || trimmed[0] != '%' {
 		return false
 	}
-	// Only consider the first token (up to next space). We treat small format
-	// tokens like "%v", "%w", "%+v" as "tiny" tails to avoid ugly splits like:
-	//   "error: "+\n\t"%v"
-	end := strings.IndexByte(trimmed, ' ')
-	if end < 0 {
-		end = len(trimmed)
+	// Treat a tail as "tiny" when it begins with one or more format verb tokens
+	// and contains little to no additional context after those tokens.
+	//
+	// This avoids awkward splits like:
+	//   "... wraps nicely "+\n\t"%d %d %d"
+	//
+	// But it allows starting a continuation line with a verb when there is
+	// meaningful text after it (e.g. "%v with context").
+	rest := trimmed
+	consumedAny := false
+	for {
+		rest = strings.TrimLeft(rest, " \t")
+		if rest == "" || rest[0] != '%' {
+			break
+		}
+		// Skip escaped percent ("%%") which is not a verb token.
+		if len(rest) >= 2 && rest[1] == '%' {
+			break
+		}
+
+		// Parse a minimal verb token: "%" + optional "+" + ASCII letter.
+		i := 1
+		if i < len(rest) && rest[i] == '+' {
+			i++
+		}
+		if i >= len(rest) || !isASCIIAlpha(rest[i]) {
+			break
+		}
+		i++
+
+		consumedAny = true
+		rest = rest[i:]
+
+		// Allow trivial closing punctuation immediately following a verb token.
+		rest = strings.TrimLeft(rest, " \t")
+		rest = strings.TrimLeft(rest, ",.)")
+
+		// If the next non-space token starts another verb, keep consuming. If
+		// there's any other content, stop.
+		next := strings.TrimLeft(rest, " \t")
+		if next == "" {
+			break
+		}
+		if next[0] == '%' {
+			continue
+		}
+		break
 	}
-	token := trimmed[:end]
-	token = strings.TrimRight(token, ",.)")
-	if len(token) == 2 && token[0] == '%' && isASCIIAlpha(token[1]) {
-		return true
+
+	if !consumedAny {
+		return false
 	}
-	if len(token) == 3 && token[0] == '%' && token[1] == '+' && isASCIIAlpha(token[2]) {
-		return true
-	}
-	return false
+
+	rest = strings.TrimSpace(rest)
+	rest = strings.Trim(rest, ",.)")
+	return rest == ""
 }
 
 func isASCIIAlpha(b byte) bool {
@@ -2324,11 +2376,11 @@ func FormatCallGreedyNext(call []byte, wsIndent string, baseLen int, colLimit, t
 		ReserveClosingParen:        true,
 		AllowExactFit:              true,
 		MinTailLen:                 8,
-		PreferBreakBeforeSplit:     true,
+		PreferBreakBeforeSplit:     false,
 		AvoidHangingParenForPrintf: true,
 		AvoidTinyFormatVerbTail:    true,
 		ReserveTrailingExprArgs:    2,
-		PreserveStringConcatExpr:   true,
+		PreserveStringConcatExpr:   false,
 	})
 
 	columnLimit = oldColumnLimit
@@ -2359,11 +2411,11 @@ func formatCallGreedyNextWithMinTailLen(call []byte, wsIndent string, baseLen in
 		ReserveClosingParen:        true,
 		AllowExactFit:              true,
 		MinTailLen:                 minTailLen,
-		PreferBreakBeforeSplit:     true,
+		PreferBreakBeforeSplit:     false,
 		AvoidHangingParenForPrintf: true,
 		AvoidTinyFormatVerbTail:    true,
 		ReserveTrailingExprArgs:    2,
-		PreserveStringConcatExpr:   true,
+		PreserveStringConcatExpr:   false,
 	})
 
 	columnLimit = oldColumnLimit

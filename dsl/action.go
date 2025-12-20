@@ -497,6 +497,71 @@ type BreakBinaryExprLayoutAction struct {
 	ArithmeticStyle string // "legacy"|"layout"
 }
 
+// InsertBlankBeforeFirstStmtInBlockAction inserts a blank line between the
+// opening delimiter of a block-like construct and its first body statement.
+//
+// This is used for the "next" profile to improve readability when a control
+// statement header is already multiline (e.g. long `if` conditions, long
+// `case` lists).
+type InsertBlankBeforeFirstStmtInBlockAction struct {
+	Target string
+}
+
+func (a *InsertBlankBeforeFirstStmtInBlockAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+	node := resolveTarget(caps, a.Target)
+	if node == nil {
+		return nil, false
+	}
+
+	var first ast.Stmt
+
+	switch n := node.(type) {
+	case *ast.IfStmt:
+		if n == nil || n.Body == nil || len(n.Body.List) == 0 {
+			return nil, false
+		}
+		first = n.Body.List[0]
+	case *ast.ForStmt:
+		if n == nil || n.Body == nil || len(n.Body.List) == 0 {
+			return nil, false
+		}
+		first = n.Body.List[0]
+	case *ast.CaseClause:
+		if n == nil || len(n.Body) == 0 {
+			return nil, false
+		}
+		first = n.Body[0]
+	default:
+		return nil, false
+	}
+
+	pos := ctx.Fset.Position(first.Pos())
+	if pos.Offset < 0 || pos.Offset > len(ctx.Source) {
+		return nil, false
+	}
+
+	// Insert at the start of the first statement's line so its indentation
+	// remains. If the first statement has a leading comment-only block, insert
+	// the blank line above the comment block so we don't split the comment and
+	// the statement apart.
+	lineStartIdx := lineStart(ctx.Source, pos.Offset)
+	lineStartIdx = leadingCommentBlockLineStart(ctx.Source, lineStartIdx)
+	if lineStartIdx < 0 || lineStartIdx > len(ctx.Source) {
+		return nil, false
+	}
+
+	// Already has a blank line?
+	if hasBlankLineBeforeLineStart(ctx.Source, lineStartIdx) {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, lineStartIdx, lineStartIdx, []byte("\n"))
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
 // opPriority returns a priority for operators (lower = prefer to break here).
 // Prefer breaking at && over || to keep "|| operand" together on the next line.
 // Logical operators are preferred over comparison/arithmetic.

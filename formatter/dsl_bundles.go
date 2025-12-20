@@ -60,7 +60,10 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 		arithStyle := opts.Style.DSLExprArithmeticStyle
 		caseClauseStyle := opts.Style.DSLExprCaseClauseStyle
 		selectorChainStyle := opts.Style.DSLExprSelectorChainStyle
-		if profile == "modern" || profile == "next" {
+		switch profile {
+		case "modern":
+			// "modern" opts into the layout engine's Go-style "break at every
+			// operator/comma once broken" behavior.
 			if logicalStyle == "" {
 				logicalStyle = "layout"
 			}
@@ -73,6 +76,16 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 			if selectorChainStyle == "" {
 				selectorChainStyle = "layout"
 			}
+		case "next":
+			// "next" is more conservative for expression chains: prefer a
+			// packed/greedy style (legacy breaker) that breaks only as much as
+			// needed to satisfy the column limit, while still opting into
+			// layout-based selector-chain breaking.
+			if selectorChainStyle == "" {
+				selectorChainStyle = "layout"
+			}
+			// Leave logical/arithmetic/case styles empty (=> legacy) unless the
+			// caller explicitly requests a style.
 		}
 
 		exprRules = dsl.LongExprRulesWithOptions(dsl.LongExprOptions{
@@ -307,10 +320,40 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 
 	// Native DSL blank line rules, with a legacy fallback for unparsable sources
 	// (and as a last resort).
+	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 	blankOpts := dsl.BlankLineOptions{
 		ExtraIfErrReturn: opts.Style.DSLBlankLinesExtraIfErrReturn,
 	}
 	rules := append([]dsl.Rule{}, dsl.BlankLineRulesWithOptions(blankOpts)...)
+
+	// Extra readability rules for "next": when a control statement header is
+	// already multiline, insert a blank line before the first statement in the
+	// body/case clause.
+	if profile == "next" {
+		rules = append(rules,
+			dsl.Rule{
+				Name:     "blank_after_multiline_if_header",
+				Pattern:  &dsl.NodePattern{Type: "IfStmt"},
+				When:     &dsl.HasMultilineIfHeaderCond{Target: "node"},
+				Priority: 9,
+				Action:   &dsl.InsertBlankBeforeFirstStmtInBlockAction{Target: "node"},
+			},
+			dsl.Rule{
+				Name:     "blank_after_multiline_for_header",
+				Pattern:  &dsl.NodePattern{Type: "ForStmt"},
+				When:     &dsl.HasMultilineForHeaderCond{Target: "node"},
+				Priority: 9,
+				Action:   &dsl.InsertBlankBeforeFirstStmtInBlockAction{Target: "node"},
+			},
+			dsl.Rule{
+				Name:     "blank_after_multiline_case_header",
+				Pattern:  &dsl.NodePattern{Type: "CaseClause"},
+				When:     &dsl.HasMultilineCaseHeaderCond{Target: "node"},
+				Priority: 9,
+				Action:   &dsl.InsertBlankBeforeFirstStmtInBlockAction{Target: "node"},
+			},
+		)
+	}
 	rules = append(rules, dsl.LegacyBlankLinesFallbackRules(FormatBlankLinesInSource)...)
 	return rules
 }

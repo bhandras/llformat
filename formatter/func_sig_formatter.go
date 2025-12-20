@@ -26,6 +26,16 @@ type FuncSigConfig struct {
 	// This is enabled for the "next" profile, but kept off for legacy behavior
 	// to avoid changing golden fixtures.
 	CanonicalMultilineSigLists bool
+
+	// ReserveTrailingComma reserves space for a trailing comma on a line when we
+	// might need to break before the next element. This helps avoid placing a
+	// comma exactly on the column boundary (or overflowing by one column) due to
+	// late comma insertion.
+	ReserveTrailingComma bool
+
+	// PreferInlineSmallReturnList prefers keeping small parenthesized return
+	// lists (e.g. `([]T, error)`) on one line by breaking parameters earlier.
+	PreferInlineSmallReturnList bool
 }
 
 // FuncSigFormatter formats long function signatures by breaking them across lines.
@@ -40,6 +50,13 @@ func NewFuncSigFormatter(cfg FuncSigConfig) *FuncSigFormatter {
 	}
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = 8
+	}
+	// Canonical multiline signature lists are a "next-profile" opt-in for this
+	// formatter. Enable the related heuristics by default when callers request
+	// canonical formatting.
+	if cfg.CanonicalMultilineSigLists {
+		cfg.ReserveTrailingComma = true
+		cfg.PreferInlineSmallReturnList = true
 	}
 	return &FuncSigFormatter{cfg: cfg}
 }
@@ -173,7 +190,9 @@ func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (s
 	f := NewFuncSigFormatter(FuncSigConfig{
 		ColumnLimit:                colLimit,
 		TabStop:                    tabStop,
-		CanonicalMultilineSigLists: true,
+		CanonicalMultilineSigLists:  true,
+		ReserveTrailingComma:        true,
+		PreferInlineSmallReturnList: true,
 	})
 
 	// When the signature already contains newlines, prefer to collapse it if it
@@ -656,7 +675,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	//
 	// and also helps avoid edge cases where a trailing comma ends up exactly on
 	// the column boundary.
-	if f.cfg.CanonicalMultilineSigLists && hasParenReturns && len(paramList) > 1 && isSmallParenReturnList(returns) {
+	if f.cfg.PreferInlineSmallReturnList && hasParenReturns && len(paramList) > 1 && isSmallParenReturnList(returns) {
 		trailingMinimal = trailingFull
 	}
 
@@ -701,7 +720,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 		// don't end up with punctuation exactly on the column boundary (or a
 		// one-column overflow) due to a late comma insertion.
 		lineToCheck := lineWithTrailing
-		if f.cfg.CanonicalMultilineSigLists && !isLast {
+		if f.cfg.ReserveTrailingComma && !isLast {
 			lineToCheck = testLine + ","
 		}
 
@@ -1220,9 +1239,9 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 	//   M(a, b) ([]T,
 	//     error)
 	//
-	// When CanonicalMultilineSigLists is enabled (next profile), delegate to the
-	// main signature formatter to keep behavior consistent across contexts.
-	if f.cfg.CanonicalMultilineSigLists {
+	// When next-profile behaviors are enabled, delegate to the main signature
+	// formatter to keep behavior consistent across contexts.
+	if f.cfg.PreferInlineSmallReturnList || f.cfg.ReserveTrailingComma || f.cfg.CanonicalMultilineSigLists {
 		return f.breakSignature(sig, indent) + commentSuffix
 	}
 

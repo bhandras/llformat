@@ -1467,6 +1467,57 @@ func (c *HasMultilineInterfaceMethodCond) Eval(caps Captures, ctx *Context) bool
 	return strings.Contains(sig, "\n")
 }
 
+// HasMultilineIfHeaderCond checks if an `if` statement header spans multiple
+// source lines before the opening `{`.
+type HasMultilineIfHeaderCond struct {
+	Target string
+}
+
+func (c *HasMultilineIfHeaderCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	ifStmt, ok := node.(*ast.IfStmt)
+	if !ok || ifStmt == nil || ifStmt.Body == nil {
+		return false
+	}
+	start := ctx.Fset.Position(ifStmt.Pos())
+	lbrace := ctx.Fset.Position(ifStmt.Body.Lbrace)
+	return start.Line != lbrace.Line
+}
+
+// HasMultilineForHeaderCond checks if a `for` statement header spans multiple
+// source lines before the opening `{`.
+type HasMultilineForHeaderCond struct {
+	Target string
+}
+
+func (c *HasMultilineForHeaderCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	forStmt, ok := node.(*ast.ForStmt)
+	if !ok || forStmt == nil || forStmt.Body == nil {
+		return false
+	}
+	start := ctx.Fset.Position(forStmt.Pos())
+	lbrace := ctx.Fset.Position(forStmt.Body.Lbrace)
+	return start.Line != lbrace.Line
+}
+
+// HasMultilineCaseHeaderCond checks if a `case A, B, ...:` clause spans
+// multiple source lines before the `:`.
+type HasMultilineCaseHeaderCond struct {
+	Target string
+}
+
+func (c *HasMultilineCaseHeaderCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	cc, ok := node.(*ast.CaseClause)
+	if !ok || cc == nil {
+		return false
+	}
+	start := ctx.Fset.Position(cc.Pos())
+	colon := ctx.Fset.Position(cc.Colon)
+	return start.Line != colon.Line
+}
+
 // Eval implements Condition for HasNestedMultilineTypeCond.
 func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)

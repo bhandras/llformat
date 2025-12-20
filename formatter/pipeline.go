@@ -211,10 +211,11 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.UseDSLBlankLines = true
 		cfg.UseDSLBlankLinesNative = true
 
-		// Enable the modern policy defaults. The multiline-call style defaults
-		// are applied later so callers can still override DSLMultiLineStyle
-		// explicitly.
-		cfg.DSLCallPolicy = "modern"
+		// Keep policy bundle unset so the "next" rule profile can choose more
+		// opinionated defaults (e.g. packed expression breaking) without being
+		// forced into the modern layout styles.
+		cfg.DSLCallPolicy = ""
+		cfg.AutoDSLCallArgs = true
 	default:
 		// Unknown mode: ignore (callers can still set individual toggles).
 	}

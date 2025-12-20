@@ -1,4 +1,3 @@
-// LLFORMAT_NEXT_GOLDEN_TODO: update this file by hand to match the --next pipeline output.
 package main
 
 import "fmt"
@@ -132,7 +131,7 @@ func multiReturn(a int) int {
 type context struct{}
 
 func (context) Context() {}
-func doSomething() {}
+func doSomething()       {}
 
 type io struct{}
 
