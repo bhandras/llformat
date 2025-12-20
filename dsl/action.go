@@ -2294,7 +2294,16 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) ([]by
 		prefixWidth > wsIndentWidth &&
 		visualLen(prefixTrimmed, ctx.TabStop) < ctx.ColumnLimit
 	if hasSyntheticPrefix {
-		signatureForFormat = prefixSuffix + signature
+		// Do not inject the full prefix text (which can include parentheses,
+		// commas, etc. when the literal is a call argument); that can confuse the
+		// signature parser which expects a `func...{` signature.
+		//
+		// Instead, model the *width* of the prefix using spaces so the formatter
+		// makes a correct first-line decision, and then strip it back out.
+		pad := prefixWidth - wsIndentWidth
+		if pad > 0 {
+			signatureForFormat = strings.Repeat(" ", pad) + signature
+		}
 	}
 	if a.FormatFunc != nil {
 		// FormatFunc expects `indent` to be the leading whitespace indentation,

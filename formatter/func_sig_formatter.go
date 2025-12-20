@@ -233,8 +233,26 @@ func FormatFuncSignatureNext(signature, indent string, colLimit, tabStop int) (s
 	// struct types again anyway).
 	if strings.Contains(signature, "\n") {
 		if !strings.Contains(signature, "struct") && !hasInlineStructWithSemicolons(signature) {
+			// Preserve any leading whitespace in the input signature. This is
+			// important for function literals where we sometimes inject a synthetic
+			// first-line prefix width using spaces so that collapsing decisions take
+			// the surrounding prefix into account. `collapseSignatureWhitespace`
+			// deliberately drops leading whitespace, so we add it back here.
+			//
+			// This also prevents non-idempotent behavior where:
+			// - a multiline func-literal signature collapses (because it "fits")
+			// - then immediately re-expands on the next iteration due to the real
+			//   prefix before `func` pushing it over the column limit
+			// which otherwise triggers DSL cycle detection and can prevent later
+			// signatures in the file from being formatted at all.
+			leading := leadingWhitespace(signature)
+
 			collapsed := collapseSignatureWhitespace(signature)
 			collapsed = tightenSignatureParens(collapsed)
+			if leading != "" && strings.HasPrefix(strings.TrimLeft(signature, " \t"), "func") {
+				collapsed = leading + collapsed
+			}
+
 			if width.VisualLenWithTab(indent+collapsed, tabStop) <= colLimit {
 				return indent + collapsed, false
 			}
