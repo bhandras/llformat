@@ -93,7 +93,7 @@ llformat --legacy --legacy-hardening [-w] <path-to-go-source>
 ## Tests
 
 The test `logs` reads `testdata/logs/input.go`, formats in memory, and compares
-against `testdata/logs/output.go`.
+against `testdata/logs/output_next.go` (the `next` pipeline golden fixtures).
 
 ## Notes and Future Work
 
