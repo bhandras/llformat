@@ -667,17 +667,29 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (
 	if ctx.editOverlapsForbidden(start, endBefore) {
 		return nil, false, false, "blocked_by_ownership"
 	}
-	if ctx.Parseable {
-		fset := token.NewFileSet()
-		if _, err := parser.ParseFile(
-			fset, "", modified, parser.ParseComments,
-		); err != nil {
-
-			return nil, false, false, "action=parse_failed=" + err.Error()
-		}
+	if ok, reason := ensureParseable(ctx, modified, "action"); !ok {
+		return nil, false, false, reason
 	}
 
 	return modified, true, true, ""
+}
+
+func ensureParseable(ctx *Context, src []byte,
+	actionLabel string) (bool, string) {
+
+	if !ctx.Parseable {
+		return true, ""
+	}
+
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(
+		fset, "", src, parser.ParseComments,
+	); err != nil {
+
+		return false, actionLabel + "=parse_failed=" + err.Error()
+	}
+
+	return true, ""
 }
 
 func collectNodesAndParents(file *ast.File) ([]ast.Node,
@@ -832,14 +844,8 @@ func (e *Engine) executeEditAction(editAction EditAction, caps Captures,
 	// However, some legacy fixtures are intentionally unparseable and are
 	// still expected to be formatted by scanner-based rules. In those
 	// cases, we allow transformations that keep the file unparseable.
-	if ctx.Parseable {
-		fset := token.NewFileSet()
-		if _, err := parser.ParseFile(
-			fset, "", applied, parser.ParseComments,
-		); err != nil {
-
-			return nil, false, false, "edit_action=parse_failed=" + err.Error()
-		}
+	if ok, reason := ensureParseable(ctx, applied, "edit_action"); !ok {
+		return nil, false, false, reason
 	}
 
 	return applied, true, true, ""

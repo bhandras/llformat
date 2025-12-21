@@ -1243,32 +1243,7 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 	// match next-mode expectations and existing tests. For `make(...)`
 	// calls we keep the first argument inline (so `make([]T, ...)` remains
 	// readable), but still break subsequent arguments onto new lines.
-	var argsGroupDocs []layout.Doc
-	if isMake && len(argDocs) > 1 {
-		// Keep the first argument inline, then force a break so the
-		// remaining arguments are laid out one-per-line. This yields:
-		// make([]T, 0, n, )
-		argsGroupDocs = append(argsGroupDocs, argDocs[0], layout.FB())
-		for i := 1; i < len(argDocs); i++ {
-			argsGroupDocs = append(
-				argsGroupDocs, layout.T(","), layout.L(),
-				argDocs[i],
-			)
-		}
-	} else {
-		argsGroupDocs = append(argsGroupDocs, layout.FB())
-		// Standard style: newline right after "(".
-		argsGroupDocs = append(argsGroupDocs, layout.SL())
-		for i, d := range argDocs {
-			if i > 0 {
-				argsGroupDocs = append(
-					argsGroupDocs, layout.T(","),
-					layout.L(),
-				)
-			}
-			argsGroupDocs = append(argsGroupDocs, d)
-		}
-	}
+	argsGroupDocs := buildCallArgsGroupDocs(argDocs, isMake)
 
 	// Trailing comma in broken form. This is key to making gofmt preserve
 	// the multi-line call layout.
@@ -1303,6 +1278,37 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 	return out, true
 }
 
+func buildCallArgsGroupDocs(argDocs []layout.Doc, isMake bool) []layout.Doc {
+	var argsGroupDocs []layout.Doc
+	if isMake && len(argDocs) > 1 {
+		// Keep the first argument inline, then force a break so the
+		// remaining arguments are laid out one-per-line. This yields:
+		// make([]T, 0, n, )
+		argsGroupDocs = append(argsGroupDocs, argDocs[0], layout.FB())
+		for i := 1; i < len(argDocs); i++ {
+			argsGroupDocs = append(
+				argsGroupDocs, layout.T(","), layout.L(),
+				argDocs[i],
+			)
+		}
+
+		return argsGroupDocs
+	}
+
+	// Standard style: newline right after "(".
+	argsGroupDocs = append(argsGroupDocs, layout.FB(), layout.SL())
+	for i, d := range argDocs {
+		if i > 0 {
+			argsGroupDocs = append(
+				argsGroupDocs, layout.T(","), layout.L(),
+			)
+		}
+		argsGroupDocs = append(argsGroupDocs, d)
+	}
+
+	return argsGroupDocs
+}
+
 func buildCallArgsDocs(args []ast.Expr, grouping string,
 	ctx *Context) ([]layout.Doc, bool) {
 
@@ -1312,38 +1318,7 @@ func buildCallArgsDocs(args []ast.Expr, grouping string,
 
 	switch grouping {
 	case "pairs":
-		// Group args as (a, b) pairs when possible. This is useful for
-		// call sites that conceptually operate on tuples of arguments.
-		var docs []layout.Doc
-		for i := 0; i < len(args); {
-			left, ok := callArgDoc(args[i], ctx)
-			if !ok {
-				return nil, false
-			}
-
-			if i+1 >= len(args) {
-				docs = append(docs, left)
-				i++
-				continue
-			}
-
-			right, ok := callArgDoc(args[i+1], ctx)
-			if !ok {
-				return nil, false
-			}
-
-			// Within a group, keep the pair flat when possible but
-			// allow the second element to wrap if it doesn't fit.
-			group := layout.G(
-				layout.C(
-					left, layout.T(","), layout.L(), right,
-				),
-			)
-			docs = append(docs, group)
-			i += 2
-		}
-
-		return docs, true
+		return buildCallArgPairs(args, ctx)
 
 	default:
 		// Default: one argument per line (forced break).
@@ -1358,6 +1333,41 @@ func buildCallArgsDocs(args []ast.Expr, grouping string,
 
 		return docs, true
 	}
+}
+
+func buildCallArgPairs(args []ast.Expr, ctx *Context) ([]layout.Doc, bool) {
+	// Group args as (a, b) pairs when possible. This is useful for call
+	// sites that conceptually operate on tuples of arguments.
+	var docs []layout.Doc
+	for i := 0; i < len(args); {
+		left, ok := callArgDoc(args[i], ctx)
+		if !ok {
+			return nil, false
+		}
+
+		if i+1 >= len(args) {
+			docs = append(docs, left)
+			i++
+			continue
+		}
+
+		right, ok := callArgDoc(args[i+1], ctx)
+		if !ok {
+			return nil, false
+		}
+
+		// Within a group, keep the pair flat when possible but allow
+		// the second element to wrap if it doesn't fit.
+		group := layout.G(
+			layout.C(
+				left, layout.T(","), layout.L(), right,
+			),
+		)
+		docs = append(docs, group)
+		i += 2
+	}
+
+	return docs, true
 }
 
 func callArgDoc(arg ast.Expr, ctx *Context) (layout.Doc, bool) {
@@ -1448,13 +1458,7 @@ func hasRawStringLit(n ast.Node) bool {
 		n,
 		func(node ast.Node) bool {
 			lit, ok := node.(*ast.BasicLit)
-			if !ok {
-				return !found
-			}
-			if lit.Kind.String() != "STRING" {
-				return !found
-			}
-			if strings.HasPrefix(lit.Value, "`") {
+			if ok && isRawStringLiteral(lit) {
 				found = true
 
 				return false
@@ -1465,6 +1469,11 @@ func hasRawStringLit(n ast.Node) bool {
 	)
 
 	return found
+}
+
+func isRawStringLiteral(lit *ast.BasicLit) bool {
+	return lit.Kind.String() == "STRING" &&
+		strings.HasPrefix(lit.Value, "`")
 }
 
 // ExecuteEdits implements EditAction for ReflowStringConcatAction.
@@ -1563,63 +1572,11 @@ func (a *BreakCaseClauseAction) ExecuteEdits(caps Captures, ctx *Context) (
 		return nil, false, nil
 	}
 
-	// Find the rightmost comma that keeps prefix under column limit
 	indent := ctx.IndentAt(caseClause)
-	indentWidth := visualLen(indent, ctx.TabStop)
-	caseStart := ctx.Fset.Position(caseClause.Pos()).Offset
-
-	// Collect comma positions
-	type commaInfo struct {
-		afterExpr int // position right after the expression (where comma is)
-		prefix    int // visual width up to and including this comma
-	}
-	var commas []commaInfo
-
-	for i := 0; i < len(caseClause.List)-1; i++ {
-		expr := caseClause.List[i]
-		exprEnd := ctx.Fset.Position(expr.End()).Offset
-
-		// Find comma after this expression
-		commaPos := exprEnd
-		for commaPos < len(ctx.Source) && ctx.Source[commaPos] != ',' {
-			commaPos++
-		}
-		if commaPos >= len(ctx.Source) {
-			continue
-		}
-
-		// Calculate prefix width (from line start to comma inclusive)
-		prefix := string(ctx.Source[caseStart : commaPos+1])
-		prefixWidth := indentWidth + visualLen(prefix, ctx.TabStop)
-
-		commas = append(
-			commas, commaInfo{
-				afterExpr: commaPos + 1,
-				prefix:    prefixWidth,
-			},
-		)
-	}
-
-	if len(commas) == 0 {
+	pos, ok := findCaseClauseBreakPos(ctx, caseClause, indent)
+	if !ok {
 		return nil, false, nil
 	}
-
-	// Find the rightmost comma that keeps prefix under column limit
-	var bestComma *commaInfo
-	for i := len(commas) - 1; i >= 0; i-- {
-		c := &commas[i]
-		if c.prefix <= ctx.ColumnLimit {
-			bestComma = c
-			break
-		}
-	}
-
-	// Fallback to first comma
-	if bestComma == nil {
-		bestComma = &commas[0]
-	}
-
-	pos := bestComma.afterExpr
 
 	// If there is already a newline here, skip.
 	i := skipHorizontalWhitespace(ctx.Source, pos)
@@ -1644,6 +1601,63 @@ func (a *BreakCaseClauseAction) ExecuteEdits(caps Captures, ctx *Context) (
 	}, true, nil
 }
 
+func findCaseClauseBreakPos(ctx *Context, clause *ast.CaseClause,
+	indent string) (int, bool) {
+
+	// Find the rightmost comma that keeps prefix under column limit.
+	indentWidth := visualLen(indent, ctx.TabStop)
+	caseStart := ctx.Fset.Position(clause.Pos()).Offset
+
+	type commaInfo struct {
+		afterExpr int // position right after the expression (where comma is)
+		prefix    int // visual width up to and including this comma
+	}
+	var commas []commaInfo
+
+	for i := 0; i < len(clause.List)-1; i++ {
+		expr := clause.List[i]
+		exprEnd := ctx.Fset.Position(expr.End()).Offset
+
+		// Find comma after this expression.
+		commaPos := exprEnd
+		for commaPos < len(ctx.Source) && ctx.Source[commaPos] != ',' {
+			commaPos++
+		}
+		if commaPos >= len(ctx.Source) {
+			continue
+		}
+
+		// Calculate prefix width (from line start to comma inclusive).
+		prefix := string(ctx.Source[caseStart : commaPos+1])
+		prefixWidth := indentWidth + visualLen(prefix, ctx.TabStop)
+
+		commas = append(
+			commas, commaInfo{
+				afterExpr: commaPos + 1,
+				prefix:    prefixWidth,
+			},
+		)
+	}
+
+	if len(commas) == 0 {
+		return 0, false
+	}
+
+	var bestComma *commaInfo
+	for i := len(commas) - 1; i >= 0; i-- {
+		c := &commas[i]
+		if c.prefix <= ctx.ColumnLimit {
+			bestComma = c
+			break
+		}
+	}
+	if bestComma == nil {
+		bestComma = &commas[0]
+	}
+
+	return bestComma.afterExpr, true
+}
+
 // ReflowNestedCallsAction finds and reflows function calls within an
 // expression.
 type ReflowNestedCallsAction struct {
@@ -1661,22 +1675,7 @@ func (a *ReflowNestedCallsAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	// Find the first call expression that would benefit from reflow
-	var targetCall *ast.CallExpr
-	ast.Inspect(node, func(n ast.Node) bool {
-		if targetCall != nil {
-			return false
-		}
-		if call, ok := n.(*ast.CallExpr); ok {
-			// Check if this call is worth reflowing
-			if len(call.Args) > 1 && ctx.NodeWidth(call) > ctx.ColumnLimit/2 {
-				targetCall = call
-
-				return false
-			}
-		}
-
-		return true
-	})
+	targetCall := findReflowTargetCall(node, ctx)
 
 	if targetCall == nil {
 		return nil, false
@@ -1695,6 +1694,29 @@ func (a *ReflowNestedCallsAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}).Execute(tempCaps,
 		ctx,
 	)
+}
+
+func findReflowTargetCall(node ast.Node, ctx *Context) *ast.CallExpr {
+	var targetCall *ast.CallExpr
+	ast.Inspect(node, func(n ast.Node) bool {
+		if targetCall != nil {
+			return false
+		}
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		// Check if this call is worth reflowing.
+		if len(call.Args) > 1 && ctx.NodeWidth(call) > ctx.ColumnLimit/2 {
+			targetCall = call
+
+			return false
+		}
+
+		return true
+	})
+
+	return targetCall
 }
 
 // Helper to render an AST node back to source.
@@ -2499,52 +2521,13 @@ func formatCallLeftFlowSimple(call *ast.CallExpr, indent string,
 	for i, arg := range call.Args {
 		argSrc := renderNode(arg, ctx.Fset)
 
-		// Check if this is a string literal that can be split
-		if expr, err := parser.ParseExpr(argSrc); err == nil {
-			if strText, ok := llast.FlattenStringExprAST(expr); ok {
-				// This is a string - use special handling
-				if i > 0 {
-					// Try to fit on current line with ", "
-					quoted := text.QuoteGoString(strText)
-					if lineWidth+2+
-						visualLen(quoted, ctx.TabStop) <= ctx.ColumnLimit {
+		if nextWidth, handled := formatLeftFlowStringArg(
+			&b, argSrc, i == 0, lineWidth, contIndent,
+			contIndentWidth, ctx,
+		); handled {
 
-						b.WriteString(", ")
-						b.WriteString(quoted)
-						lineWidth += 2 +
-							visualLen(
-								quoted,
-								ctx.TabStop,
-							)
-						continue
-					}
-					// Need to break - end current line and
-					// start new
-					b.WriteString(",\n")
-					b.WriteString(contIndent)
-					lineWidth = contIndentWidth
-				}
-
-				// Split the string if needed
-				split := text.SplitQuotedString(
-					strText, lineWidth, contIndent,
-					ctx.ColumnLimit, ctx.TabStop,
-				)
-				b.WriteString(split)
-				// Update lineWidth to last line of split
-				if idx := strings.LastIndex(split, "\n"); idx >= 0 {
-					lineWidth = contIndentWidth +
-						visualLen(
-							split[idx+1:],
-							ctx.TabStop,
-						)
-				} else {
-					lineWidth += visualLen(
-						split, ctx.TabStop,
-					)
-				}
-				continue
-			}
+			lineWidth = nextWidth
+			continue
 		}
 
 		// Non-string argument
@@ -2574,6 +2557,58 @@ func formatCallLeftFlowSimple(call *ast.CallExpr, indent string,
 	b.WriteString(")")
 
 	return b.String()
+}
+
+func formatLeftFlowStringArg(b *strings.Builder, argSrc string, isFirst bool,
+	lineWidth int, contIndent string, contIndentWidth int,
+	ctx *Context) (int, bool) {
+
+	expr, err := parser.ParseExpr(argSrc)
+	if err != nil {
+		return lineWidth, false
+	}
+
+	strText, ok := llast.FlattenStringExprAST(expr)
+	if !ok {
+		return lineWidth, false
+	}
+
+	if !isFirst {
+		// Try to fit on current line with ", ".
+		quoted := text.QuoteGoString(strText)
+		quotedWidth := visualLen(quoted, ctx.TabStop)
+		if lineWidth+2+quotedWidth <= ctx.ColumnLimit {
+			b.WriteString(", ")
+			b.WriteString(quoted)
+
+			return lineWidth + 2 + quotedWidth, true
+		}
+
+		// Need to break - end current line and start new.
+		b.WriteString(",\n")
+		b.WriteString(contIndent)
+		lineWidth = contIndentWidth
+	}
+
+	// Split the string if needed.
+	split := text.SplitQuotedString(
+		strText, lineWidth, contIndent, ctx.ColumnLimit, ctx.TabStop,
+	)
+	b.WriteString(split)
+
+	return lineWidthAfterSplit(
+		split, lineWidth, contIndentWidth, ctx.TabStop,
+	), true
+}
+
+func lineWidthAfterSplit(split string, lineWidth int, contIndentWidth int,
+	tabStop int) int {
+
+	if idx := strings.LastIndex(split, "\n"); idx >= 0 {
+		return contIndentWidth + visualLen(split[idx+1:], tabStop)
+	}
+
+	return lineWidth + visualLen(split, tabStop)
 }
 
 // SignatureFormatFunc is the signature for the function signature formatting
@@ -2619,12 +2654,7 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	// Check for an existing newline after the signature's opening brace,
 	// and if the following line contains code, insert an additional blank
 	// line to separate a multiline signature header from the body.
-	pos := afterBrace
-	for pos < len(ctx.Source) &&
-		(ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
-
-		pos++
-	}
+	pos := skipHorizontalWhitespace(ctx.Source, afterBrace)
 	if pos >= len(ctx.Source) || ctx.Source[pos] != '\n' {
 		return nil, false, nil
 	}
@@ -2632,11 +2662,7 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	// There's already a newline after brace; check the next line.
 	pos++
 	lineContentStart := pos
-	for pos < len(ctx.Source) &&
-		(ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
-
-		pos++
-	}
+	pos = skipHorizontalWhitespace(ctx.Source, pos)
 	if pos >= len(ctx.Source) || ctx.Source[pos] == '\n' ||
 		ctx.Source[pos] == '}' {
 
@@ -3204,25 +3230,10 @@ func formatPackedMultilineTypeList(elems []string, itemIndent,
 			lineWidth = indentWidth
 			atLineStart = false
 		} else {
-			// Separator before the next element.
-			if isMultiline {
-				b.WriteString(",\n")
-				b.WriteString(itemIndent)
-				lineWidth = indentWidth
-				atLineStart = false
-			} else {
-				need := 2 +
-					visualLen(elem, tabStop) // ", " + elem
-				if lineWidth+need > colLimit {
-					b.WriteString(",\n")
-					b.WriteString(itemIndent)
-					lineWidth = indentWidth
-					atLineStart = false
-				} else {
-					b.WriteString(", ")
-					lineWidth += 2
-				}
-			}
+			lineWidth, atLineStart = writePackedTypeListSeparator(
+				&b, elem, isMultiline, itemIndent, lineWidth,
+				indentWidth, colLimit, tabStop,
+			)
 		}
 
 		b.WriteString(elem)
@@ -3251,6 +3262,30 @@ func formatPackedMultilineTypeList(elems []string, itemIndent,
 	b.WriteString(")")
 
 	return b.String()
+}
+
+func writePackedTypeListSeparator(b *strings.Builder, elem string,
+	isMultiline bool, itemIndent string, lineWidth, indentWidth, colLimit,
+	tabStop int) (int, bool) {
+
+	if isMultiline {
+		b.WriteString(",\n")
+		b.WriteString(itemIndent)
+
+		return indentWidth, false
+	}
+
+	need := 2 + visualLen(elem, tabStop) // ", " + elem
+	if lineWidth+need > colLimit {
+		b.WriteString(",\n")
+		b.WriteString(itemIndent)
+
+		return indentWidth, false
+	}
+
+	b.WriteString(", ")
+
+	return lineWidth + 2, false
 }
 
 func formatSignatureCompat(sig, indent string, colLimit,
@@ -4623,7 +4658,8 @@ func formatMethodChain(calls []*ast.CallExpr, indent string,
 			continue
 		}
 
-		// Doesn't fit - check if the method call with just opening paren fits.
+		// Doesn't fit - check if the method call with just opening
+		// paren fits.
 		methodWidth := methodOpenWidth(methodPart, isFirst, ctx.TabStop)
 		argsWidth := visualLen(argsInline+")", ctx.TabStop)
 		if len(call.Args) > 0 &&
