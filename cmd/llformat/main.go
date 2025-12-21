@@ -106,20 +106,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	out := formatter.NewPipeline(cfg).Format(data)
 
 	if f.write {
-		if err := os.WriteFile(path, out, 0644); err != nil {
-			fmt.Fprintf(stderr, "write %s: %v\n", path, err)
-
-			return 1
-		}
-
-		return 0
+		return writeOutputToFile(path, out, stderr)
 	}
 
-	if _, err := stdout.Write(out); err != nil {
-		return 1
-	}
-
-	return 0
+	return writeOutputToWriter(out, stdout)
 }
 
 func printUsage(w io.Writer) {
@@ -210,6 +200,24 @@ func parseCommaList(s string) []string {
 	}
 
 	return out
+}
+
+func writeOutputToFile(path string, out []byte, stderr io.Writer) int {
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		fmt.Fprintf(stderr, "write %s: %v\n", path, err)
+
+		return 1
+	}
+
+	return 0
+}
+
+func writeOutputToWriter(out []byte, stdout io.Writer) int {
+	if _, err := stdout.Write(out); err != nil {
+		return 1
+	}
+
+	return 0
 }
 
 func runPrintPlan(w io.Writer, cfg formatter.PipelineConfig) int {
