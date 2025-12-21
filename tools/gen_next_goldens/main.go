@@ -32,7 +32,6 @@ func main() {
 	p := formatter.NewPipeline(formatter.PipelineConfig{
 		ColumnLimit: *col,
 		TabStop:     *tab,
-		Mode:        "next",
 	})
 
 	for _, dirName := range cases {

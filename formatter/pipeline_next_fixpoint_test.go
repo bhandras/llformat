@@ -7,9 +7,8 @@ import (
 )
 
 func TestPipelineNext_ConvergesWithinSingleRun_WhenEnabled(t *testing.T) {
-	// The pipeline's default behavior is a single pass (to preserve golden
-	// fixtures). When explicitly requested, it should be able to iterate to a
-	// stable fixpoint so users can avoid running llformat multiple times.
+	// NewPipeline defaults to a single pass; when explicitly enabled, it should
+	// be able to converge to a stable fixpoint within a single run.
 	in := []byte(`package p
 
 import "fmt"
@@ -36,7 +35,6 @@ func f(wallet interface{ WithCoinSelectLock(func() error, ...interface{}) error 
 `)
 
 	p := NewPipeline(PipelineConfig{
-		Mode:                  "next",
 		ColumnLimit:           60,
 		TabStop:               8,
 		UseOwnershipRegistry:  true,

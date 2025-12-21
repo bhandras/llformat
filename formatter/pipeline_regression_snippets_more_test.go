@@ -26,8 +26,8 @@ func TestPipeline_RegressionSnippets_MoreASTConstructs(t *testing.T) {
 	}
 
 	policies := []policy{
-		{name: "next", cfg: PipelineConfig{Mode: "next", ColumnLimit: 48, TabStop: 8}},
-		{name: "next_with_ownership", cfg: PipelineConfig{Mode: "next", ColumnLimit: 48, TabStop: 8, UseOwnershipRegistry: true}},
+		{name: "next", cfg: PipelineConfig{ColumnLimit: 48, TabStop: 8}},
+		{name: "next_with_ownership", cfg: PipelineConfig{ColumnLimit: 48, TabStop: 8, UseOwnershipRegistry: true}},
 	}
 
 	type tc struct {

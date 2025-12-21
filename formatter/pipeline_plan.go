@@ -3,7 +3,6 @@ package formatter
 // PipelinePlan is a best-effort summary of resolved pipeline behavior. It is
 // designed for debugging and UX (e.g. CLI `--print-plan`).
 type PipelinePlan struct {
-	Mode      string
 	StagePlan StagePlan
 
 	// Key style knobs
@@ -38,7 +37,6 @@ func ResolvePipelinePlan(cfg PipelineConfig) PipelinePlan {
 func (p *Pipeline) Plan() PipelinePlan {
 	plan := stagePlanFromPipelineConfig(p.cfg)
 	return PipelinePlan{
-		Mode:      p.cfg.Mode,
 		StagePlan: plan,
 
 		DSLMultiLineStyle: p.cfg.DSLMultiLineStyle,

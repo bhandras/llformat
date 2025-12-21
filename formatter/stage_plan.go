@@ -10,8 +10,8 @@ const (
 
 // StagePlan is the coherent per-stage execution plan for a pipeline run.
 //
-// This is intended to become the primary way a RuleProfile selects "which
-// stages are DSL vs legacy" while still allowing explicit overrides.
+// llformat is next-only: callers can override the per-stage DSL/off plan, but
+// there is no longer a user-facing "profile" selector.
 type StagePlan struct {
 	Comments       StageMode
 	LogCalls       StageMode

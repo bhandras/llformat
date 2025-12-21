@@ -12,12 +12,12 @@ func TestValidatePipelineConfig_DefaultsAreValid(t *testing.T) {
 	require.NoError(t, ValidatePipelineConfig(PipelineConfig{}))
 }
 
-func TestValidatePipelineConfig_RejectsUnknownMode(t *testing.T) {
+func TestValidatePipelineConfig_RejectsUnknownSigsStyle(t *testing.T) {
 	t.Parallel()
 
-	err := ValidatePipelineConfig(PipelineConfig{Mode: "weird"})
+	err := ValidatePipelineConfig(PipelineConfig{DSLSigsStyle: "weird"})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Mode")
+	require.Contains(t, err.Error(), "DSLSigsStyle")
 	require.Contains(t, err.Error(), "allowed")
 }
 

@@ -10,13 +10,7 @@ import (
 	"github.com/lightninglabs/llformat/dsl"
 )
 
-func dslBudgetForRuleProfile(profile string) dsl.RewriteBudget {
-	// Only "next" gets explicit safety guardrails by default; other profiles keep
-	// behavior identical unless the caller opts into budgets.
-	if normalizedRuleProfile(profile) != "next" {
-		return dsl.RewriteBudget{}
-	}
-
+func dslBudgetNext() dsl.RewriteBudget {
 	// Large enough to never trigger for normal formatting runs, but small enough
 	// to act as a safety valve against pathological rules.
 	return dsl.RewriteBudget{
@@ -150,7 +144,7 @@ func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOpti
 		MaxIterations: bundle.Comments.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		Budget:        dslBudgetNext(),
 	})
 }
 
@@ -169,7 +163,7 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts Stage
 		MaxIterations: bundle.LogCalls.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		Budget:        dslBudgetNext(),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			// Align ownership boundaries with the log/printf DSL stage selection.
 			cond := &dsl.IsLogOrPrintfCallCond{
@@ -199,7 +193,7 @@ func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageO
 		MaxIterations: bundle.Expressions.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		Budget:        dslBudgetNext(),
 	})
 }
 
@@ -220,7 +214,7 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 		DetectCycles:      bundle.MultiLineCalls.DetectCycles,
 		SkipGofmt:         true,
 		StageName:         stageName,
-		Budget:            dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		Budget:            dslBudgetNext(),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 			logCond := &dsl.IsLogOrPrintfCallCond{
 				Target:                 "node",
@@ -271,7 +265,7 @@ func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 		DetectCycles:      bundle.Signatures.DetectCycles,
 		SkipGofmt:         true,
 		StageName:         stageName,
-		Budget:            dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		Budget:            dslBudgetNext(),
 	})
 }
 
@@ -290,6 +284,6 @@ func buildBlankLineStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 		MaxIterations: bundle.BlankLines.MaxIterations,
 		SkipGofmt:     true,
 		StageName:     stageName,
-		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		Budget:        dslBudgetNext(),
 	})
 }

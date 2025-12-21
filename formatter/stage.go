@@ -103,8 +103,7 @@ type StageOptions struct {
 }
 
 type StageSelectionOptions struct {
-	RuleProfile string
-	StagePlan   *StagePlan
+	StagePlan *StagePlan
 }
 
 type StageStyleOptions struct {
@@ -142,7 +141,7 @@ type DSLStageOptions struct {
 // This creates stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
 	return DefaultStagesWithOptions(cfg, StageOptions{
-		Selection: StageSelectionOptions{RuleProfile: "next"},
+		Selection: StageSelectionOptions{},
 		Style: StageStyleOptions{
 			CommentMoveInline: commentMoveInline,
 			Excludes:          excludes,

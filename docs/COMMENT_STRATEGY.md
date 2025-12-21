@@ -9,12 +9,12 @@ formatting in `llformat`, with a special focus on directive preservation.
 - Preserve the meaning of source code and keep output Go parseable.
 - Never break tool directives that are encoded as comments (Go toolchain, cgo,
   linters, code generators).
-- Keep default behavior parity unless explicitly opt-in.
+- Default to directive-safe behavior.
 
-## Current Approach (Default / Parity)
+## Current Approach (Default)
 
-In the default configuration (`RuleProfile=parity`, `Mode=""`), comment
-formatting remains **legacy-driven**:
+In the default configuration (llformat is next-only), comment formatting remains
+**legacy-driven**:
 
 - The `CommentFormatter` is treated as the **authoritative “oracle”** for comment
   reflow and comment safety rules.
@@ -79,4 +79,3 @@ only justified if there is a proven need that cannot be met by:
 
 - directive preservation + conservative reflow, and/or
 - targeted opt-in rules for narrow comment families.
-

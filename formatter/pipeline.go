@@ -36,14 +36,6 @@ type PipelineConfig struct {
 	TraceDSL           bool // Enable DSL rule tracing (only when UseDSLExpr)
 	TraceDSLReasons    bool // Include "why fired/didn't fire" reasons in DSL tracing
 
-	// Mode provides a user-facing coarse selection of pipeline behavior.
-	// It is intentionally opt-in; when empty, callers can control the pipeline
-	// via the individual toggles below.
-	//
-	// Supported values:
-	// - "next": next-generation DSL pipeline
-	Mode string
-
 	// UseOwnershipRegistry enables pipeline-level stage ownership boundaries.
 	// When enabled, the pipeline will compute owned span sets for later stages
 	// and provide them to earlier stages that support ownership-aware behavior.
@@ -77,7 +69,6 @@ type PipelineConfig struct {
 	DSLExprSelectorChainStyle string
 
 	// StagePlanOverride forces an explicit stage selection for the pipeline.
-	// When set, it overrides Mode-derived stage selection.
 	// This is intended for controlled experiments and debugging.
 	StagePlanOverride *StagePlan
 
@@ -85,9 +76,9 @@ type PipelineConfig struct {
 	// When > 0, the pipeline will run stages + gofmt repeatedly until the output
 	// stabilizes (no changes) or a cycle is detected.
 	//
-	// When 0, a profile default is used:
-	// - next: 3
-	// - others: 1
+	// When 0, NewPipeline runs a single pass. The CLI defaults to a small
+	// fixpoint search (see `--fixpoint-iters`) because it tends to produce more
+	// stable results on large files.
 	MaxPipelineIterations int
 }
 
@@ -104,12 +95,6 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = DefaultTabStop
-	}
-
-	// llformat is next-only: treat empty Mode as "next". Callers that want
-	// strictness can validate cfg via ValidatePipelineConfig.
-	if cfg.Mode == "" {
-		cfg.Mode = "next"
 	}
 
 	// Enable the full DSL pipeline by default when callers did not explicitly
@@ -174,8 +159,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		Selection: StageSelectionOptions{
-			RuleProfile: "next",
-			StagePlan:   &stagePlan,
+			StagePlan: &stagePlan,
 		},
 		Style: StageStyleOptions{
 			CommentMoveInline:             cfg.MoveInlineAbove,
@@ -262,12 +246,10 @@ func (p *Pipeline) Format(src []byte) []byte {
 	if maxIters <= 0 {
 		maxIters = 1
 	}
-	if maxIters < 1 {
-		maxIters = 1
-	}
 
 	// Default behavior: a single pipeline pass + one final gofmt run.
-	// This preserves the golden fixtures and existing expectations.
+	// This is useful for debugging or for callers that want a strictly bounded
+	// pass count.
 	if maxIters == 1 {
 		out := src
 

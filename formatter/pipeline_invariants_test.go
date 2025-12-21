@@ -63,10 +63,10 @@ func f(xs []int, i, j int) int {
 		name string
 		cfg  PipelineConfig
 	}{
-		{name: "next", cfg: PipelineConfig{Mode: "next", ColumnLimit: 60, TabStop: 8}},
+		{name: "next", cfg: PipelineConfig{ColumnLimit: 60, TabStop: 8}},
 		{
 			name: "next_with_ownership",
-			cfg:  PipelineConfig{Mode: "next", ColumnLimit: 60, TabStop: 8, UseOwnershipRegistry: true},
+			cfg:  PipelineConfig{ColumnLimit: 60, TabStop: 8, UseOwnershipRegistry: true},
 		},
 	}
 

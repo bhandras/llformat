@@ -5,8 +5,7 @@ living checklist. It is intended to be updated as work lands.
 
 Constraints:
 - Do **not** modify golden fixtures under `testdata/**/output.go`.
-- Keep default behavior parity (`RuleProfile=parity`, `Mode=""`) unless changes
-  are explicitly opt-in.
+- llformat is next-only: avoid reintroducing legacy/mode/profile selectors.
 - Keep `make unit` green on each merged chunk.
 
 Legend:
@@ -19,22 +18,20 @@ Legend:
 
 ## 0) Status Snapshot
 
-- [x] DSL rule bundles extracted (`formatter/dsl_bundles.go`)
-- [x] `RuleProfile` introduced and threaded through pipeline/stages
+- [x] DSL rule bundles extracted (`formatter/dsl_bundles_next.go`)
 - [x] `DSLBundle` stage specs introduced (`formatter/dsl_bundle.go`)
 - [x] Stage construction factored into builders (`formatter/stage_builders.go`)
 - [x] `StagePlan` introduced (`formatter/stage_plan.go`)
-- [x] Pipeline derives `StagePlan` from `Mode`/`DSLCallPolicy` (with tests)
+- [x] Pipeline derives `StagePlan` from stage toggles (with tests)
 
 ---
 
-## A) Configuration + Taxonomy (StagePlan / Bundle / Profile)
+## A) Configuration + Taxonomy (StagePlan / Bundle)
 
 - [x] **P0 Safe** Add `PipelineConfig.StagePlanOverride *StagePlan` (explicit stage selection without per-stage booleans).
-- [x] **P0 Safe** Add `RuleProfile -> default StagePlan` mapping (so `RuleProfile` becomes a first-class stage selector).
-- [x] **P1 Safe** Add `RuleProfile -> default DSLBundle` factory object (bundle selection as a single testable function).
+- [x] **P1 Safe** Centralize DSL bundle selection (single testable function).
 - [x] **P1 Safe** Move all DSL stage engine defaults into bundles (node order, max iters, shim flags).
-- [x] **P1 Safe** Add `--print-plan` output (resolved `RuleProfile`, `StagePlan`, and key style knobs).
+- [x] **P1 Safe** Add `--print-plan` output (resolved `StagePlan` and key style knobs).
 - [ ] **P2 Safe** Config validation (unknown profile/style produces clear errors or explicit fallback).
 
 ---
@@ -103,7 +100,7 @@ Legend:
 
 ## I) Testing Strategy (No Goldens)
 
-- [x] **P0 Safe** Expand property tests (idempotence + AST equivalence) across modes/profiles.
+- [x] **P0 Safe** Expand property tests (idempotence + AST equivalence).
 - [x] **P1 Safe** Add more regression snippet tests for tricky AST constructs (non-golden).
 - [x] **P1 Safe** Expand “invalid Go doesn’t panic” coverage.
 

@@ -15,12 +15,12 @@ func TestPipeline_PropertyMatrix_ParseableIdempotentASTEquivalent(t *testing.T) 
 
 	policies := []policy{
 		{
-			name: "mode_next",
-			cfg:  PipelineConfig{Mode: "next"},
+			name: "next",
+			cfg:  PipelineConfig{},
 		},
 		{
-			name: "mode_next_with_ownership",
-			cfg:  PipelineConfig{Mode: "next", UseOwnershipRegistry: true},
+			name: "next_with_ownership",
+			cfg:  PipelineConfig{UseOwnershipRegistry: true},
 		},
 	}
 

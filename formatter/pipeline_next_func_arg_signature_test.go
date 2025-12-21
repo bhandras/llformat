@@ -34,7 +34,6 @@ func f(graph Graph, ctx interface{}) error {
 `)
 
 	p := NewPipeline(PipelineConfig{
-		Mode:                 "next",
 		ColumnLimit:          60,
 		TabStop:              8,
 		UseOwnershipRegistry: true,

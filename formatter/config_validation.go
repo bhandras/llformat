@@ -9,15 +9,12 @@ import (
 // ValidatePipelineConfig performs best-effort validation of PipelineConfig.
 //
 // This is intended to catch specification/config mistakes early (unknown
-// mode/profile/style values) and provide actionable errors for CLI callers.
+// style values) and provide actionable errors for CLI callers.
 //
-// NewPipeline remains best-effort and will typically fall back to legacy/parity
-// behavior when provided unknown values; callers that want strictness should
-// validate up front.
+// NewPipeline remains best-effort; callers that want strictness should validate
+// up front.
 func ValidatePipelineConfig(cfg PipelineConfig) error {
 	var issues []configIssue
-
-	validateOptionalEnum(&issues, "Mode", cfg.Mode, allowedModes())
 
 	validateOptionalEnum(&issues, "DSLMultiLineStyle", cfg.DSLMultiLineStyle, allowedDSLMultiLineStyles())
 	validateOptionalEnum(&issues, "DSLSigsStyle", cfg.DSLSigsStyle, allowedDSLSigsStyles())
@@ -106,10 +103,6 @@ func validateStageMode(issues *[]configIssue, field string, mode StageMode) {
 			message: fmt.Sprintf("unknown stage mode (allowed: %s|%s)", StageModeOff, StageModeDSL),
 		})
 	}
-}
-
-func allowedModes() []string {
-	return []string{"next"}
 }
 
 func allowedDSLMultiLineStyles() []string {

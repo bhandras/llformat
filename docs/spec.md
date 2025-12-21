@@ -28,7 +28,7 @@ uphold.
   `//` comment appears inside the rewritten span, because AST rendering drops
   comments inside expressions/argument lists.
 
-## Pipeline stages (legacy and DSL)
+## Pipeline stages (next-only)
 
 llformat composes multiple focused formatters. The default CLI pipeline is:
 
@@ -41,16 +41,8 @@ llformat composes multiple focused formatters. The default CLI pipeline is:
    between interface methods.
 7. **Final gofmt**: Normalize with `gofmt`.
 
-### `UseDSLExpr` mode
-
-When `UseDSLExpr` is enabled, the pipeline remains the same, but the **expressions**
-stage is implemented by the DSL engine.
-
-This is intentional:
-
-- It provides incremental adoption (swap one stage).
-- It avoids reformatting calls/signatures in the expression stage, preserving
-  behavior parity with the legacy pipeline.
+The pipeline is DSL-based by default, but `PipelineConfig` still allows disabling
+individual stages for debugging/experiments.
 
 ## Expression formatting rules (high level)
 

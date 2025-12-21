@@ -72,7 +72,6 @@ func main() {
 	}
 
 	cfg := formatter.PipelineConfig{
-		Mode:                  "next",
 		ColumnLimit:           colLimit,
 		TabStop:               tabStop,
 		MoveInlineAbove:       moveInline,
@@ -88,7 +87,6 @@ func main() {
 
 	if printPlan {
 		plan := formatter.ResolvePipelinePlan(cfg)
-		fmt.Fprintf(os.Stdout, "mode=%s\n", plan.Mode)
 		if plan.DSLMultiLineStyle != "" {
 			fmt.Fprintf(os.Stdout, "dsl_multiline_style=%s\n", plan.DSLMultiLineStyle)
 		}

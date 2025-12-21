@@ -14,10 +14,10 @@ type DSLStageSpec struct {
 }
 
 // DSLBundle is the cohesive per-stage DSL rule/config selection for a given
-// RuleProfile and StageOptions.
+// StageOptions.
 //
 // The intent is to make it easy to reason about "what rules run where" and to
-// make profile selection an explicit, testable piece of logic.
+// make selection an explicit, testable piece of logic.
 type DSLBundle struct {
 	Comments       DSLStageSpec
 	LogCalls       DSLStageSpec
@@ -38,7 +38,6 @@ func ResolveDSLBundle(opts StageOptions) DSLBundle {
 
 func dslBundleForOptions(opts StageOptions) DSLBundle {
 	multiLineRules, multiLineNodeOrder := dslRulesForMultiLineCalls(opts)
-	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 
 	blankLineRules := dslRulesForBlankLines(opts)
 
@@ -66,8 +65,8 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			// later calls to be missed entirely. Enable an AST-informed iteration
 			// limit in the "next" profile, which is intentionally opt-in.
 			MaxIterations:     20,
-			AutoMaxIterations: profile == "next",
-			DetectCycles:      profile == "next",
+			AutoMaxIterations: true,
+			DetectCycles:      true,
 		},
 		Signatures: DSLStageSpec{
 			Rules:         dslRulesForSignatures(opts),

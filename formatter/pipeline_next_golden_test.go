@@ -47,7 +47,6 @@ func TestPipelineNextGoldens(t *testing.T) {
 			p := NewPipeline(PipelineConfig{
 				ColumnLimit: 80,
 				TabStop:     8,
-				Mode:        "next",
 			})
 			got := p.Format(inData)
 

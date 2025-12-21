@@ -46,8 +46,7 @@ Pipeline knobs:
 ## Major Expression Families
 
 This section documents the current layout intent for the most important
-expression kinds. These behaviors are typically enabled under `RuleProfile`
-`modern`/`next` via the style toggles:
+expression kinds. These behaviors are controlled via the style toggles:
 
 - `DSLExprLogicalStyle`
 - `DSLExprArithmeticStyle`

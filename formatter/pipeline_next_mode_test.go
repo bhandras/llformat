@@ -8,15 +8,12 @@ import (
 
 func TestPipelineNextModeAppliesExpectedDefaults(t *testing.T) {
 	p := NewPipeline(PipelineConfig{
-		Mode:        "next",
 		ColumnLimit: 60,
 		TabStop:     8,
 	})
 
-	// "next" is intended to be a convenience alias for the most aggressive
-	// DSL-first config. These checks are intentionally on internal config fields
-	// rather than exact output formatting so the mode can evolve without
-	// modifying golden fixtures.
+	// llformat is next-only: PipelineConfig defaults should enable the full DSL
+	// pipeline without requiring an explicit "mode" selector.
 	require.True(t, p.cfg.UseDSLComments)
 	require.True(t, p.cfg.UseDSLLogCalls)
 	require.True(t, p.cfg.UseDSLMultiLineCalls)
@@ -34,7 +31,7 @@ func TestPipelineNextModeAppliesExpectedDefaults(t *testing.T) {
 	require.True(t, p.cfg.AutoDSLCallArgs)
 }
 
-func TestPipelineNextModeIdempotentAndASTEquivalent(t *testing.T) {
+func TestPipelineDefaultConfigIdempotentAndASTEquivalent(t *testing.T) {
 	const in = `package p
 
 func g(x int) int { return x }
@@ -51,7 +48,6 @@ func f(a, b, c, d, e, f2, g2 bool, x int) {
 `
 
 	p := NewPipeline(PipelineConfig{
-		Mode:        "next",
 		ColumnLimit: 50,
 		TabStop:     8,
 	})
@@ -61,7 +57,7 @@ func f(a, b, c, d, e, f2, g2 bool, x int) {
 	require.Equal(t, string(out1), string(out2))
 	requireASTEquivalent(t, []byte(in), out1)
 
-	// next-mode should reflow a long outer call while preserving AST.
+	// The default pipeline should reflow a long outer call while preserving AST.
 	outStr := string(out1)
 	require.Contains(t, outStr, "outerVeryLongFunctionNameForNextModeTesting(\n",
 		"expected the long call to be rewritten as multiline")

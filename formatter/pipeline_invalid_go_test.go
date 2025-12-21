@@ -17,7 +17,6 @@ func TestPipeline_DoesNotPanicOnInvalidGo(t *testing.T) {
 		{
 			name: "next_with_ownership",
 			cfg: PipelineConfig{
-				Mode:                 "next",
 				UseOwnershipRegistry: true,
 				ColumnLimit:          80,
 				TabStop:              8,
