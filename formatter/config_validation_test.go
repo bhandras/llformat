@@ -24,7 +24,11 @@ func TestValidatePipelineConfig_RejectsUnknownSigsStyle(t *testing.T) {
 func TestValidatePipelineConfig_RejectsUnknownMultiLineStyle(t *testing.T) {
 	t.Parallel()
 
-	err := ValidatePipelineConfig(PipelineConfig{DSLMultiLineStyle: "layout-everything"})
+	err := ValidatePipelineConfig(
+		PipelineConfig{
+			DSLMultiLineStyle: "layout-everything",
+		},
+	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "DSLMultiLineStyle")
 }
@@ -32,7 +36,11 @@ func TestValidatePipelineConfig_RejectsUnknownMultiLineStyle(t *testing.T) {
 func TestValidatePipelineConfig_RejectsUnknownExprStyle(t *testing.T) {
 	t.Parallel()
 
-	err := ValidatePipelineConfig(PipelineConfig{DSLExprLogicalStyle: "pretty"})
+	err := ValidatePipelineConfig(
+		PipelineConfig{
+			DSLExprLogicalStyle: "pretty",
+		},
+	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "DSLExprLogicalStyle")
 }

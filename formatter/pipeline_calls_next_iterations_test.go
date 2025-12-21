@@ -8,14 +8,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineNext_MultiLineCalls_DoesNotStopAfterTwentyRewrites(t *testing.T) {
+func TestPipelineNext_MultiLineCalls_DoesNotStopAfterTwentyRewrites(
+	t *testing.T) {
+
 	// The DSL engine applies at most one transforming edit per iteration.
-	// Historically the multiline-calls stage used a fixed 20-iteration cap, which
-	// can leave later long calls untouched in large files.
+	// Historically the multiline-calls stage used a fixed 20-iteration cap,
+	// which can leave later long calls untouched in large files.
 	var b strings.Builder
 	b.WriteString("package p\n\nfunc f() {\n")
 	for i := 0; i < 35; i++ {
-		fmt.Fprintf(&b, "\t_ = veryLongCalleeNameForIterationTesting(%d, a, b, c, d, e, f)\n", i)
+		fmt.Fprintf(
+			&b, "	_ = "+
+				"veryLongCalleeNameForIterationTesting(%d, "+
+				"a, b, c, d, e, f)\n", i,
+		)
 	}
 	b.WriteString("}\n")
 	in := b.String()
@@ -38,8 +44,12 @@ func TestPipelineNext_MultiLineCalls_DoesNotStopAfterTwentyRewrites(t *testing.T
 	out := string(p.Format([]byte(in)))
 
 	// The last call should also be rewritten (not only the first ~20).
-	require.Contains(t, out, "\t_ = veryLongCalleeNameForIterationTesting(\n",
-		"expected long calls to be rewritten as multiline")
-	require.Contains(t, out, "\t\t34,",
-		"expected the final long call (index 34) to be rewritten too")
+	require.Contains(
+		t, out, "	_ = veryLongCalleeNameForIterationTesting(\n",
+		"expected long calls to be rewritten as multiline",
+	)
+	require.Contains(
+		t, out, "		34,",
+		"expected the final long call (index 34) to be rewritten too",
+	)
 }

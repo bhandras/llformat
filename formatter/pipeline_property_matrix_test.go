@@ -7,7 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipeline_PropertyMatrix_ParseableIdempotentASTEquivalent(t *testing.T) {
+func TestPipeline_PropertyMatrix_ParseableIdempotentASTEquivalent(
+	t *testing.T) {
+
 	type policy struct {
 		name string
 		cfg  PipelineConfig
@@ -20,7 +22,9 @@ func TestPipeline_PropertyMatrix_ParseableIdempotentASTEquivalent(t *testing.T) 
 		},
 		{
 			name: "next_with_ownership",
-			cfg:  PipelineConfig{UseOwnershipRegistry: true},
+			cfg: PipelineConfig{
+				UseOwnershipRegistry: true,
+			},
 		},
 	}
 
@@ -32,10 +36,27 @@ func TestPipeline_PropertyMatrix_ParseableIdempotentASTEquivalent(t *testing.T) 
 	}
 
 	styles := []style{
-		{name: "col40_tab8", columnLimit: 40, tabStop: 8},
-		{name: "col60_tab8", columnLimit: 60, tabStop: 8},
-		{name: "col60_tab4", columnLimit: 60, tabStop: 4},
-		{name: "col40_tab4_hoist_inline", columnLimit: 40, tabStop: 4, moveInlineAbove: true},
+		{
+			name:        "col40_tab8",
+			columnLimit: 40,
+			tabStop:     8,
+		},
+		{
+			name:        "col60_tab8",
+			columnLimit: 60,
+			tabStop:     8,
+		},
+		{
+			name:        "col60_tab4",
+			columnLimit: 60,
+			tabStop:     4,
+		},
+		{
+			name:            "col40_tab4_hoist_inline",
+			columnLimit:     40,
+			tabStop:         4,
+			moveInlineAbove: true,
+		},
 	}
 
 	snippets := []string{
@@ -94,7 +115,8 @@ func f(s S) int {
 		`package p
 
 func f() {
-	// Keep an inline comment inside args; argument rewrites should avoid dropping it.
+	// Keep an inline comment inside args; argument rewrites should avoid
+	// dropping it.
 	_ = outerFunctionNameThatIsVeryLong(
 		firstConditionThatIsVeryLong && secondConditionThatIsVeryLong, // keep me
 		thirdConditionThatIsVeryLong || fourthConditionThatIsVeryLong,
@@ -167,19 +189,45 @@ func f() {
 
 					for snippetIndex, in := range snippets {
 						in := in
-						t.Run(fmt.Sprintf("snippet_%02d", snippetIndex), func(t *testing.T) {
-							out1 := p.Format([]byte(in))
+						t.Run(fmt.Sprintf("snippet_%0"+
+							"2d", snippetIndex), func(
+							t *testing.T) {
+
+							out1 := p.Format(
+								[]byte(in),
+							)
 							out2 := p.Format(out1)
 
-							require.NotEmpty(t, out1)
-							requireParseableGo(t, out1)
-							require.Equal(t, string(out1), string(out2), "not idempotent")
-							requireASTEquivalent(t, []byte(in), out1)
+							require.NotEmpty(
+								t, out1,
+							)
+							requireParseableGo(
+								t, out1,
+							)
+							require.Equal(
+								t, string(out1),
+								string(out2),
+								"not idempotent",
+							)
+							requireASTEquivalent(
+								t, []byte(in),
+								out1,
+							)
 
-							// For sources with inline comments in argument lists, ensure we do
-							// not drop the comment text as a side effect of AST-based printing.
+							// For sources with
+							// inline comments in
+							// argument lists,
+							// ensure we do not drop
+							// the comment text as a
+							// side effect of
+							// AST-based printing.
 							if snippetIndex == 6 {
-								require.Contains(t, string(out1), "keep me")
+								require.Contains(
+									t, string(
+										out1,
+									), "k"+
+										"eep me",
+								)
 							}
 						})
 					}

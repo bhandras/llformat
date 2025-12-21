@@ -20,8 +20,16 @@ func (a fixedEditAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	return nil, false
 }
 
-func (a fixedEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error) {
-	return []Edit{{Start: a.start, End: a.end, Replace: a.replace}}, true, nil
+func (a fixedEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool,
+	error) {
+
+	return []Edit{
+		{
+			Start:   a.start,
+			End:     a.end,
+			Replace: a.replace,
+		},
+	}, true, nil
 }
 
 func captureStderr(t *testing.T, fn func()) string {
@@ -39,6 +47,7 @@ func captureStderr(t *testing.T, fn func()) string {
 
 	b, err := io.ReadAll(r)
 	require.NoError(t, err)
+
 	return string(b)
 }
 
@@ -53,8 +62,10 @@ func TestEngine_BlocksEditsOverlappingForbiddenSpans(t *testing.T) {
 	rule := Rule{
 		Name:     "fixed_edit",
 		Priority: 100,
-		Pattern:  &NodePattern{Type: "File"},
-		When:     TrueCond{},
+		Pattern: &NodePattern{
+			Type: "File",
+		},
+		When: TrueCond{},
 		Action: fixedEditAction{
 			start:   start,
 			end:     end,
@@ -65,11 +76,14 @@ func TestEngine_BlocksEditsOverlappingForbiddenSpans(t *testing.T) {
 	engine := NewEngine([]Rule{rule})
 	engine.MaxIterations = 1
 
-	t.Run("budget_rejects_large_growth", func(t *testing.T) {
-		engine.Budget = RewriteBudget{MaxOutputBytes: len(src) - 1}
-		outBudget := engine.FormatFile(src)
-		require.Equal(t, string(src), string(outBudget))
-	})
+	t.Run(
+		"budget_rejects_large_growth",
+		func(t *testing.T) {
+			engine.Budget = RewriteBudget{MaxOutputBytes: len(src) - 1}
+			outBudget := engine.FormatFile(src)
+			require.Equal(t, string(src), string(outBudget))
+		},
+	)
 
 	// Sanity: without forbidden spans, edit applies.
 	engine.Budget = RewriteBudget{}
@@ -78,15 +92,20 @@ func TestEngine_BlocksEditsOverlappingForbiddenSpans(t *testing.T) {
 	require.Contains(t, string(out), "var x = 2")
 
 	// With forbidden spans, edit is blocked.
-	engine.ForbiddenSpans = llast.NewOffsetSpanSet([]llast.OffsetSpan{
-		{Start: start, End: end},
-	})
+	engine.ForbiddenSpans = llast.NewOffsetSpanSet(
+		[]llast.OffsetSpan{
+			{Start: start, End: end},
+		},
+	)
 	engine.TraceReasons = true
 	engine.Trace = false
 
-	stderr := captureStderr(t, func() {
-		out2 := engine.FormatFile(src)
-		require.Equal(t, string(src), string(out2))
-	})
+	stderr := captureStderr(
+		t,
+		func() {
+			out2 := engine.FormatFile(src)
+			require.Equal(t, string(src), string(out2))
+		},
+	)
 	require.Contains(t, stderr, "blocked_by_ownership")
 }

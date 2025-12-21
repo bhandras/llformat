@@ -11,7 +11,11 @@ func TestLeftFlowBreakerSingleLine(t *testing.T) {
 	indent := NewIndent("\t", 8)
 
 	ctx := BreakContext{
-		Elements:   []string{"a", "b", "c"},
+		Elements: []string{
+			"a",
+			"b",
+			"c",
+		},
 		Indent:     indent,
 		CurrentCol: 16, // After "funcName("
 		Config:     cfg,
@@ -32,7 +36,11 @@ func TestLeftFlowBreakerMultiLine(t *testing.T) {
 	indent := NewIndent("\t", 8)
 
 	ctx := BreakContext{
-		Elements:   []string{"longArgument1", "longArgument2", "longArgument3"},
+		Elements: []string{
+			"longArgument1",
+			"longArgument2",
+			"longArgument3",
+		},
 		Indent:     indent,
 		CurrentCol: 20, // Starts mid-line
 		Config:     cfg,
@@ -84,7 +92,10 @@ func TestLeftFlowBreakerTrailingComma(t *testing.T) {
 	indent := NewIndent("", 8)
 
 	ctx := BreakContext{
-		Elements:   []string{"longArg1", "longArg2"},
+		Elements: []string{
+			"longArg1",
+			"longArg2",
+		},
 		Indent:     indent,
 		CurrentCol: 15,
 		Config:     cfg,
@@ -102,7 +113,8 @@ func TestLeftFlowBreakerTrailingComma(t *testing.T) {
 		t.Errorf("Expected trailing comma, got %q", secondLastLine)
 	}
 	if !strings.HasSuffix(lastLine, ")") {
-		t.Errorf("Expected closing paren on last line, got %q", lastLine)
+		t.Errorf("Expected closing paren on last line, got %q",
+			lastLine)
 	}
 }
 
@@ -112,7 +124,11 @@ func TestVerticalBreakerBasic(t *testing.T) {
 	indent := NewIndent("\t", 8)
 
 	ctx := BreakContext{
-		Elements:   []string{"a", "b", "c"},
+		Elements: []string{
+			"a",
+			"b",
+			"c",
+		},
 		Indent:     indent,
 		CurrentCol: 0,
 		Config:     cfg,
@@ -132,7 +148,8 @@ func TestVerticalBreakerBasic(t *testing.T) {
 		t.Errorf("First line should be (, got %q", lines[0])
 	}
 	if !strings.HasSuffix(lines[len(lines)-1], ")") {
-		t.Errorf("Last line should end with ), got %q", lines[len(lines)-1])
+		t.Errorf("Last line should end with ), got %q",
+			lines[len(lines)-1])
 	}
 }
 
@@ -165,7 +182,10 @@ func TestVerticalBreakerNoTrailingComma(t *testing.T) {
 	indent := NewIndent("", 8)
 
 	ctx := BreakContext{
-		Elements:   []string{"a", "b"},
+		Elements: []string{
+			"a",
+			"b",
+		},
 		Indent:     indent,
 		CurrentCol: 0,
 		Config:     cfg,
@@ -187,21 +207,51 @@ func TestCommaSplitter(t *testing.T) {
 		input string
 		want  []string
 	}{
-		{"a, b, c", []string{"a", "b", "c"}},
-		{"a, (b, c), d", []string{"a", "(b, c)", "d"}},
-		{`a, "b,c", d`, []string{"a", `"b,c"`, "d"}},
-		{"a, {b, c}, d", []string{"a", "{b, c}", "d"}},
+		{
+			"a, b, c",
+			[]string{
+				"a",
+				"b",
+				"c",
+			},
+		},
+		{
+			"a, (b, c), d",
+			[]string{
+				"a",
+				"(b, c)",
+				"d",
+			},
+		},
+		{
+			`a, "b,c", d`,
+			[]string{
+				"a",
+				`"b,c"`,
+				"d",
+			},
+		},
+		{
+			"a, {b, c}, d",
+			[]string{
+				"a",
+				"{b, c}",
+				"d",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		got := splitter.Split(tt.input)
 		if len(got) != len(tt.want) {
-			t.Errorf("Split(%q) = %v, want %v", tt.input, got, tt.want)
+			t.Errorf("Split(%q) = %v, want %v", tt.input, got,
+				tt.want)
 			continue
 		}
 		for i := range got {
 			if got[i] != tt.want[i] {
-				t.Errorf("Split(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				t.Errorf("Split(%q)[%d] = %q, want %q",
+					tt.input, i, got[i], tt.want[i])
 			}
 		}
 	}

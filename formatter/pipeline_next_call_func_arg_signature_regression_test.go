@@ -8,14 +8,17 @@ import (
 )
 
 func TestPipelineNext_CallFuncArgSignature_BreaksAtC1(t *testing.T) {
-	// Regression: in next mode, func literals used as call arguments should use
-	// the same signature formatter behavior as other signatures (no overflow).
+	// Regression: in next mode, func literals used as call arguments should
+	// use the same signature formatter behavior as other signatures (no
+	// overflow).
 	//
-	// This case is a common pattern in large codebases: a callback with a long
-	// first argument name/type followed by multiple parameters sharing a long
-	// pointer type. The desired behavior is to break after the first parameter
-	// (at c1), not to keep everything on one line and overflow the column limit.
-	in := []byte(`package p
+	// This case is a common pattern in large codebases: a callback with a
+	// long first argument name/type followed by multiple parameters sharing
+	// a long pointer type. The desired behavior is to break after the first
+	// parameter (at c1), not to keep everything on one line and overflow
+	// the column limit.
+	in := []byte(
+		`package p
 
 import (
 	"errors"
@@ -76,22 +79,26 @@ func f(graph Graph, ctx interface{}, includeUnannounced bool, req Req) (*Resp, e
 
 	return resp, nil
 }
-`)
+`,
+	)
 
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
 		UseOwnershipRegistry: true,
-		// Be resilient to cross-stage convergence within a single formatting run.
+		// Be resilient to cross-stage convergence within a single
+		// formatting run.
 		MaxPipelineIterations: 3,
 	})
 
 	out := string(p.Format(in))
 
-	// Ensure the callback signature breaks between edgeInfo and c1 (the key fix)
-	// rather than overflowing on a single line or splitting inside the shared
-	// `c1, c2 *models.ChannelEdgePolicy` group.
-	require.Regexp(t, regexp.MustCompile(
-		`func\(edgeInfo \*models\.ChannelEdgeInfo,\n\t\tc1, c2 \*models\.ChannelEdgePolicy\) error \{`,
-	), out)
+	// Ensure the callback signature breaks between edgeInfo and c1 (the key
+	// fix) rather than overflowing on a single line or splitting inside the
+	// shared `c1, c2 *models.ChannelEdgePolicy` group.
+	require.Regexp(
+		t, regexp.MustCompile(
+			`func\(edgeInfo \*models\.ChannelEdgeInfo,\n\t\tc1, c2 \*models\.ChannelEdgePolicy\) error \{`,
+		), out,
+	)
 }

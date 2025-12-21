@@ -26,40 +26,45 @@ type Engine struct {
 	AutoMaxIterations bool // Derive MaxIterations from the AST when true
 	DetectCycles      bool // Stop if the engine repeats a previous output
 
-	// ForbiddenSpans holds the union of spans that this engine instance should
-	// not rewrite (e.g. spans owned by later pipeline stages).
+	// ForbiddenSpans holds the union of spans that this engine instance
+	// should not rewrite (e.g. spans owned by later pipeline stages).
 	ForbiddenSpans llast.OffsetSpanSet
 
-	// Budget provides optional guardrails against pathological rule behavior
-	// (e.g. exponential growth, accidental whole-file rewrites).
+	// Budget provides optional guardrails against pathological rule
+	// behavior (e.g. exponential growth, accidental whole-file rewrites).
 	Budget RewriteBudget
 
-	// StageName is an optional label (e.g. "expressions", "multiline-calls") that
-	// will be included in trace output for easier debugging.
+	// StageName is an optional label (e.g. "expressions",
+	// "multiline-calls") that will be included in trace output for easier
+	// debugging.
 	StageName string
 }
 
-// RewriteBudget describes optional safety limits for the DSL engine.
-// Zero values mean "no limit".
+// RewriteBudget describes optional safety limits for the DSL engine. Zero
+// values mean "no limit".
 type RewriteBudget struct {
 	// MaxOutputBytes rejects a rewrite if the candidate output exceeds this
 	// absolute size.
 	MaxOutputBytes int
 
-	// MaxBytesIncrease rejects a rewrite if the candidate output grows more than
-	// this many bytes beyond the initial input size for the engine run.
+	// MaxBytesIncrease rejects a rewrite if the candidate output grows more
+	// than this many bytes beyond the initial input size for the engine
+	// run.
 	MaxBytesIncrease int
 }
 
 // NewEngine creates a rule engine with default settings.
 func NewEngine(rules []Rule) *Engine {
-	// Sort rules by priority (descending - higher priority first).
-	// Keep relative order stable for equal priority to avoid nondeterminism.
+	// Sort rules by priority (descending - higher priority first). Keep
+	// relative order stable for equal priority to avoid nondeterminism.
 	sorted := make([]Rule, len(rules))
 	copy(sorted, rules)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].Priority > sorted[j].Priority
-	})
+	sort.SliceStable(
+		sorted,
+		func(i, j int) bool {
+			return sorted[i].Priority > sorted[j].Priority
+		},
+	)
 
 	return &Engine{
 		Rules:         sorted,
@@ -95,37 +100,46 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 	for iter := 0; iter < maxIters; iter++ {
 		// Parse current source
 		fset := token.NewFileSet()
-		file, err := parser.ParseFile(fset, "", result, parser.AllErrors|parser.ParseComments)
+		file, err := parser.ParseFile(
+			fset, "", result, parser.AllErrors|parser.ParseComments,
+		)
 		if file == nil {
-			// If we can't parse, we can still try to apply file-scoped
-			// scan/delegation rules that don't require an AST (e.g. legacy
-			// comment formatting).
-			ctx := NewContext(token.NewFileSet(), result, e.ColumnLimit, e.TabStop)
+			// If we can't parse, we can still try to apply
+			// file-scoped scan/delegation rules that don't require
+			// an AST (e.g. legacy comment formatting).
+			ctx := NewContext(
+				token.NewFileSet(), result, e.ColumnLimit,
+				e.TabStop,
+			)
 			ctx.Parseable = false
 			ctx.ForbiddenSpans = e.ForbiddenSpans
-			modified, changed := e.applyOneFileRuleWithoutAST(iter+1, ctx)
+			modified, changed := e.applyOneFileRuleWithoutAST(
+				iter+1, ctx,
+			)
 			if !changed {
 				return result, nil
 			}
 
 			if e.Trace {
-				start, endBefore, endAfter := changedSpan(ctx.Source, modified)
+				start, endBefore, endAfter := changedSpan(
+					ctx.Source, modified,
+				)
 				line, col := offsetToLineCol(ctx.Source, start)
-				fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d rule=%s prio=%d node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d snippet=%q\n",
-					e.StageName,
-					iter+1,
+				fmt.Fprintf(
+					os.Stderr, "dsl: stage=%s iter=%d "+
+						"rule=%s prio=%d node=%s "+
+						"nodeSpan=[%d:%d] "+
+						"editSpan=[%d:%d]->[%d:%d] "+
+						"@%d:%d snippet=%q\n",
+					e.StageName, iter+1,
 					ctx.LastAppliedRule,
 					ctx.LastAppliedRulePriority,
 					ctx.LastAppliedNodeType,
 					ctx.LastAppliedNodeStart,
-					ctx.LastAppliedNodeEnd,
-					start,
-					endBefore,
-					start,
-					endAfter,
-					line,
-					col,
-					snippetForRange(ctx.Source, start, endBefore),
+					ctx.LastAppliedNodeEnd, start,
+					endBefore, start, endAfter, line, col, snippetForRange(
+						ctx.Source, start, endBefore,
+					),
 				)
 			}
 
@@ -135,7 +149,14 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 				h := e.hashBytes(seed, result)
 				if _, ok := seen[h]; ok {
 					if e.TraceReasons && !e.Trace {
-						fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d reason=%s\n", e.StageName, iter+1, "cycle_detected")
+						fmt.Fprintf(
+							os.Stderr, "dsl: "+
+								"stage=%s "+
+								"iter=%d "+
+								"reason=%s\n",
+							e.StageName, iter+1,
+							"cycle_detected",
+						)
 					}
 					break
 				}
@@ -148,7 +169,8 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		ctx.Parseable = err == nil
 		ctx.ForbiddenSpans = e.ForbiddenSpans
 
-		// First pass: apply atomic markers (high priority keep_together rules)
+		// First pass: apply atomic markers (high priority keep_together
+		// rules)
 		e.applyAtomicMarkers(file, ctx)
 
 		// Second pass: try to apply one transforming rule
@@ -158,14 +180,17 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		}
 
 		if !e.withinBudget(initialLen, modified) {
-			// Refuse the rewrite and stop: a later rule in this iteration might
-			// have produced a smaller/safer result, but we intentionally apply at
-			// most one transforming rule per iteration for determinism.
+			// Refuse the rewrite and stop: a later rule in this
+			// iteration might have produced a smaller/safer result,
+			// but we intentionally apply at most one transforming
+			// rule per iteration for determinism.
 			if e.TraceReasons && !e.Trace {
-				fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d applied rule=%s prio=%d node=%s nodeSpan=[%d:%d] reason=%s\n",
-					e.StageName,
-					iter+1,
-					ctx.LastAppliedRule,
+				fmt.Fprintf(
+					os.Stderr, "dsl: stage=%s iter=%d "+
+						"applied rule=%s prio=%d "+
+						"node=%s nodeSpan=[%d:%d] "+
+						"reason=%s\n", e.StageName,
+					iter+1, ctx.LastAppliedRule,
 					ctx.LastAppliedRulePriority,
 					ctx.LastAppliedNodeType,
 					ctx.LastAppliedNodeStart,
@@ -177,57 +202,62 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		}
 
 		if e.TraceReasons && !e.Trace {
-			start, endBefore, endAfter := changedSpan(ctx.Source, modified)
+			start, endBefore, endAfter := changedSpan(
+				ctx.Source, modified,
+			)
 			line, col := offsetToLineCol(ctx.Source, start)
-			fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d applied rule=%s prio=%d node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d snippet=%q\n",
-				e.StageName,
-				iter+1,
+			fmt.Fprintf(
+				os.Stderr, "dsl: stage=%s iter=%d applied "+
+					"rule=%s prio=%d node=%s "+
+					"nodeSpan=[%d:%d] "+
+					"editSpan=[%d:%d]->[%d:%d] @%d:%d "+
+					"snippet=%q\n", e.StageName, iter+1,
 				ctx.LastAppliedRule,
 				ctx.LastAppliedRulePriority,
 				ctx.LastAppliedNodeType,
 				ctx.LastAppliedNodeStart,
-				ctx.LastAppliedNodeEnd,
-				start,
-				endBefore,
-				start,
-				endAfter,
-				line,
-				col,
+				ctx.LastAppliedNodeEnd, start, endBefore, start,
+				endAfter, line, col,
 				snippetForRange(ctx.Source, start, endBefore),
 			)
 		}
 
 		if e.Trace {
-			start, endBefore, endAfter := changedSpan(ctx.Source, modified)
+			start, endBefore, endAfter := changedSpan(
+				ctx.Source, modified,
+			)
 			line, col := offsetToLineCol(ctx.Source, start)
-			fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d rule=%s prio=%d node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d snippet=%q\n",
-				e.StageName,
-				iter+1,
+			fmt.Fprintf(
+				os.Stderr, "dsl: stage=%s iter=%d rule=%s "+
+					"prio=%d node=%s nodeSpan=[%d:%d] "+
+					"editSpan=[%d:%d]->[%d:%d] @%d:%d "+
+					"snippet=%q\n", e.StageName, iter+1,
 				ctx.LastAppliedRule,
 				ctx.LastAppliedRulePriority,
 				ctx.LastAppliedNodeType,
 				ctx.LastAppliedNodeStart,
-				ctx.LastAppliedNodeEnd,
-				start,
-				endBefore,
-				start,
-				endAfter,
-				line,
-				col,
+				ctx.LastAppliedNodeEnd, start, endBefore, start,
+				endAfter, line, col,
 				snippetForRange(ctx.Source, start, endBefore),
 			)
 		}
 
-		// Keep the edited source as-is and rely on the outer pipeline to run
-		// gofmt once at the end. Running gofmt here would reformat unrelated
-		// code and violate llformat's "only touch targeted regions" goal.
+		// Keep the edited source as-is and rely on the outer pipeline
+		// to run gofmt once at the end. Running gofmt here would
+		// reformat unrelated code and violate llformat's "only touch
+		// targeted regions" goal.
 		result = modified
 
 		if e.DetectCycles {
 			h := e.hashBytes(seed, result)
 			if _, ok := seen[h]; ok {
 				if e.TraceReasons && !e.Trace {
-					fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d reason=%s\n", e.StageName, iter+1, "cycle_detected")
+					fmt.Fprintf(
+						os.Stderr, "dsl: stage=%s "+
+							"iter=%d reason=%s\n",
+						e.StageName, iter+1,
+						"cycle_detected",
+					)
 				}
 				break
 			}
@@ -242,14 +272,18 @@ func (e *Engine) hashBytes(seed maphash.Seed, b []byte) uint64 {
 	var h maphash.Hash
 	h.SetSeed(seed)
 	h.Write(b)
+
 	return h.Sum64()
 }
 
 func (e *Engine) estimateMaxIterations(src []byte) int {
-	// If the file isn't parseable, auto-iteration can't estimate safely. The
-	// caller may still have file-level fallback rules, so allow a single pass.
+	// If the file isn't parseable, auto-iteration can't estimate safely.
+	// The caller may still have file-level fallback rules, so allow a
+	// single pass.
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", src, parser.AllErrors|parser.ParseComments)
+	file, err := parser.ParseFile(
+		fset, "", src, parser.AllErrors|parser.ParseComments,
+	)
 	if file == nil {
 		return 1
 	}
@@ -261,29 +295,34 @@ func (e *Engine) estimateMaxIterations(src []byte) int {
 	}
 
 	candidates := 0
-	ast.Inspect(file, func(n ast.Node) bool {
-		if n == nil {
-			return true
-		}
-		rt := reflect.TypeOf(n)
-		if rt == nil {
-			return true
-		}
-		if rt.Kind() == reflect.Ptr {
-			rt = rt.Elem()
-		}
-		if rt == nil {
-			return true
-		}
-		if _, ok := nodeTypes[rt.Name()]; ok {
-			candidates++
-		}
-		return true
-	})
+	ast.Inspect(
+		file,
+		func(n ast.Node) bool {
+			if n == nil {
+				return true
+			}
+			rt := reflect.TypeOf(n)
+			if rt == nil {
+				return true
+			}
+			if rt.Kind() == reflect.Ptr {
+				rt = rt.Elem()
+			}
+			if rt == nil {
+				return true
+			}
+			if _, ok := nodeTypes[rt.Name()]; ok {
+				candidates++
+			}
 
-	// Apply at most one transforming rewrite per iteration. In the common case,
-	// each iteration fixes one candidate node, so a small multiplier is enough.
-	// Clamp to keep pathological files from running too long by accident.
+			return true
+		},
+	)
+
+	// Apply at most one transforming rewrite per iteration. In the common
+	// case, each iteration fixes one candidate node, so a small multiplier
+	// is enough. Clamp to keep pathological files from running too long by
+	// accident.
 	const (
 		minIters = 20
 		maxIters = 5000
@@ -295,6 +334,7 @@ func (e *Engine) estimateMaxIterations(src []byte) int {
 	if estimate > maxIters {
 		estimate = maxIters
 	}
+
 	return estimate
 }
 
@@ -310,6 +350,7 @@ func (e *Engine) ruleNodeTypes() map[string]struct{} {
 		}
 		out[np.Type] = struct{}{}
 	}
+
 	return out
 }
 
@@ -317,16 +358,23 @@ func (e *Engine) withinBudget(initialLen int, candidate []byte) bool {
 	if e == nil {
 		return true
 	}
-	if e.Budget.MaxOutputBytes > 0 && len(candidate) > e.Budget.MaxOutputBytes {
+	if e.Budget.MaxOutputBytes > 0 &&
+		len(candidate) > e.Budget.MaxOutputBytes {
+
 		return false
 	}
-	if e.Budget.MaxBytesIncrease > 0 && len(candidate) > initialLen+e.Budget.MaxBytesIncrease {
+	if e.Budget.MaxBytesIncrease > 0 &&
+		len(candidate) > initialLen+e.Budget.MaxBytesIncrease {
+
 		return false
 	}
+
 	return true
 }
 
-func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, bool) {
+func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte,
+	bool) {
+
 	const maxReasonsPerIter = 30
 	reasonsPrinted := 0
 
@@ -335,8 +383,8 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, boo
 		if !ok || np.Type != "File" {
 			continue
 		}
-		// Only support truly file-scoped rules in this fallback: no field
-		// constraints (which would require an AST).
+		// Only support truly file-scoped rules in this fallback: no
+		// field constraints (which would require an AST).
 		if len(np.Fields) != 0 {
 			continue
 		}
@@ -346,19 +394,18 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, boo
 
 		caps := Captures{"node": nil}
 		if !rule.When.Eval(caps, ctx) {
-			if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+			if e.TraceReasons &&
+				reasonsPrinted < maxReasonsPerIter {
+
 				reasonsPrinted++
-				fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
-					e.StageName,
-					iter,
-					rule.Name,
-					rule.Priority,
-					"File",
-					0,
-					len(ctx.Source),
-					1,
-					1,
-					"when=false",
+				fmt.Fprintf(
+					os.Stderr, "dsl: stage=%s iter=%d "+
+						"skip rule=%s prio=%d "+
+						"node=%s nodeSpan=[%d:%d] "+
+						"@%d:%d reason=%s\n",
+					e.StageName, iter, rule.Name,
+					rule.Priority, "File", 0,
+					len(ctx.Source), 1, 1, "when=false",
 				)
 			}
 			continue
@@ -366,18 +413,18 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, boo
 
 		out, changed := rule.Action.Execute(caps, ctx)
 		if !changed || out == nil {
-			if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+			if e.TraceReasons &&
+				reasonsPrinted < maxReasonsPerIter {
+
 				reasonsPrinted++
-				fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
-					e.StageName,
-					iter,
-					rule.Name,
-					rule.Priority,
-					"File",
-					0,
-					len(ctx.Source),
-					1,
-					1,
+				fmt.Fprintf(
+					os.Stderr, "dsl: stage=%s iter=%d "+
+						"skip rule=%s prio=%d "+
+						"node=%s nodeSpan=[%d:%d] "+
+						"@%d:%d reason=%s\n",
+					e.StageName, iter, rule.Name,
+					rule.Priority, "File", 0,
+					len(ctx.Source), 1, 1,
 					"action=no_change",
 				)
 			}
@@ -386,18 +433,18 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, boo
 
 		start, endBefore, _ := changedSpan(ctx.Source, out)
 		if ctx.editOverlapsForbidden(start, endBefore) {
-			if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+			if e.TraceReasons &&
+				reasonsPrinted < maxReasonsPerIter {
+
 				reasonsPrinted++
-				fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
-					e.StageName,
-					iter,
-					rule.Name,
-					rule.Priority,
-					"File",
-					0,
-					len(ctx.Source),
-					1,
-					1,
+				fmt.Fprintf(
+					os.Stderr, "dsl: stage=%s iter=%d "+
+						"skip rule=%s prio=%d "+
+						"node=%s nodeSpan=[%d:%d] "+
+						"@%d:%d reason=%s\n",
+					e.StageName, iter, rule.Name,
+					rule.Priority, "File", 0,
+					len(ctx.Source), 1, 1,
 					"blocked_by_ownership",
 				)
 			}
@@ -409,13 +456,15 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte, boo
 		ctx.LastAppliedNodeType = "File"
 		ctx.LastAppliedNodeStart = 0
 		ctx.LastAppliedNodeEnd = len(ctx.Source)
+
 		return out, true
 	}
+
 	return nil, false
 }
 
-// changedSpan finds a minimal differing span between before and after.
-// It returns start offset, end offset in before, and end offset in after.
+// changedSpan finds a minimal differing span between before and after. It
+// returns start offset, end offset in before, and end offset in after.
 func changedSpan(before, after []byte) (start, endBefore, endAfter int) {
 	minLen := len(before)
 	if len(after) < minLen {
@@ -436,6 +485,7 @@ func changedSpan(before, after []byte) (start, endBefore, endAfter int) {
 		i--
 		j--
 	}
+
 	return start, i + 1, j + 1
 }
 
@@ -455,6 +505,7 @@ func offsetToLineCol(src []byte, off int) (line, col int) {
 		}
 	}
 	col = off - lastNL
+
 	return line, col
 }
 
@@ -472,7 +523,8 @@ func snippetForRange(src []byte, start, end int) string {
 		end = len(src)
 	}
 
-	// Handle insertion-only changes (end == start) by providing a little context.
+	// Handle insertion-only changes (end == start) by providing a little
+	// context.
 	if end <= start {
 		left := start - 30
 		if left < 0 {
@@ -492,6 +544,7 @@ func snippetForRange(src []byte, start, end int) string {
 	if len(s) > maxLen {
 		return s[:maxLen-3] + "..."
 	}
+
 	return s
 }
 
@@ -523,13 +576,16 @@ func (e *Engine) applyAtomicMarkers(file *ast.File, ctx *Context) {
 
 			// Execute action (marks as atomic)
 			rule.Action.Execute(caps, ctx)
+
 			return true
 		})
 	}
 }
 
 // applyOneRule finds and applies the first matching transforming rule.
-func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte, bool) {
+func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte,
+	bool) {
+
 	var result []byte
 	changed := false
 
@@ -554,17 +610,22 @@ func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte, b
 				stack = stack[:len(stack)-1]
 			}
 		}
+
 		return true
 	})
 	ctx.SetParentMap(parentMap)
 
 	// Try each node
 	if e.NodeOrder == NodeOrderSourceOrder {
-		sort.SliceStable(nodes, func(i, j int) bool {
-			pi := nodeOrderOffset(ctx, nodes[i])
-			pj := nodeOrderOffset(ctx, nodes[j])
-			return pi < pj
-		})
+		sort.SliceStable(
+			nodes,
+			func(i, j int) bool {
+				pi := nodeOrderOffset(ctx, nodes[i])
+				pj := nodeOrderOffset(ctx, nodes[j])
+
+				return pi < pj
+			},
+		)
 	}
 	if e.NodeOrder == NodeOrderDeepestFirst {
 		sort.SliceStable(nodes, func(i, j int) bool {
@@ -578,6 +639,7 @@ func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte, b
 			// Tie-break by source order for determinism.
 			pi := nodeOrderOffset(ctx, nodes[i])
 			pj := nodeOrderOffset(ctx, nodes[j])
+
 			return pi < pj
 		})
 	}
@@ -609,45 +671,57 @@ func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte, b
 
 			// Evaluate condition
 			if !rule.When.Eval(caps, ctx) {
-				if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+				if e.TraceReasons &&
+					reasonsPrinted < maxReasonsPerIter {
+
 					reasonsPrinted++
 					start, end := nodeSpanOffsets(ctx, n)
-					line, col := offsetToLineCol(ctx.Source, start)
-					fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d node=%T nodeSpan=[%d:%d] @%d:%d reason=%s snippet=%q\n",
-						e.StageName,
-						iter,
-						rule.Name,
-						rule.Priority,
-						n,
-						start,
-						end,
-						line,
-						col,
-						"when=false",
-						snippetForRange(ctx.Source, start, end),
+					line, col := offsetToLineCol(
+						ctx.Source, start,
+					)
+					fmt.Fprintf(
+						os.Stderr, "dsl: stage=%s "+
+							"iter=%d skip "+
+							"rule=%s prio=%d "+
+							"node=%T "+
+							"nodeSpan=[%d:%d] "+
+							"@%d:%d reason=%s "+
+							"snippet=%q\n",
+						e.StageName, iter, rule.Name,
+						rule.Priority, n, start, end,
+						line, col, "when=false", snippetForRange(
+							ctx.Source, start, end,
+						),
 					)
 				}
 				continue
 			}
 
-			modified, actionChanged, ok, reason := e.executeAction(rule, caps, ctx)
+			modified, actionChanged, ok, reason := e.executeAction(
+				rule, caps, ctx,
+			)
 			if !ok {
-				if e.TraceReasons && reasonsPrinted < maxReasonsPerIter {
+				if e.TraceReasons &&
+					reasonsPrinted < maxReasonsPerIter {
+
 					reasonsPrinted++
 					start, end := nodeSpanOffsets(ctx, n)
-					line, col := offsetToLineCol(ctx.Source, start)
-					fmt.Fprintf(os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d node=%T nodeSpan=[%d:%d] @%d:%d reason=%s snippet=%q\n",
-						e.StageName,
-						iter,
-						rule.Name,
-						rule.Priority,
-						n,
-						start,
-						end,
-						line,
-						col,
-						reason,
-						snippetForRange(ctx.Source, start, end),
+					line, col := offsetToLineCol(
+						ctx.Source, start,
+					)
+					fmt.Fprintf(
+						os.Stderr, "dsl: stage=%s "+
+							"iter=%d skip "+
+							"rule=%s prio=%d "+
+							"node=%T "+
+							"nodeSpan=[%d:%d] "+
+							"@%d:%d reason=%s "+
+							"snippet=%q\n",
+						e.StageName, iter, rule.Name,
+						rule.Priority, n, start, end,
+						line, col, reason, snippetForRange(
+							ctx.Source, start, end,
+						),
 					)
 				}
 				continue
@@ -668,9 +742,9 @@ func nodeOrderOffset(ctx *Context, n ast.Node) int {
 		return 0
 	}
 
-	// For call expressions, use the '(' position. For selector calls this avoids
-	// the "all calls start at the receiver" ambiguity and more closely matches
-	// legacy scanner left-to-right behavior.
+	// For call expressions, use the '(' position. For selector calls this
+	// avoids the "all calls start at the receiver" ambiguity and more
+	// closely matches legacy scanner left-to-right behavior.
 	if call, ok := n.(*ast.CallExpr); ok {
 		if call.Lparen.IsValid() {
 			return ctx.Fset.Position(call.Lparen).Offset
@@ -692,10 +766,13 @@ func nodeSpanOffsets(ctx *Context, n ast.Node) (start, end int) {
 	if end < start {
 		end = start
 	}
+
 	return start, end
 }
 
-func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified []byte, changed bool, ok bool, reason string) {
+func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (
+	modified []byte, changed bool, ok bool, reason string) {
+
 	n, _ := caps["node"]
 	if ctx != nil && n != nil {
 		pos := ctx.Fset.Position(n.Pos()).Offset
@@ -738,20 +815,25 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 		if err != nil {
 			return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
 		}
-		// Never accept a transformation that produces syntactically invalid Go
-		// when the input was parseable. This ensures the DSL engine won't "brick"
-		// a file even if a rule is imperfect or interacts badly with semicolon
-		// insertion.
+		// Never accept a transformation that produces syntactically
+		// invalid Go when the input was parseable. This ensures the DSL
+		// engine won't "brick" a file even if a rule is imperfect or
+		// interacts badly with semicolon insertion.
 		//
-		// However, some legacy fixtures are intentionally unparseable and are
-		// still expected to be formatted by scanner-based rules. In those cases,
-		// we allow transformations that keep the file unparseable.
+		// However, some legacy fixtures are intentionally unparseable
+		// and are still expected to be formatted by scanner-based
+		// rules. In those cases, we allow transformations that keep the
+		// file unparseable.
 		if ctx.Parseable {
 			fset := token.NewFileSet()
-			if _, err := parser.ParseFile(fset, "", applied, parser.ParseComments); err != nil {
+			if _, err := parser.ParseFile(
+				fset, "", applied, parser.ParseComments,
+			); err != nil {
+
 				return nil, false, false, "edit_action=parse_failed=" + err.Error()
 			}
 		}
+
 		return applied, true, true, ""
 	}
 
@@ -765,15 +847,20 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (modified
 	}
 	if ctx.Parseable {
 		fset := token.NewFileSet()
-		if _, err := parser.ParseFile(fset, "", modified, parser.ParseComments); err != nil {
+		if _, err := parser.ParseFile(
+			fset, "", modified, parser.ParseComments,
+		); err != nil {
+
 			return nil, false, false, "action=parse_failed=" + err.Error()
 		}
 	}
+
 	return modified, true, true, ""
 }
 
 // FormatFile is a convenience method that reads, formats, and returns source.
 func (e *Engine) FormatFile(src []byte) []byte {
 	result, _ := e.Format(src)
+
 	return result
 }

@@ -2,9 +2,9 @@ package formatter
 
 import "github.com/lightninglabs/llformat/dsl"
 
-// DSLStageSpec describes how a single stage should run under the DSL engine.
-// It intentionally mirrors DSLExprConfig fields that are policy-driven rather
-// than derived from the file formatting config (column limit/tab stop).
+// DSLStageSpec describes how a single stage should run under the DSL engine. It
+// intentionally mirrors DSLExprConfig fields that are policy-driven rather than
+// derived from the file formatting config (column limit/tab stop).
 type DSLStageSpec struct {
 	Rules             []dsl.Rule
 	NodeOrder         dsl.NodeOrder
@@ -43,7 +43,9 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 
 	return DSLBundle{
 		Comments: DSLStageSpec{
-			Rules:         dslRulesForComments(opts.Style.CommentMoveInline),
+			Rules: dslRulesForComments(
+				opts.Style.CommentMoveInline,
+			),
 			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: 1,
 		},
@@ -60,10 +62,11 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 		MultiLineCalls: DSLStageSpec{
 			Rules:     multiLineRules,
 			NodeOrder: multiLineNodeOrder,
-			// Multiline call formatting applies at most one rewrite per iteration.
-			// For large files with many long calls, a small fixed cap can cause
-			// later calls to be missed entirely. Enable an AST-informed iteration
-			// limit in the "next" profile, which is intentionally opt-in.
+			// Multiline call formatting applies at most one rewrite
+			// per iteration. For large files with many long calls,
+			// a small fixed cap can cause later calls to be missed
+			// entirely. Enable an AST-informed iteration limit in
+			// the "next" profile, which is intentionally opt-in.
 			MaxIterations:     20,
 			AutoMaxIterations: true,
 			DetectCycles:      true,
@@ -72,10 +75,11 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			Rules:         dslRulesForSignatures(opts),
 			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: dslMaxItersForSignatures(opts),
-			// Signature formatting applies at most one rewrite per iteration, so
-			// files with many long signatures legitimately require >100 iterations.
-			// Use an AST-informed auto limit with cycle detection instead of a
-			// fixed cap.
+			// Signature formatting applies at most one rewrite per
+			// iteration, so files with many long signatures
+			// legitimately require >100 iterations. Use an
+			// AST-informed auto limit with cycle detection instead
+			// of a fixed cap.
 			AutoMaxIterations: opts.DSL.UseFuncSigsNative,
 			DetectCycles:      opts.DSL.UseFuncSigsNative,
 		},
@@ -91,10 +95,11 @@ func dslMaxItersForSignatures(opts StageOptions) int {
 	if !opts.DSL.UseFuncSigsNative {
 		return 1
 	}
-	// When native signatures are enabled, iteration count is set automatically
-	// based on the number of candidate nodes (FuncDecl, interface methods, etc).
-	// The fixed cap is intentionally disabled here; safety is enforced via
-	// rewrite budgets + cycle detection.
+
+	// When native signatures are enabled, iteration count is set
+	// automatically based on the number of candidate nodes (FuncDecl,
+	// interface methods, etc). The fixed cap is intentionally disabled
+	// here; safety is enforced via rewrite budgets + cycle detection.
 	return 0
 }
 
@@ -102,6 +107,7 @@ func dslMaxItersForBlankLines(opts StageOptions) int {
 	if !opts.DSL.UseBlankLinesNative {
 		return 1
 	}
+
 	// Blank line insertion is handled in a single batch rewrite; keep the
 	// iteration cap low to avoid pathological loops.
 	return 20

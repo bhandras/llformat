@@ -14,7 +14,9 @@ type OwnershipPolicy struct {
 	StageName string
 }
 
-func NewOwnershipPolicy(reg *OwnershipRegistry, stageName string) OwnershipPolicy {
+func NewOwnershipPolicy(reg *OwnershipRegistry,
+	stageName string) OwnershipPolicy {
+
 	return OwnershipPolicy{
 		Registry:  reg,
 		StageName: stageName,
@@ -29,8 +31,8 @@ func (p OwnershipPolicy) ForbiddenSpans() llast.OffsetSpanSet {
 		return p.Registry.AllOwned()
 	}
 
-	// Directional ownership: this stage should avoid rewriting within spans that
-	// later stages will format, but it is allowed to rewrite inside spans owned
-	// by earlier stages.
+	// Directional ownership: this stage should avoid rewriting within spans
+	// that later stages will format, but it is allowed to rewrite inside
+	// spans owned by earlier stages.
 	return p.Registry.AllOwnedAfter(p.StageName)
 }

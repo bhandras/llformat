@@ -7,8 +7,8 @@ import (
 	"github.com/lightninglabs/llformat/width"
 )
 
-// QuoteGoString returns s as a double-quoted Go string literal.
-// It preserves printable runes and escapes only what's required.
+// QuoteGoString returns s as a double-quoted Go string literal. It preserves
+// printable runes and escapes only what's required.
 func QuoteGoString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
@@ -17,13 +17,17 @@ func QuoteGoString(s string) string {
 		case '"', '\\':
 			b.WriteByte('\\')
 			b.WriteRune(r)
+
 		case '\n':
 			b.WriteString("\\n")
+
 		case '\r':
 			b.WriteString("\\r")
+
 		case '\t':
 			// Keep literal tab to match golden behavior
 			b.WriteByte('\t')
+
 		default:
 			if r < 0x20 {
 				// Control chars: emit as \xNN
@@ -37,17 +41,21 @@ func QuoteGoString(s string) string {
 		}
 	}
 	b.WriteByte('"')
+
 	return b.String()
 }
 
-// SplitQuotedString splits text into quoted segments that fit within the
-// given width starting at startCol for the first segment. Continuation lines
-// are indented with contIndent. Segments are joined with " +" at line breaks.
-func SplitQuotedString(text string, startCol int, contIndent string, colLimit, tabStop int) string {
+// SplitQuotedString splits text into quoted segments that fit within the given
+// width starting at startCol for the first segment. Continuation lines are
+// indented with contIndent. Segments are joined with " +" at line breaks.
+func SplitQuotedString(text string, startCol int, contIndent string, colLimit,
+	tabStop int) string {
+
 	var out strings.Builder
 	rest := text
 	curStart := startCol
-	// String continuation lines get an extra tab beyond the argument indent.
+	// String continuation lines get an extra tab beyond the argument
+	// indent.
 	stringContIndent := contIndent + "\t"
 	contStart := width.VisualLenWithTab(stringContIndent, tabStop)
 
@@ -55,21 +63,26 @@ func SplitQuotedString(text string, startCol int, contIndent string, colLimit, t
 		if rest == "" {
 			break
 		}
-		// If the whole rest fits as a quoted literal on this line, emit and finish.
+		// If the whole rest fits as a quoted literal on this line, emit
+		// and finish.
 		quoted := QuoteGoString(rest)
 		if width.AdvanceColsWithTab(curStart, quoted, tabStop) <= colLimit {
 			out.WriteString(quoted)
 			break
 		}
-		// Choose split point at last space that fits with trailing " +".
+		// Choose split point at last space that fits with trailing "
+		// +".
 		cut := lastQuotedSpaceBefore(curStart, rest, colLimit, tabStop)
 		if cut <= 0 {
-			// Hard cut by visual width capacity for content excluding quotes + " +".
+			// Hard cut by visual width capacity for content
+			// excluding quotes + " +".
 			capCols := colLimit - curStart - 2 - 2 // quotes + " +"
 			if capCols <= 0 {
 				capCols = 1
 			}
-			idx := cutIndexForWidth(curStart, rest, capCols, tabStop)
+			idx := cutIndexForWidth(
+				curStart, rest, capCols, tabStop,
+			)
 			if idx <= 0 {
 				idx = 1
 			}
@@ -88,6 +101,7 @@ func SplitQuotedString(text string, startCol int, contIndent string, colLimit, t
 		rest = rest[cut+1:]
 		curStart = contStart
 	}
+
 	return out.String()
 }
 
@@ -102,19 +116,23 @@ func lastQuotedSpaceBefore(startCol int, s string, boundary, tabStop int) int {
 			continue
 		}
 		piece := s[:i+1]
-		used := width.AdvanceColsWithTab(startCol, QuoteGoString(piece), tabStop) + 2 // " +"
+		used := width.AdvanceColsWithTab(
+			startCol, QuoteGoString(piece), tabStop,
+		) +
+			2 // " +"
 		if used < boundary { // strict inequality
 			last = i
 		} else {
 			break
 		}
 	}
+
 	return last
 }
 
 // cutIndexForWidth returns the number of bytes from the start of s that fit
-// within maxCols additional columns when starting from startCol.
-// It avoids splitting runes.
+// within maxCols additional columns when starting from startCol. It avoids
+// splitting runes.
 func cutIndexForWidth(startCol int, s string, maxCols, tabStop int) int {
 	col := startCol
 	i := 0
@@ -138,5 +156,6 @@ func cutIndexForWidth(startCol int, s string, maxCols, tabStop int) int {
 	if i <= 0 {
 		return 1
 	}
+
 	return i
 }

@@ -15,9 +15,11 @@ func f() {
 }
 `)
 
-	spans := OwnedSpansFromSource(src, OwnedSpanOptions{
-		IncludeCallArgLists: true,
-	})
+	spans := OwnedSpansFromSource(
+		src, OwnedSpanOptions{
+			IncludeCallArgLists: true,
+		},
+	)
 
 	offOuterIdent := strings.Index(string(src), "outer")
 	require.Greater(t, offOuterIdent, 0)
@@ -36,9 +38,11 @@ func f() {
 }
 `)
 
-	spans := OwnedSpansFromSource(src, OwnedSpanOptions{
-		IncludeCallExprs: true,
-	})
+	spans := OwnedSpansFromSource(
+		src, OwnedSpanOptions{
+			IncludeCallExprs: true,
+		},
+	)
 
 	offCalleeOp := strings.Index(string(src), "a + b")
 	require.Greater(t, offCalleeOp, 0)
@@ -61,9 +65,11 @@ func f() {
 }
 `)
 
-	spans := OwnedSpansFromSource(src, OwnedSpanOptions{
-		IncludeCompositeBodies: true,
-	})
+	spans := OwnedSpansFromSource(
+		src, OwnedSpanOptions{
+			IncludeCompositeBodies: true,
+		},
+	)
 
 	offLit := strings.Index(string(src), "1, 2, 3")
 	require.Greater(t, offLit, 0)
@@ -82,9 +88,11 @@ func f() {
 }
 `)
 
-	spans := OwnedSpansFromSource(src, OwnedSpanOptions{
-		IncludeFuncBodies: true,
-	})
+	spans := OwnedSpansFromSource(
+		src, OwnedSpanOptions{
+			IncludeFuncBodies: true,
+		},
+	)
 
 	offReturn := strings.Index(string(src), "return 1")
 	require.Greater(t, offReturn, 0)

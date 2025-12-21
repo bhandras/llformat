@@ -18,7 +18,7 @@ func TestBacktrackHorizontalWhitespace(t *testing.T) {
 	t.Parallel()
 
 	src := []byte("abc\t  def")
-	// Position points at 'd', should backtrack over "\t  ".
+	// Position points at 'd', should backtrack over "\t ".
 	if got := backtrackHorizontalWhitespace(src, 6); got != 3 {
 		t.Fatalf("got %d", got)
 	}

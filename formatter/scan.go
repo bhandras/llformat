@@ -2,8 +2,8 @@ package formatter
 
 import "github.com/lightninglabs/llformat/scanner"
 
-// Scanner provides stateful source scanning that skips strings and comments.
-// It wraps the low-level scanner package utilities into a convenient struct.
+// Scanner provides stateful source scanning that skips strings and comments. It
+// wraps the low-level scanner package utilities into a convenient struct.
 type Scanner struct {
 	src []byte
 	pos int
@@ -40,26 +40,30 @@ func (s *Scanner) Peek() byte {
 	if s.pos >= len(s.src) {
 		return 0
 	}
+
 	return s.src[s.pos]
 }
 
-// PeekAt returns the byte at the given offset from current position, or 0 if out of bounds.
+// PeekAt returns the byte at the given offset from current position, or 0 if
+// out of bounds.
 func (s *Scanner) PeekAt(offset int) byte {
 	idx := s.pos + offset
 	if idx < 0 || idx >= len(s.src) {
 		return 0
 	}
+
 	return s.src[idx]
 }
 
-// Advance moves forward one byte and returns the byte that was at the current position.
-// Returns 0 if at end.
+// Advance moves forward one byte and returns the byte that was at the current
+// position. Returns 0 if at end.
 func (s *Scanner) Advance() byte {
 	if s.pos >= len(s.src) {
 		return 0
 	}
 	b := s.src[s.pos]
 	s.pos++
+
 	return b
 }
 
@@ -81,14 +85,20 @@ func (s *Scanner) SkipLiteral() bool {
 	switch {
 	case scanner.IsStringStart(s.src, s.pos):
 		s.pos = scanner.ScanString(s.src, s.pos)
+
 		return true
+
 	case scanner.IsLineCommentStart(s.src, s.pos):
 		s.pos = scanner.ScanLineComment(s.src, s.pos)
+
 		return true
+
 	case scanner.IsBlockCommentStart(s.src, s.pos):
 		s.pos = scanner.ScanBlockComment(s.src, s.pos)
+
 		return true
 	}
+
 	return false
 }
 
@@ -131,6 +141,7 @@ func (s *Scanner) Slice(start, end int) []byte {
 	if start >= end {
 		return nil
 	}
+
 	return s.src[start:end]
 }
 
@@ -159,7 +170,8 @@ func (s *Scanner) Len() int {
 	return len(s.src)
 }
 
-// Match returns true if the source at current position matches the given string.
+// Match returns true if the source at current position matches the given
+// string.
 func (s *Scanner) Match(pattern string) bool {
 	if s.pos+len(pattern) > len(s.src) {
 		return false
@@ -169,6 +181,7 @@ func (s *Scanner) Match(pattern string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -195,7 +208,9 @@ func (s *Scanner) SkipPastNewline() bool {
 	s.SkipToNewline()
 	if s.pos < len(s.src) && s.src[s.pos] == '\n' {
 		s.pos++
+
 		return true
 	}
+
 	return false
 }

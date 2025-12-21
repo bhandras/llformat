@@ -36,7 +36,8 @@ func TestStageWithRequires(t *testing.T) {
 		t.Errorf("len(Requires) = %d, want 2", len(newStage.Requires))
 	}
 	if newStage.Requires[0] != "dep1" {
-		t.Errorf("Requires[0] = %q, want %q", newStage.Requires[0], "dep1")
+		t.Errorf("Requires[0] = %q, want %q", newStage.Requires[0],
+			"dep1")
 	}
 }
 
@@ -56,8 +57,13 @@ func TestStageOrder(t *testing.T) {
 	if len(ordered) != 3 {
 		t.Errorf("len(ordered) = %d, want 3", len(ordered))
 	}
-	if ordered[0].Name != "stage1" || ordered[1].Name != "stage2" || ordered[2].Name != "stage3" {
-		t.Fatalf("unexpected order: %q, %q, %q", ordered[0].Name, ordered[1].Name, ordered[2].Name)
+	if ordered[0].Name != "stage1" || ordered[1].Name != "stage2" ||
+		ordered[2].Name != "stage3" {
+
+		t.Fatalf(
+			"unexpected order: %q, %q, %q", ordered[0].Name,
+			ordered[1].Name, ordered[2].Name,
+		)
 	}
 }
 
@@ -104,7 +110,8 @@ func TestDefaultStages(t *testing.T) {
 
 	for i, expected := range expectedNames {
 		if stages[i].Name != expected {
-			t.Errorf("stages[%d].Name = %q, want %q", i, stages[i].Name, expected)
+			t.Errorf("stages[%d].Name = %q, want %q", i,
+				stages[i].Name, expected)
 		}
 	}
 

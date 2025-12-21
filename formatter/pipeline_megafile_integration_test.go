@@ -10,7 +10,8 @@ import (
 func TestPipeline_MegaFile_InvariantsAcrossModes(t *testing.T) {
 	t.Parallel()
 
-	raw := []byte(`//go:build !ignore
+	raw := []byte(
+		`//go:build !ignore
 
 package p
 
@@ -32,7 +33,9 @@ type Pair[A any, B any] struct {
 }
 
 type C[T any] interface {
-	// Long comment that is intentionally written in an awkward way to force wrapping and reflow. It also contains tokens like // and /* */ which should not break directive detection.
+	// Long comment that is intentionally written in an awkward way to force
+	// wrapping and reflow. It also contains tokens like // and /* */ which
+	// should not break directive detection.
 	M(x int, y string) error
 	N(x T) (T, error)
 }
@@ -46,12 +49,14 @@ func f[T ~string](x T, y []Pair[int, string]) (Maybe[T], error) {
 	s := strings.NewReplacer("a", "b", "c", "d").Replace(fmt.Sprintf("%v", x))
 	_ = s
 
-	// A deeply nested expression intended to exercise the expression formatter.
+	// A deeply nested expression intended to exercise the expression
+	// formatter.
 	_ = (((firstConditionThatIsVeryLong && secondConditionThatIsVeryLong) || thirdConditionThatIsVeryLong) &&
 		(fourthConditionThatIsVeryLong || fifthConditionThatIsVeryLong) &&
 		sixthConditionThatIsVeryLong)
 
-	// A call with tricky arguments: nested calls, composites, and long logical chains.
+	// A call with tricky arguments: nested calls, composites, and long
+	// logical chains.
 	_ = outerFunctionNameThatIsVeryLong(
 		strings.TrimSpace(strings.ToUpper(fmt.Sprintf("x=%v", x))),
 		map[string][]Pair[int, string]{
@@ -63,7 +68,8 @@ func f[T ~string](x T, y []Pair[int, string]) (Maybe[T], error) {
 		(firstConditionThatIsVeryLong && secondConditionThatIsVeryLong && thirdConditionThatIsVeryLong && fourthConditionThatIsVeryLong),
 	)
 
-	// Switch with comments around case/return to exercise blank-line behavior.
+	// Switch with comments around case/return to exercise blank-line
+	// behavior.
 	switch {
 	// comment above first case
 	case x == "a":
@@ -80,7 +86,8 @@ func f[T ~string](x T, y []Pair[int, string]) (Maybe[T], error) {
 func outerFunctionNameThatIsVeryLong(args ...any) any {
 	return args
 }
-`)
+`,
+	)
 
 	in, err := formatstd.Source(raw)
 	require.NoError(t, err)
@@ -94,23 +101,29 @@ func outerFunctionNameThatIsVeryLong(args ...any) any {
 		_, err := formatstd.Source(out1)
 		require.NoError(t, err)
 
-		// Formatting is allowed to move comments/whitespace, but must preserve
-		// AST structure for valid Go sources.
+		// Formatting is allowed to move comments/whitespace, but must
+		// preserve AST structure for valid Go sources.
 		requireASTEquivalent(t, in, out1)
 
-		// Must converge quickly. Some legacy formatting passes can stabilize
-		// layout over multiple runs; require convergence within 2 additional runs.
+		// Must converge quickly. Some legacy formatting passes can
+		// stabilize layout over multiple runs; require convergence
+		// within 2 additional runs.
 		out2 := NewPipeline(cfg).Format(out1)
 		out3 := NewPipeline(cfg).Format(out2)
 		require.Equal(t, string(out2), string(out3))
 	}
 
-	t.Run("next_with_ownership", func(t *testing.T) {
-		run(t, PipelineConfig{
-			ColumnLimit:          60,
-			TabStop:              8,
-			UseOwnershipRegistry: true,
-			Excludes:             []string{"outerFunctionNameThatIsVeryLong"},
-		})
-	})
+	t.Run(
+		"next_with_ownership",
+		func(t *testing.T) {
+			run(
+				t, PipelineConfig{
+					ColumnLimit:          60,
+					TabStop:              8,
+					UseOwnershipRegistry: true,
+					Excludes:             []string{"outerFunctionNameThatIsVeryLong"},
+				},
+			)
+		},
+	)
 }

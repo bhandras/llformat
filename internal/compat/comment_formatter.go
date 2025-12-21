@@ -40,6 +40,7 @@ func NewCommentFormatter(cfg CommentConfig) *CommentFormatter {
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = 8
 	}
+
 	return &CommentFormatter{cfg: cfg}
 }
 
@@ -69,8 +70,9 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 		line := lines[i]
 		// Try line comment block
 		if isStandaloneLineComment(line) {
-			// Preserve directive comments verbatim. These lines are not
-			// "text" in the normal sense; tools expect specific formats.
+			// Preserve directive comments verbatim. These lines are
+			// not "text" in the normal sense; tools expect specific
+			// formats.
 			if isDirectiveLineComment(line) {
 				out = append(out, line)
 				i++
@@ -80,11 +82,17 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 			indent, _ := splitIndent(line)
 			// Collect consecutive standalone `//` lines.
 			start := i
-			for i < len(lines) && isStandaloneLineComment(lines[i]) && !isDirectiveLineComment(lines[i]) {
+			for i < len(lines) &&
+				isStandaloneLineComment(lines[i]) && !isDirectiveLineComment(
+				lines[i],
+			) {
+
 				i++
 			}
 			block := lines[start:i]
-			out = append(out, reflowLineCommentBlock(block, indent)...)
+			out = append(
+				out, reflowLineCommentBlock(block, indent)...,
+			)
 			continue
 		}
 
@@ -98,13 +106,17 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 			}
 			if j < len(lines) && isStandaloneBlockEnd(lines[j]) {
 				block := lines[i : j+1]
-				// Preserve directive-like blocks verbatim (e.g. cgo directives).
+				// Preserve directive-like blocks verbatim (e.g.
+				// cgo directives).
 				if isDirectiveBlockComment(block) {
 					out = append(out, block...)
 					i = j + 1
 					continue
 				}
-				out = append(out, reflowBlockComment(block, indent)...)
+				out = append(
+					out,
+					reflowBlockComment(block, indent)...,
+				)
 				i = j + 1
 				continue
 			}
@@ -120,18 +132,23 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 	return []byte(strings.Join(out, "\n"))
 }
 
-// FormatCommentsInSource applies the legacy comment formatter to src and reports
-// whether it changed anything.
-func FormatCommentsInSource(src []byte, colLimit, tabStop int, moveInlineAbove bool) ([]byte, bool) {
-	f := NewCommentFormatter(CommentConfig{
-		ColumnLimit:     colLimit,
-		TabStop:         tabStop,
-		MoveInlineAbove: moveInlineAbove,
-	})
+// FormatCommentsInSource applies the legacy comment formatter to src and
+// reports whether it changed anything.
+func FormatCommentsInSource(src []byte, colLimit, tabStop int,
+	moveInlineAbove bool) ([]byte, bool) {
+
+	f := NewCommentFormatter(
+		CommentConfig{
+			ColumnLimit:     colLimit,
+			TabStop:         tabStop,
+			MoveInlineAbove: moveInlineAbove,
+		},
+	)
 	out := f.FormatFile(src)
 	if bytesEqual(out, src) {
 		return nil, false
 	}
+
 	return out, true
 }
 
@@ -144,19 +161,21 @@ func bytesEqual(a, b []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
 // splitLines preserves all lines without dropping trailing empty line info.
 func splitLines(s string) []string {
 	// Normalize to raw lines without retaining trailing newline sentinel;
-	// the go/format pass later (if any) can normalize final newline sentinel;
-	// the go/format pass later (if any) can normalize final newline. Here
-	// we keep behavior consistent with our other formatters which operate
-	// on bytes.
+	// the go/format pass later (if any) can normalize final newline
+	// sentinel; the go/format pass later (if any) can normalize final
+	// newline. Here we keep behavior consistent with our other formatters
+	// which operate on bytes.
 	if s == "" {
 		return []string{""}
 	}
+
 	// strings.Split keeps a trailing empty element if s ends with '\n'.
 	return strings.Split(s, "\n")
 }
@@ -170,12 +189,14 @@ func splitIndent(s string) (indent, rest string) {
 		}
 		break
 	}
+
 	return s[:i], s[i:]
 }
 
 func isStandaloneLineComment(s string) bool {
 	indent, rest := splitIndent(s)
 	_ = indent
+
 	return strings.HasPrefix(rest, "//")
 }
 
@@ -195,19 +216,23 @@ func isDirectiveLineComment(s string) bool {
 		return true
 	}
 
-	// Build tags are typically `// +build ...` but be tolerant of `//+build ...`.
-	if strings.HasPrefix(rest, "// +build") || strings.HasPrefix(rest, "//+build") {
+	// Build tags are typically `// +build ...` but be tolerant of `//+build
+	// ...`.
+	if strings.HasPrefix(rest, "// +build") ||
+		strings.HasPrefix(rest, "//+build") {
+
 		return true
 	}
 
-	// `//line` directives must have no space between `//` and `line`.
-	// Avoid treating ordinary comment prose like "the next line ..." as a directive.
+	// `//line` directives must have no space between `//` and `line`. Avoid
+	// treating ordinary comment prose like "the next line ..." as a
+	// directive.
 	if strings.HasPrefix(rest, "//line") {
 		return true
 	}
 
-	// cgo `//export` directives must have no space between `//` and `export`.
-	// Reflowing (e.g. turning it into `// export`) can break cgo.
+	// cgo `//export` directives must have no space between `//` and
+	// `export`. Reflowing (e.g. turning it into `// export`) can break cgo.
 	if strings.HasPrefix(rest, "//export") {
 		if len(rest) == len("//export") {
 			return true
@@ -220,19 +245,29 @@ func isDirectiveLineComment(s string) bool {
 
 	// Common lint directives are typically tool-specific and should not be
 	// wrapped.
-	if strings.HasPrefix(rest, "//nolint:") || strings.HasPrefix(rest, "// nolint:") {
+	if strings.HasPrefix(rest, "//nolint:") ||
+		strings.HasPrefix(rest, "// nolint:") {
+
 		return true
 	}
-	if strings.HasPrefix(rest, "//lint:") || strings.HasPrefix(rest, "// lint:") {
+	if strings.HasPrefix(rest, "//lint:") ||
+		strings.HasPrefix(rest, "// lint:") {
+
 		return true
 	}
-	if strings.HasPrefix(rest, "//staticcheck:") || strings.HasPrefix(rest, "// staticcheck:") {
+	if strings.HasPrefix(rest, "//staticcheck:") ||
+		strings.HasPrefix(rest, "// staticcheck:") {
+
 		return true
 	}
-	if strings.HasPrefix(rest, "//gosec:") || strings.HasPrefix(rest, "// gosec:") {
+	if strings.HasPrefix(rest, "//gosec:") ||
+		strings.HasPrefix(rest, "// gosec:") {
+
 		return true
 	}
-	if strings.HasPrefix(rest, "//revive:") || strings.HasPrefix(rest, "// revive:") {
+	if strings.HasPrefix(rest, "//revive:") ||
+		strings.HasPrefix(rest, "// revive:") {
+
 		return true
 	}
 
@@ -241,23 +276,30 @@ func isDirectiveLineComment(s string) bool {
 
 func isStandaloneBlockStart(s string) bool {
 	_, rest := splitIndent(s)
+
 	return rest == "/*"
 }
 
 func isStandaloneBlockEnd(s string) bool {
 	_, rest := splitIndent(s)
+
 	return rest == "*/"
 }
 
 func isDirectiveBlockComment(block []string) bool {
-	// Preserve any cgo directive blocks starting with #cgo, or blocks containing
-	// #include/#define lines. We check the raw interior lines.
+	// Preserve any cgo directive blocks starting with #cgo, or blocks
+	// containing #include/#define lines. We check the raw interior lines.
 	for _, line := range block {
 		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "#cgo") || strings.HasPrefix(trim, "#include") || strings.HasPrefix(trim, "#define") {
+		if strings.HasPrefix(trim, "#cgo") ||
+			strings.HasPrefix(trim, "#include") || strings.HasPrefix(
+			trim, "#define",
+		) {
+
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -271,8 +313,8 @@ func reflowLineCommentBlock(block []string, indent string) []string {
 	type para struct {
 		kind paraKind
 		lead string
-		// For text paragraphs, lines are trimmed text lines.
-		// For list items, lines are item text fragments (dash + continuation).
+		// For text paragraphs, lines are trimmed text lines. For list
+		// items, lines are item text fragments (dash + continuation).
 		lines []string
 	}
 
@@ -313,16 +355,25 @@ func reflowLineCommentBlock(block []string, indent string) []string {
 			flushText()
 			flushList()
 			itemText := strings.TrimSpace(afterLead[2:])
-			curList = &para{kind: paraListItem, lead: lead, lines: []string{itemText}}
+			curList = &para{
+				kind: paraListItem,
+				lead: lead,
+				lines: []string{
+					itemText,
+				},
+			}
 			continue
 		}
 
 		if curList != nil {
-			// Treat any non-empty non-list line immediately following a list
-			// item as a continuation line, even if it isn't already indented.
-			// This lets the formatter repair "broken" list indentation.
+			// Treat any non-empty non-list line immediately
+			// following a list item as a continuation line, even if
+			// it isn't already indented. This lets the formatter
+			// repair "broken" list indentation.
 			_, contText := splitIndent(content)
-			curList.lines = append(curList.lines, strings.TrimSpace(contText))
+			curList.lines = append(
+				curList.lines, strings.TrimSpace(contText),
+			)
 			continue
 		}
 
@@ -337,17 +388,22 @@ func reflowLineCommentBlock(block []string, indent string) []string {
 		switch p.kind {
 		case paraBlank:
 			out = append(out, indent+"//")
+
 		case paraListItem:
 			item := strings.Join(p.lines, " ")
-			lines := reflowWords(item, indent+"//"+p.lead+"- ",
-				indent+"//"+p.lead+"  ")
+			lines := reflowWords(
+				item, indent+"//"+p.lead+"- ",
+				indent+"//"+p.lead+"  ",
+			)
 			out = append(out, lines...)
+
 		case paraText:
 			text := strings.Join(p.lines, " ")
 			lines := reflowWords(text, indent+"// ", indent+"// ")
 			out = append(out, lines...)
 		}
 	}
+
 	return out
 }
 
@@ -408,16 +464,25 @@ func reflowBlockComment(block []string, indent string) []string {
 			flushText()
 			flushList()
 			itemText := strings.TrimSpace(afterLead[2:])
-			curList = &para{kind: paraListItem, lead: lead, lines: []string{itemText}}
+			curList = &para{
+				kind: paraListItem,
+				lead: lead,
+				lines: []string{
+					itemText,
+				},
+			}
 			continue
 		}
 
 		if curList != nil {
-			// Treat any non-empty non-list line immediately following a list
-			// item as a continuation line, even if it isn't already indented.
-			// This lets the formatter repair "broken" list indentation.
+			// Treat any non-empty non-list line immediately
+			// following a list item as a continuation line, even if
+			// it isn't already indented. This lets the formatter
+			// repair "broken" list indentation.
 			_, contText := splitIndent(content)
-			curList.lines = append(curList.lines, strings.TrimSpace(contText))
+			curList.lines = append(
+				curList.lines, strings.TrimSpace(contText),
+			)
 			continue
 		}
 
@@ -433,11 +498,15 @@ func reflowBlockComment(block []string, indent string) []string {
 		switch p.kind {
 		case paraBlank:
 			out = append(out, indent+" *")
+
 		case paraListItem:
 			item := strings.Join(p.lines, " ")
-			lines := reflowWords(item, indent+" * "+p.lead+"- ",
-				indent+" * "+p.lead+"  ")
+			lines := reflowWords(
+				item, indent+" * "+p.lead+"- ",
+				indent+" * "+p.lead+"  ",
+			)
 			out = append(out, lines...)
+
 		case paraText:
 			text := strings.Join(p.lines, " ")
 			lines := reflowWords(text, indent+" * ", indent+" * ")
@@ -445,6 +514,7 @@ func reflowBlockComment(block []string, indent string) []string {
 		}
 	}
 	out = append(out, close)
+
 	return out
 }
 
@@ -484,12 +554,16 @@ func reflowWords(text, prefix, contPrefix string) []string {
 			lines = append(lines, cur)
 		}
 	}
+
 	return lines
 }
 
 func splitWords(s string) []string {
-	f := func(r rune) bool { return unicode.IsSpace(r) }
+	f := func(r rune) bool {
+		return unicode.IsSpace(r)
+	}
 	parts := strings.FieldsFunc(s, f)
+
 	return parts
 }
 
@@ -503,7 +577,9 @@ func hoistInlineComments(src []byte) []byte {
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
 		// Quick checks: skip pure comment lines
-		if isStandaloneLineComment(line) || isStandaloneBlockStart(line) || strings.TrimSpace(line) == "" {
+		if isStandaloneLineComment(line) ||
+			isStandaloneBlockStart(line) || strings.TrimSpace(line) == "" {
+
 			out = append(out, line)
 			continue
 		}
@@ -518,8 +594,8 @@ func hoistInlineComments(src []byte) []byte {
 		commentText := strings.TrimSpace(line[end:])
 		switch kind {
 		case "//":
-			// Never hoist directive-like comments; tools can require them
-			// to remain trailing on the same line.
+			// Never hoist directive-like comments; tools can
+			// require them to remain trailing on the same line.
 			if isDirectiveLineComment(indent + line[start:]) {
 				out = append(out, line)
 				continue
@@ -533,6 +609,7 @@ func hoistInlineComments(src []byte) []byte {
 			if code != "" {
 				out = append(out, code)
 			}
+
 		case "/*":
 			// Only handle when */ is on the same line (end points
 			// to char after */) commentText currently is the suffix
@@ -559,10 +636,12 @@ func hoistInlineComments(src []byte) []byte {
 				}
 			}
 			out = append(out, merged)
+
 		default:
 			out = append(out, line)
 		}
 	}
+
 	return []byte(strings.Join(out, "\n"))
 }
 
@@ -595,19 +674,24 @@ func findInlineCommentOnLine(line string) (kind string, start, end int) {
 		case ' ', '\t':
 			// whitespace before code
 			continue
+
 		case '"', '\'', '`':
 			inStr = c
 			seenCode = true
+
 		case '/':
 			if i+1 < len(line) && line[i+1] == '/' {
-				// If comment begins at first non-space, treat as standalone comment.
+				// If comment begins at first non-space, treat
+				// as standalone comment.
 				if !seenCode {
 					return "", 0, 0
 				}
+
 				return "//", i, len(line)
 			}
 			if i+1 < len(line) && line[i+1] == '*' {
-				// Must have closing */ on same line to be hoisted.
+				// Must have closing */ on same line to be
+				// hoisted.
 				j := strings.Index(line[i+2:], "*/")
 				if j < 0 {
 					continue
@@ -615,12 +699,15 @@ func findInlineCommentOnLine(line string) (kind string, start, end int) {
 				if !seenCode {
 					return "", 0, 0
 				}
+
 				return "/*", i, i + 2 + j + 2
 			}
 			seenCode = true
+
 		default:
 			seenCode = true
 		}
 	}
+
 	return "", 0, 0
 }

@@ -8,7 +8,8 @@ import (
 )
 
 func TestCommentFormatterPreservesGoDirectives(t *testing.T) {
-	in := []byte(`package p
+	in := []byte(
+		`package p
 
 //go:build linux && amd64
 // +build linux,amd64
@@ -17,7 +18,8 @@ func TestCommentFormatterPreservesGoDirectives(t *testing.T) {
 //line other.go:123
 
 func f() {}
-`)
+`,
+	)
 
 	f := compat.NewCommentFormatter(compat.CommentConfig{ColumnLimit: 30})
 	out := string(f.FormatFile(in))
@@ -37,10 +39,12 @@ func f() {
 }
 `)
 
-	f := compat.NewCommentFormatter(compat.CommentConfig{
-		ColumnLimit:     20,
-		MoveInlineAbove: true,
-	})
+	f := compat.NewCommentFormatter(
+		compat.CommentConfig{
+			ColumnLimit:     20,
+			MoveInlineAbove: true,
+		},
+	)
 	out := string(f.FormatFile(in))
 
 	// Ensure the directive comment stays trailing and is not hoisted above.

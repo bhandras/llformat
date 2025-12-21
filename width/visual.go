@@ -1,5 +1,5 @@
-// Package width provides visual width calculations for text,
-// accounting for tabs and multi-byte characters.
+// Package width provides visual width calculations for text, accounting for
+// tabs and multi-byte characters.
 package width
 
 // DefaultTabStop is the default tab width (8 spaces).
@@ -18,20 +18,23 @@ func AdvanceColsWithTab(startCol int, s string, tabStop int) int {
 		switch r {
 		case '\n':
 			col = 0
+
 		case '\t':
 			if tabStop > 0 {
 				col = ((col / tabStop) + 1) * tabStop
 			}
+
 		default:
 			col += RuneWidth(r)
 		}
 	}
+
 	return col
 }
 
-// RuneWidth returns the display width of a rune.
-// Most runes are width 1, but wide CJK characters and some emoji are width 2.
-// Zero-width characters (combining marks, control chars, etc.) return 0.
+// RuneWidth returns the display width of a rune. Most runes are width 1, but
+// wide CJK characters and some emoji are width 2. Zero-width characters
+// (combining marks, control chars, etc.) return 0.
 func RuneWidth(r rune) int {
 	// Control and non-spacing combining marks have zero width.
 	if r == 0 {
@@ -48,10 +51,12 @@ func RuneWidth(r rune) int {
 	if isWideRune(r) || isEmojiRune(r) {
 		return 2
 	}
+
 	return 1
 }
 
-// isWideRune returns true for characters that typically display as double-width.
+// isWideRune returns true for characters that typically display as
+// double-width.
 func isWideRune(r rune) bool {
 	// CJK Unified Ideographs and related blocks
 	if r >= 0x4E00 && r <= 0x9FFF {
@@ -97,6 +102,7 @@ func isWideRune(r rune) bool {
 	if r >= 0x3000 && r <= 0x303F {
 		return true
 	}
+
 	return false
 }
 
@@ -134,20 +140,24 @@ func isEmojiRune(r rune) bool {
 	if r >= 0x2700 && r <= 0x27BF {
 		return true
 	}
+
 	return false
 }
 
-// FirstLineLenWithTab returns the visual width of the first line with custom tab stop.
+// FirstLineLenWithTab returns the visual width of the first line with custom
+// tab stop.
 func FirstLineLenWithTab(s string, tabStop int) int {
 	for i, r := range s {
 		if r == '\n' {
 			return VisualLenWithTab(s[:i], tabStop)
 		}
 	}
+
 	return VisualLenWithTab(s, tabStop)
 }
 
-// LastLineLenWithTab returns the visual width of the last line with custom tab stop.
+// LastLineLenWithTab returns the visual width of the last line with custom tab
+// stop.
 func LastLineLenWithTab(s string, tabStop int) int {
 	lastNewline := -1
 	for i := len(s) - 1; i >= 0; i-- {
@@ -159,5 +169,6 @@ func LastLineLenWithTab(s string, tabStop int) int {
 	if lastNewline == -1 {
 		return VisualLenWithTab(s, tabStop)
 	}
+
 	return VisualLenWithTab(s[lastNewline+1:], tabStop)
 }

@@ -2,7 +2,8 @@ package dsl
 
 // SplitLongStringLiteralOptions configures string literal splitting.
 type SplitLongStringLiteralOptions struct {
-	// MinTailLen avoids creating tiny trailing pieces when splitting at spaces.
+	// MinTailLen avoids creating tiny trailing pieces when splitting at
+	// spaces.
 	MinTailLen int
 }
 
@@ -11,9 +12,13 @@ type SplitLongStringLiteralOptions struct {
 func SplitLongStringLiteralRules(opts SplitLongStringLiteralOptions) []Rule {
 	return []Rule{
 		{
-			Name:     "split_long_string_literal_in_call_args",
-			Pattern:  &NodePattern{Type: "BasicLit"},
-			When:     &IsCallArgCond{Target: "node"},
+			Name: "split_long_string_literal_in_call_args",
+			Pattern: &NodePattern{
+				Type: "BasicLit",
+			},
+			When: &IsCallArgCond{
+				Target: "node",
+			},
 			Priority: 20,
 			Action: &SplitLongStringLiteralAction{
 				Target:     "node",

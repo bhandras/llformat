@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksCompositeKeyValueLogicalValue(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksCompositeKeyValueLogicalValue(
+	t *testing.T) {
+
 	const in = `package p
 
 type cfg struct {
@@ -22,20 +24,26 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          70,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          70,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// Ensure the call breaks and the KV value breaks with continuation indent.
-	require.Contains(t, outStr, "outerFunctionNameThatIsVeryLong(\n\t\tcfg{")
+	// Ensure the call breaks and the KV value breaks with continuation
+	// indent.
+	require.Contains(
+		t, outStr, "outerFunctionNameThatIsVeryLong(\n		cfg{",
+	)
 	require.Contains(t, outStr, "Allow: firstConditionThatIsVeryLong &&")
-	require.Contains(t, outStr, "\n\t\t\t\tsecondConditionThatIsVeryLong &&")
+	require.Contains(t, outStr, "\n				secondConditi"+
+		"onThatIsVeryLong &&")
 	require.Contains(t, outStr, "\n\t\t\t\tthirdConditionThatIsVeryLong,")
 
 	// Idempotent.
@@ -47,4 +55,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-

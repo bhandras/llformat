@@ -25,19 +25,19 @@ type DSLExprConfig struct {
 	TraceReasons  bool       // Include "why fired/didn't fire" reasons in DSL tracing
 	NodeOrder     dsl.NodeOrder
 	MaxIterations int // Override engine MaxIterations (0 keeps default)
-	// AutoMaxIterations enables an AST-informed iteration cap (node-count based)
-	// rather than a fixed constant. This is intended for stages that legitimately
-	// need many iterations (e.g. signature formatting across many declarations)
-	// while remaining protected against cycles.
+	// AutoMaxIterations enables an AST-informed iteration cap (node-count
+	// based) rather than a fixed constant. This is intended for stages that
+	// legitimately need many iterations (e.g. signature formatting across
+	// many declarations) while remaining protected against cycles.
 	AutoMaxIterations bool
 	DetectCycles      bool
 	SkipGofmt         bool // Skip gofmt (pipelines may run gofmt once at end)
 
 	StageName string
 
-	// OwnedSpansFunc optionally declares which regions of the source this stage
-	// "owns" for pipeline-level stage fighting prevention. When nil, the stage
-	// declares no ownership.
+	// OwnedSpansFunc optionally declares which regions of the source this
+	// stage "owns" for pipeline-level stage fighting prevention. When nil,
+	// the stage declares no ownership.
 	OwnedSpansFunc func(src []byte) llast.OffsetSpanSet
 
 	// Budget provides optional safety guardrails for the DSL engine.
@@ -66,9 +66,10 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	engine.AutoMaxIterations = cfg.AutoMaxIterations
 	engine.DetectCycles = cfg.DetectCycles
 	if cfg.AutoMaxIterations {
-		// When auto iteration is enabled we intentionally disable the fixed
-		// iteration cap so the engine can derive an appropriate limit from the
-		// AST. Safety is enforced by budgets + cycle detection.
+		// When auto iteration is enabled we intentionally disable the
+		// fixed iteration cap so the engine can derive an appropriate
+		// limit from the AST. Safety is enforced by budgets + cycle
+		// detection.
 		engine.MaxIterations = 0
 	} else if cfg.MaxIterations > 0 {
 		engine.MaxIterations = cfg.MaxIterations
@@ -91,6 +92,7 @@ func (f *DSLExprFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
 	if f == nil || f.ownedSpansFn == nil {
 		return llast.OffsetSpanSet{}
 	}
+
 	return f.ownedSpansFn(src)
 }
 
@@ -104,5 +106,6 @@ func (f *DSLExprFormatter) FormatFile(src []byte) []byte {
 	if formatted, err := formatstd.Source(out); err == nil {
 		return formatted
 	}
+
 	return out
 }

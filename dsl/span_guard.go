@@ -9,6 +9,7 @@ func hasAnyComment(s string) bool {
 	if hasLineComment(s) {
 		return true
 	}
+
 	return hasBlockComment(s)
 }
 
@@ -22,5 +23,6 @@ func isSafeStandaloneExprSpan(s string) bool {
 		return false
 	}
 	_, err := parser.ParseExpr(s)
+
 	return err == nil
 }

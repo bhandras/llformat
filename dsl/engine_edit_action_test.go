@@ -13,6 +13,7 @@ type nodeTextIsCond struct {
 
 func (c nodeTextIsCond) Eval(caps Captures, ctx *Context) bool {
 	n := resolveTarget(caps, "node")
+
 	return string(ctx.NodeSource(n)) == c.Want
 }
 
@@ -21,11 +22,15 @@ type replaceIdentEditAction struct {
 	To   string
 }
 
-func (a *replaceIdentEditAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+func (a *replaceIdentEditAction) Execute(caps Captures, ctx *Context) ([]byte,
+	bool) {
+
 	return nil, false
 }
 
-func (a *replaceIdentEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error) {
+func (a *replaceIdentEditAction) ExecuteEdits(caps Captures, ctx *Context) (
+	[]Edit, bool, error) {
+
 	n, ok := caps["node"].(*ast.Ident)
 	if !ok || n == nil {
 		return nil, false, nil
@@ -36,6 +41,7 @@ func (a *replaceIdentEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Ed
 
 	start := ctx.Fset.Position(n.Pos()).Offset
 	end := ctx.Fset.Position(n.End()).Offset
+
 	return []Edit{
 		{
 			Start:   start,
@@ -47,20 +53,33 @@ func (a *replaceIdentEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Ed
 
 type overlappingEditAction struct{}
 
-func (a *overlappingEditAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+func (a *overlappingEditAction) Execute(caps Captures, ctx *Context) ([]byte,
+	bool) {
+
 	return nil, false
 }
 
-func (a *overlappingEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error) {
+func (a *overlappingEditAction) ExecuteEdits(caps Captures, ctx *Context) (
+	[]Edit, bool, error) {
+
 	n, ok := caps["node"].(*ast.Ident)
 	if !ok || n == nil || n.Name != "foo" {
 		return nil, false, nil
 	}
 	start := ctx.Fset.Position(n.Pos()).Offset
 	end := ctx.Fset.Position(n.End()).Offset
+
 	return []Edit{
-		{Start: start, End: end, Replace: []byte("bar")},
-		{Start: start, End: end - 1, Replace: []byte("baz")},
+		{
+			Start:   start,
+			End:     end,
+			Replace: []byte("bar"),
+		},
+		{
+			Start:   start,
+			End:     end - 1,
+			Replace: []byte("baz"),
+		},
 	}, true, nil
 }
 
@@ -72,15 +91,17 @@ func foo() {
 }
 `
 
-	engine := NewEngine([]Rule{
-		{
-			Name:     "replace_foo_with_bar",
-			Pattern:  &NodePattern{Type: "Ident"},
-			When:     nodeTextIsCond{Want: "foo"},
-			Priority: 100,
-			Action:   &replaceIdentEditAction{From: "foo", To: "bar"},
+	engine := NewEngine(
+		[]Rule{
+			{
+				Name:     "replace_foo_with_bar",
+				Pattern:  &NodePattern{Type: "Ident"},
+				When:     nodeTextIsCond{Want: "foo"},
+				Priority: 100,
+				Action:   &replaceIdentEditAction{From: "foo", To: "bar"},
+			},
 		},
-	})
+	)
 	result, err := engine.Format([]byte(src))
 	require.NoError(t, err)
 
@@ -98,15 +119,17 @@ func foo() {
 }
 `
 
-	engine := NewEngine([]Rule{
-		{
-			Name:     "overlap_edits",
-			Pattern:  &NodePattern{Type: "Ident"},
-			When:     nodeTextIsCond{Want: "foo"},
-			Priority: 100,
-			Action:   &overlappingEditAction{},
+	engine := NewEngine(
+		[]Rule{
+			{
+				Name:     "overlap_edits",
+				Pattern:  &NodePattern{Type: "Ident"},
+				When:     nodeTextIsCond{Want: "foo"},
+				Priority: 100,
+				Action:   &overlappingEditAction{},
+			},
 		},
-	})
+	)
 	result, err := engine.Format([]byte(src))
 	require.NoError(t, err)
 	require.Equal(t, src, string(result))

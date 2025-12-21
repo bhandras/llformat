@@ -48,16 +48,19 @@ func f() {
 		},
 		{
 			name: "bad_tokens",
-			src: []byte(`package p
+			src: []byte(
+				`package p
 
 func f() {
 	_ = someVeryLongIdentifierNameThatIsVeryLong(,
 }
-`),
+`,
+			),
 		},
 		{
 			name: "multiple_decl_blocks",
-			src: []byte(`package p
+			src: []byte(
+				`package p
 
 import "fmt"
 import "strings"
@@ -65,7 +68,8 @@ import "strings"
 func f() {
 	fmt.Println(strings.TrimSpace("x"))
 }
-`),
+`,
+			),
 		},
 		{
 			name: "dangling_generic_bracket",
@@ -78,13 +82,15 @@ func f() {
 		},
 		{
 			name: "unterminated_block_comment",
-			src: []byte(`package p
+			src: []byte(
+				`package p
 
 func f() {
 	/* comment starts
 	_ = 1 + 2
 }
-`),
+`,
+			),
 		},
 		{
 			name: "stray_block_comment_end",
@@ -97,29 +103,40 @@ func f() {}
 		},
 		{
 			name: "nested_block_comment_like",
-			src: []byte(`package p
+			src: []byte(
+				`package p
 
 func f() {
 	/* outer /* inner */ still outer?
 	_ = 1
 }
-`),
+`,
+			),
 		},
 		{
 			name: "unterminated_raw_string",
-			src:  []byte("package p\n\nfunc f() {\n\t_ = `unterminated\n}\n"),
+			src: []byte(
+				"package p\n\nfunc f() {\n	_ = " +
+					"`unterminated\n}\n",
+			),
 		},
 		{
 			name: "unterminated_interpreted_string",
-			src:  []byte("package p\n\nfunc f() {\n\t_ = \"unterminated\n\t_ = 2\n}\n"),
+			src: []byte(
+				"package p\n\nfunc f() {\n	_ = " +
+					"\"unterminated\n	_ = 2\n}\n",
+			),
 		},
 		{
 			name: "unterminated_rune",
-			src:  []byte("package p\n\nfunc f() {\n\t_ = 'x\n}\n"),
+			src:  []byte("package p\n\nfunc f() {\n	_ = 'x\n}\n"),
 		},
 		{
 			name: "bad_escape_sequence",
-			src:  []byte("package p\n\nfunc f() {\n\t_ = \"\\xZZ\"\n}\n"),
+			src: []byte(
+				"package p\n\nfunc f() {\n	_ = " +
+					"\"\\xZZ\"\n}\n",
+			),
 		},
 		{
 			name: "mismatched_braces",
@@ -133,13 +150,15 @@ func f() {
 		},
 		{
 			name: "dangling_select",
-			src: []byte(`package p
+			src: []byte(
+				`package p
 
 func f() {
 	select {
 	case <-make(chan struct{}):
 }
-`),
+`,
+			),
 		},
 		{
 			name: "dangling_go_stmt",
@@ -152,24 +171,50 @@ func f() {
 		},
 		{
 			name: "invalid_utf8_bytes",
-			src:  append([]byte("package p\n\nfunc f() { _ = \""), 0xff, 0xfe, 0xfd, '\n', '}', '\n'),
+			src: append(
+				[]byte("package p\n\nfunc f() { _ = \""), 0xff,
+				0xfe, 0xfd, '\n', '}', '\n',
+			),
 		},
 	}
 
 	for pipelineIndex := range pipelines {
 		pl := pipelines[pipelineIndex]
-		t.Run(pl.name, func(t *testing.T) {
-			p := NewPipeline(pl.cfg)
+		t.Run(
+			pl.name,
+			func(t *testing.T) {
+				p := NewPipeline(pl.cfg)
 
-			for _, tc := range invalidSources {
-				t.Run(tc.name, func(t *testing.T) {
-					require.NotPanics(t, func() {
-						out := p.Format(tc.src)
-						require.NotEmpty(t, out)
-						require.False(t, bytes.Contains(out, []byte{0}), "output contained NUL byte")
-					})
-				})
-			}
-		})
+				for _, tc := range invalidSources {
+					t.Run(
+						tc.name,
+						func(t *testing.T) {
+							require.NotPanics(
+								t,
+								func() {
+									out := p.Format(
+										tc.src,
+									)
+									require.NotEmpty(
+										t,
+										out,
+									)
+									require.False(
+										t,
+										bytes.Contains(
+											out,
+											[]byte{
+												0,
+											},
+										),
+										"output contained NUL byte",
+									)
+								},
+							)
+						},
+					)
+				}
+			},
+		)
 	}
 }

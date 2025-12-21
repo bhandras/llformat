@@ -6,15 +6,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFuncSigFormatterNext_LegacyInterfaceMethod_DoesNotPartiallyBreakShortReturnList(t *testing.T) {
-	// This reproduces a class of issues where interface methods end up with a
-	// partially broken parenthesized return list, sometimes leaving a trailing
-	// comma exactly on the column boundary:
-	//   M(a, b) ([]T,
-	//     error)
+func TestFuncSigFormatterNext_LegacyInterfaceMethod_DoesNotPartiallyBreakShortReturnList(
+	t *testing.T) {
+
+	// This reproduces a class of issues where interface methods end up with
+	// a partially broken parenthesized return list, sometimes leaving a
+	// trailing comma exactly on the column boundary: M(a, b) ([]T, error)
 	//
-	// In the next profile we prefer to break params earlier and keep
-	// `([]T, error)` inline.
+	// In the next profile we prefer to break params earlier and keep `([]T,
+	// error)` inline.
 	const in = `package p
 
 import "context"
@@ -27,16 +27,25 @@ type I interface {
 }
 `
 
-	f := NewFuncSigFormatter(FuncSigConfig{
-		ColumnLimit:                80,
-		TabStop:                    8,
-		CanonicalMultilineSigLists: true,
-	})
+	f := NewFuncSigFormatter(
+		FuncSigConfig{
+			ColumnLimit:                80,
+			TabStop:                    8,
+			CanonicalMultilineSigLists: true,
+		},
+	)
 
 	out := string(f.FormatFile([]byte(in)))
 
-	require.Contains(t, out, "InvoicesAddedSince(ctx context.Context,\n\t\tsinceAddIndex uint64) ([]Invoice, error)",
-		"expected params to break before forcing a multiline return list")
-	require.NotContains(t, out, "([]Invoice,\n\t\terror)",
-		"should not partially break short parenthesized return list in next profile")
+	require.Contains(
+		t, out, "InvoicesAddedSince(ctx "+
+			"context.Context,\n		sinceAddIndex "+
+			"uint64) ([]Invoice, error)", "expected params to "+
+			"break before forcing a multiline return list",
+	)
+	require.NotContains(
+		t, out, "([]Invoice,\n		error)", "should not "+
+			"partially break short parenthesized return list in "+
+			"next profile",
+	)
 }

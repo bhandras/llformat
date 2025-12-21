@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksCompositeLiteralWithGenericType(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksCompositeLiteralWithGenericType(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,20 +20,25 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The generic type arguments should be allowed to break, but `{` must remain
-	// attached to the type to avoid Go semicolon insertion hazards.
+	// The generic type arguments should be allowed to break, but `{` must
+	// remain attached to the type to avoid Go semicolon insertion hazards.
 	require.Contains(t, outStr, "GenericType[")
-	require.Contains(t, outStr, "VeryLongTypeNameOne,\n\t\t\tVeryLongTypeNameTwo,")
+	require.Contains(
+		t, outStr,
+		"VeryLongTypeNameOne,\n			VeryLongTypeNameTwo,",
+	)
 	require.Contains(t, outStr, "VeryLongTypeNameThree]{")
 
 	// The field value should also be able to break.
@@ -46,4 +53,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-

@@ -12,8 +12,8 @@ func TestPipelineNextModeAppliesExpectedDefaults(t *testing.T) {
 		TabStop:     8,
 	})
 
-	// llformat is next-only: PipelineConfig defaults should enable the full DSL
-	// pipeline without requiring an explicit "mode" selector.
+	// llformat is next-only: PipelineConfig defaults should enable the full
+	// DSL pipeline without requiring an explicit "mode" selector.
 	require.True(t, p.cfg.UseDSLComments)
 	require.True(t, p.cfg.UseDSLLogCalls)
 	require.True(t, p.cfg.UseDSLMultiLineCalls)
@@ -57,8 +57,11 @@ func f(a, b, c, d, e, f2, g2 bool, x int) {
 	require.Equal(t, string(out1), string(out2))
 	requireASTEquivalent(t, []byte(in), out1)
 
-	// The default pipeline should reflow a long outer call while preserving AST.
+	// The default pipeline should reflow a long outer call while preserving
+	// AST.
 	outStr := string(out1)
-	require.Contains(t, outStr, "outerVeryLongFunctionNameForNextModeTesting(\n",
-		"expected the long call to be rewritten as multiline")
+	require.Contains(
+		t, outStr, "outerVeryLongFunctionNameForNextModeTesting(\n",
+		"expected the long call to be rewritten as multiline",
+	)
 }

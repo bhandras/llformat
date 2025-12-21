@@ -19,7 +19,9 @@ type SplitLongStringLiteralAction struct {
 }
 
 // Execute implements Action for SplitLongStringLiteralAction.
-func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) (
+	[]byte, bool) {
+
 	node := resolveTarget(caps, a.Target)
 	lit, ok := node.(*ast.BasicLit)
 	if !ok || lit == nil {
@@ -37,6 +39,7 @@ func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) ([]b
 
 	orig := string(ctx.Source[start:end])
 	if orig == "" || orig[0] == '`' {
+
 		// Do not split raw string literals.
 		return nil, false
 	}
@@ -79,7 +82,10 @@ func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) ([]b
 	}
 
 	minTailLen := a.MinTailLen
-	repl := buildSplitQuotedForCallArgDSL(text, startCol, wsIndent, ctx.ColumnLimit, ctx.TabStop, hasTrailingArgs, minTailLen)
+	repl := buildSplitQuotedForCallArgDSL(
+		text, startCol, wsIndent, ctx.ColumnLimit, ctx.TabStop,
+		hasTrailingArgs, minTailLen,
+	)
 	if repl == "" || repl == orig {
 		return nil, false
 	}
@@ -93,15 +99,20 @@ func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) ([]b
 	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
 		return nil, false
 	}
+
 	return out, true
 }
 
-func buildSplitQuotedForCallArgDSL(text string, startCol int, wsIndent string, colLimit int, tabStop int, hasTrailingArgs bool, minTailLen int) string {
+func buildSplitQuotedForCallArgDSL(text string, startCol int, wsIndent string,
+	colLimit int, tabStop int, hasTrailingArgs bool,
+	minTailLen int) string {
+
 	var out strings.Builder
 	rest := text
 	curStart := startCol
 
-	// String continuation lines get an extra tab beyond the line's indentation.
+	// String continuation lines get an extra tab beyond the line's
+	// indentation.
 	stringContIndent := wsIndent + "\t"
 	contStart := visualLen(stringContIndent, tabStop)
 
@@ -123,23 +134,32 @@ func buildSplitQuotedForCallArgDSL(text string, startCol int, wsIndent string, c
 			break
 		}
 
-		// If indentation already exceeds the available width budget, splitting can't help.
+		// If indentation already exceeds the available width budget,
+		// splitting can't help.
 		if curStart >= colLimit {
 			out.WriteString(quoteGoString(rest))
 			break
 		}
 
-		// If the whole rest fits as a quoted literal on this line, emit and finish.
+		// If the whole rest fits as a quoted literal on this line, emit
+		// and finish.
 		if advanceColsFrom(curStart, quoteGoString(rest), tabStop) <= colLimit {
 			out.WriteString(quoteGoString(rest))
 			break
 		}
 
-		// Choose split point at last space that fits with trailing join.
-		cut := lastQuotedSpaceBeforeWithJoinMinTail(curStart, rest, colLimit, tabStop, hasTrailingArgs, minTailLen)
+		// Choose split point at last space that fits with trailing
+		// join.
+		cut := lastQuotedSpaceBeforeWithJoinMinTail(
+			curStart, rest, colLimit, tabStop, hasTrailingArgs,
+			minTailLen,
+		)
 		if cut <= 0 {
 			// Hard cut by width: ensure we cut at a rune boundary.
-			cut = cutIndexForWidthFrom(curStart, rest, colLimit, tabStop, hasTrailingArgs)
+			cut = cutIndexForWidthFrom(
+				curStart, rest, colLimit, tabStop,
+				hasTrailingArgs,
+			)
 		}
 		if cut <= 0 || cut >= len(rest) {
 			out.WriteString(quoteGoString(rest))
@@ -164,10 +184,13 @@ func advanceColsFrom(startCol int, s string, tabStop int) int {
 		}
 		col++
 	}
+
 	return col
 }
 
-func lastQuotedSpaceBeforeWithJoinMinTail(startCol int, s string, boundary int, tabStop int, hasTrailingArgs bool, minTailLen int) int {
+func lastQuotedSpaceBeforeWithJoinMinTail(startCol int, s string, boundary int,
+	tabStop int, hasTrailingArgs bool, minTailLen int) int {
+
 	last := -1
 	for i := 0; i < len(s); i++ {
 		if s[i] != ' ' {
@@ -178,34 +201,44 @@ func lastQuotedSpaceBeforeWithJoinMinTail(startCol int, s string, boundary int, 
 		}
 		piece := s[:i+1]
 		joinCols := 2 // " +"
-		if hasTrailingArgs && len(piece) > 0 && piece[len(piece)-1] == ' ' {
+		if hasTrailingArgs && len(piece) > 0 &&
+			piece[len(piece)-1] == ' ' {
+
 			joinCols = 1 // "+", gofmt removes the space before '+' in this context
 		}
-		used := advanceColsFrom(startCol, quoteGoString(piece), tabStop) + joinCols
+		used := advanceColsFrom(startCol, quoteGoString(piece), tabStop) +
+			joinCols
 		if used <= boundary {
 			last = i + 1
 		} else {
 			break
 		}
 	}
+
 	return last
 }
 
-func cutIndexForWidthFrom(startCol int, s string, boundary int, tabStop int, hasTrailingArgs bool) int {
+func cutIndexForWidthFrom(startCol int, s string, boundary int, tabStop int,
+	hasTrailingArgs bool) int {
+
 	last := -1
 	for idx, r := range s {
 		piece := s[:idx+utf8Len(r)]
 		joinCols := 2
-		if hasTrailingArgs && len(piece) > 0 && piece[len(piece)-1] == ' ' {
+		if hasTrailingArgs && len(piece) > 0 &&
+			piece[len(piece)-1] == ' ' {
+
 			joinCols = 1
 		}
-		used := advanceColsFrom(startCol, quoteGoString(piece), tabStop) + joinCols
+		used := advanceColsFrom(startCol, quoteGoString(piece), tabStop) +
+			joinCols
 		if used <= boundary {
 			last = len(piece)
 		} else {
 			break
 		}
 	}
+
 	return last
 }
 
@@ -213,10 +246,13 @@ func utf8Len(r rune) int {
 	switch {
 	case r <= 0x7F:
 		return 1
+
 	case r <= 0x7FF:
 		return 2
+
 	case r <= 0xFFFF:
 		return 3
+
 	default:
 		return 4
 	}
@@ -227,6 +263,7 @@ func isTinyTail(s string, minTailLen int) bool {
 		return false
 	}
 	trimmed := strings.TrimLeft(s, " ")
+
 	return len(trimmed) > 0 && len(trimmed) < minTailLen
 }
 
@@ -240,13 +277,17 @@ func quoteGoString(s string) string {
 		case '"', '\\':
 			b.WriteByte('\\')
 			b.WriteRune(r)
+
 		case '\n':
 			b.WriteString("\\n")
+
 		case '\r':
 			b.WriteString("\\r")
+
 		case '\t':
 			// Keep literal tab to match golden behavior.
 			b.WriteByte('\t')
+
 		default:
 			if r < 0x20 {
 				b.WriteString("\\x")
@@ -259,5 +300,6 @@ func quoteGoString(s string) string {
 		}
 	}
 	b.WriteByte('"')
+
 	return b.String()
 }

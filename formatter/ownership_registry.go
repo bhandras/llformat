@@ -41,12 +41,15 @@ func (r *OwnershipRegistry) AllOwned() llast.OffsetSpanSet {
 	if r == nil {
 		return llast.OffsetSpanSet{}
 	}
+
 	return r.allOwned
 }
 
 // AllOwnedExcept returns the union of all owned spans except those owned by the
 // provided stage name.
-func (r *OwnershipRegistry) AllOwnedExcept(stageName string) llast.OffsetSpanSet {
+func (r *OwnershipRegistry) AllOwnedExcept(
+	stageName string) llast.OffsetSpanSet {
+
 	if r == nil {
 		return llast.OffsetSpanSet{}
 	}
@@ -61,15 +64,19 @@ func (r *OwnershipRegistry) AllOwnedExcept(stageName string) llast.OffsetSpanSet
 		}
 		out = out.Union(r.byStage[name])
 	}
+
 	return out
 }
 
 // ByStage returns the span set owned by a specific stage name, if present.
-func (r *OwnershipRegistry) ByStage(stageName string) (llast.OffsetSpanSet, bool) {
+func (r *OwnershipRegistry) ByStage(stageName string) (llast.OffsetSpanSet,
+	bool) {
+
 	if r == nil {
 		return llast.OffsetSpanSet{}, false
 	}
 	s, ok := r.byStage[stageName]
+
 	return s, ok
 }
 
@@ -79,7 +86,9 @@ func (r *OwnershipRegistry) ByStage(stageName string) (llast.OffsetSpanSet, bool
 // This supports a directional ownership policy: earlier stages should avoid
 // rewriting spans that later stages "own", but later stages are allowed to
 // rewrite inside earlier-stage owned spans as part of the pipeline.
-func (r *OwnershipRegistry) AllOwnedAfter(stageName string) llast.OffsetSpanSet {
+func (r *OwnershipRegistry) AllOwnedAfter(
+	stageName string) llast.OffsetSpanSet {
+
 	if r == nil {
 		return llast.OffsetSpanSet{}
 	}
@@ -95,7 +104,9 @@ func (r *OwnershipRegistry) AllOwnedAfter(stageName string) llast.OffsetSpanSet 
 		}
 	}
 	if idx == -1 {
-		// Unknown stage name: conservatively treat all owned spans as forbidden.
+
+		// Unknown stage name: conservatively treat all owned spans as
+		// forbidden.
 		return r.allOwned
 	}
 
@@ -103,6 +114,7 @@ func (r *OwnershipRegistry) AllOwnedAfter(stageName string) llast.OffsetSpanSet 
 	for i := idx + 1; i < len(r.stageList); i++ {
 		out = out.Union(r.byStage[r.stageList[i]])
 	}
+
 	return out
 }
 
@@ -135,5 +147,6 @@ func BuildOwnershipRegistry(src []byte, stages []Stage) *OwnershipRegistry {
 		}
 		reg.add(s.Name, provider.OwnedSpans(src))
 	}
+
 	return reg
 }

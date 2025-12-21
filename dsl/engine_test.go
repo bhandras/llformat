@@ -8,8 +8,8 @@ import (
 )
 
 func TestEngineKeepSimpleComparison(t *testing.T) {
-	// This test verifies that simple comparisons are marked as atomic
-	// and not broken across lines
+	// This test verifies that simple comparisons are marked as atomic and
+	// not broken across lines
 
 	src := `package main
 
@@ -65,7 +65,8 @@ func doSomething() {}
 	require.NoError(t, err)
 
 	got := string(result)
-	// The function call should be reformatted, but > 10 should stay together
+	// The function call should be reformatted, but > 10 should stay
+	// together
 	require.Contains(t, got, "> 10")
 	// And the comparison shouldn't be broken
 	require.NotContains(t, got, ">\n\t\t10")
@@ -103,8 +104,10 @@ func TestEnginePriorityOrder(t *testing.T) {
 
 	prevPriority := 1000
 	for _, rule := range engine.Rules {
-		require.GreaterOrEqual(t, prevPriority, rule.Priority,
-			"rules should be sorted by descending priority")
+		require.GreaterOrEqual(
+			t, prevPriority, rule.Priority,
+			"rules should be sorted by descending priority",
+		)
 		prevPriority = rule.Priority
 	}
 }

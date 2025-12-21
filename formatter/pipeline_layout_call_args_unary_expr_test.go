@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksUnaryParenLogicalArg(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksUnaryParenLogicalArg(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,18 +20,20 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The unary expression should allow the nested paren + logical chain to be
-	// formatted, rather than treating it atomically.
+	// The unary expression should allow the nested paren + logical chain to
+	// be formatted, rather than treating it atomically.
 	require.Contains(t, outStr, "&&\n\t\t\tsecondConditionThatIsVeryLong")
 	require.Contains(t, outStr, "thirdConditionThatIsVeryLong)")
 
@@ -42,4 +46,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-

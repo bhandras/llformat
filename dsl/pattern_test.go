@@ -24,12 +24,18 @@ func TestNodePatternMatchBinaryExpr(t *testing.T) {
 			pattern: &NodePattern{
 				Type: "BinaryExpr",
 				Fields: map[string]FieldMatch{
-					"op":    {Literal: ">"},
-					"right": {Capture: "r"},
+					"op": {
+						Literal: ">",
+					},
+					"right": {
+						Capture: "r",
+					},
 				},
 			},
-			wantOK:  true,
-			wantCap: map[string]string{"r": "0"},
+			wantOK: true,
+			wantCap: map[string]string{
+				"r": "0",
+			},
 		},
 		{
 			name: "match comparison with wrong op",
@@ -37,7 +43,9 @@ func TestNodePatternMatchBinaryExpr(t *testing.T) {
 			pattern: &NodePattern{
 				Type: "BinaryExpr",
 				Fields: map[string]FieldMatch{
-					"op": {Literal: "<"},
+					"op": {
+						Literal: "<",
+					},
 				},
 			},
 			wantOK: false,
@@ -48,12 +56,21 @@ func TestNodePatternMatchBinaryExpr(t *testing.T) {
 			pattern: &NodePattern{
 				Type: "BinaryExpr",
 				Fields: map[string]FieldMatch{
-					"op":   {OneOf: []string{"&&", "||"}},
-					"left": {Capture: "l"},
+					"op": {
+						OneOf: []string{
+							"&&",
+							"||",
+						},
+					},
+					"left": {
+						Capture: "l",
+					},
 				},
 			},
-			wantOK:  true,
-			wantCap: map[string]string{"l": "a"},
+			wantOK: true,
+			wantCap: map[string]string{
+				"l": "a",
+			},
 		},
 		{
 			name: "match nested call in binary",
@@ -62,35 +79,54 @@ func TestNodePatternMatchBinaryExpr(t *testing.T) {
 				Type: "BinaryExpr",
 				Fields: map[string]FieldMatch{
 					"left": {
-						Capture:    "call",
-						SubPattern: &NodePattern{Type: "CallExpr"},
+						Capture: "call",
+						SubPattern: &NodePattern{
+							Type: "CallExpr",
+						},
 					},
-					"op":    {OneOf: ComparisonOps()},
-					"right": {Capture: "r"},
+					"op": {
+						OneOf: ComparisonOps(),
+					},
+					"right": {
+						Capture: "r",
+					},
 				},
 			},
-			wantOK:  true,
-			wantCap: map[string]string{"call": "len(s)", "r": "0"},
+			wantOK: true,
+			wantCap: map[string]string{
+				"call": "len(s)",
+				"r":    "0",
+			},
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tt.expr)
-			require.NoError(t, err)
+		t.Run(
+			tt.name,
+			func(t *testing.T) {
+				expr, err := parser.ParseExpr(tt.expr)
+				require.NoError(t, err)
 
-			caps, ok := tt.pattern.Match(expr, fset)
-			require.Equal(t, tt.wantOK, ok)
+				caps, ok := tt.pattern.Match(expr, fset)
+				require.Equal(t, tt.wantOK, ok)
 
-			if ok && tt.wantCap != nil {
-				for name, wantSrc := range tt.wantCap {
-					node := caps[name]
-					require.NotNil(t, node, "capture %q should exist", name)
-					gotSrc := renderNode(node, fset)
-					require.Equal(t, wantSrc, gotSrc, "capture %q", name)
+				if ok && tt.wantCap != nil {
+					for name, wantSrc := range tt.wantCap {
+						node := caps[name]
+						require.NotNil(
+							t, node, "capture %q "+
+								"should exist",
+							name,
+						)
+						gotSrc := renderNode(node, fset)
+						require.Equal(
+							t, wantSrc, gotSrc,
+							"capture %q", name,
+						)
+					}
 				}
-			}
-		})
+			},
+		)
 	}
 }
 
@@ -117,7 +153,9 @@ func TestNodePatternMatchCallExpr(t *testing.T) {
 			pattern: &NodePattern{
 				Type: "CallExpr",
 				Fields: map[string]FieldMatch{
-					"func": {Capture: "fn"},
+					"func": {
+						Capture: "fn",
+					},
 				},
 			},
 			wantOK: true,
@@ -133,13 +171,16 @@ func TestNodePatternMatchCallExpr(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tt.expr)
-			require.NoError(t, err)
+		t.Run(
+			tt.name,
+			func(t *testing.T) {
+				expr, err := parser.ParseExpr(tt.expr)
+				require.NoError(t, err)
 
-			_, ok := tt.pattern.Match(expr, fset)
-			require.Equal(t, tt.wantOK, ok)
-		})
+				_, ok := tt.pattern.Match(expr, fset)
+				require.Equal(t, tt.wantOK, ok)
+			},
+		)
 	}
 }
 
@@ -163,8 +204,12 @@ func TestAnyOf(t *testing.T) {
 
 	pattern := &AnyOf{
 		Patterns: []Pattern{
-			&NodePattern{Type: "CallExpr"},
-			&NodePattern{Type: "BinaryExpr"},
+			&NodePattern{
+				Type: "CallExpr",
+			},
+			&NodePattern{
+				Type: "BinaryExpr",
+			},
 		},
 	}
 

@@ -8,18 +8,18 @@ import (
 	"strconv"
 )
 
-// ParseExpr parses s as a Go expression.
-// Returns nil if parsing fails.
+// ParseExpr parses s as a Go expression. Returns nil if parsing fails.
 func ParseExpr(s string) ast.Expr {
 	expr, err := parser.ParseExpr(s)
 	if err != nil {
 		return nil
 	}
+
 	return expr
 }
 
-// IsCallExpr returns true if s parses as a function call expression.
-// Also matches parenthesized call expressions like (fn()).
+// IsCallExpr returns true if s parses as a function call expression. Also
+// matches parenthesized call expressions like (fn()).
 func IsCallExpr(s string) bool {
 	expr := ParseExpr(s)
 	if expr == nil {
@@ -28,17 +28,20 @@ func IsCallExpr(s string) bool {
 	switch expr.(type) {
 	case *ast.CallExpr:
 		return true
+
 	case *ast.ParenExpr:
 		if pe, ok := expr.(*ast.ParenExpr); ok {
 			_, ok2 := pe.X.(*ast.CallExpr)
+
 			return ok2
 		}
 	}
+
 	return false
 }
 
-// IsCompositeLit returns true if s parses as a composite literal.
-// Also matches parenthesized composite literals like (T{}).
+// IsCompositeLit returns true if s parses as a composite literal. Also matches
+// parenthesized composite literals like (T{}).
 func IsCompositeLit(s string) bool {
 	expr := ParseExpr(s)
 	if expr == nil {
@@ -49,13 +52,15 @@ func IsCompositeLit(s string) bool {
 	}
 	if pe, ok := expr.(*ast.ParenExpr); ok {
 		_, ok2 := pe.X.(*ast.CompositeLit)
+
 		return ok2
 	}
+
 	return false
 }
 
-// HasNestedCall returns true if any argument of the call expression is itself
-// a call expression or contains a call expression in parentheses.
+// HasNestedCall returns true if any argument of the call expression is itself a
+// call expression or contains a call expression in parentheses.
 func HasNestedCall(s string) bool {
 	expr := ParseExpr(s)
 	if expr == nil {
@@ -77,18 +82,20 @@ func HasNestedCall(s string) bool {
 		switch aa := a.(type) {
 		case *ast.CallExpr:
 			return true
+
 		case *ast.ParenExpr:
 			if _, ok := aa.X.(*ast.CallExpr); ok {
 				return true
 			}
 		}
 	}
+
 	return false
 }
 
-// FlattenStringExprAST recursively extracts string content from
-// an expression tree consisting of string literals and binary '+' operations.
-// This is the AST version that takes an already-parsed expression.
+// FlattenStringExprAST recursively extracts string content from an expression
+// tree consisting of string literals and binary '+' operations. This is the AST
+// version that takes an already-parsed expression.
 func FlattenStringExprAST(e ast.Expr) (string, bool) {
 	switch v := e.(type) {
 	case *ast.BasicLit:
@@ -105,9 +112,12 @@ func FlattenStringExprAST(e ast.Expr) (string, bool) {
 		if err != nil {
 			return "", false
 		}
+
 		return unquoted, true
+
 	case *ast.ParenExpr:
 		return FlattenStringExprAST(v.X)
+
 	case *ast.BinaryExpr:
 		if v.Op != token.ADD {
 			return "", false
@@ -117,7 +127,9 @@ func FlattenStringExprAST(e ast.Expr) (string, bool) {
 		if !okL || !okR {
 			return "", false
 		}
+
 		return left + right, true
 	}
+
 	return "", false
 }

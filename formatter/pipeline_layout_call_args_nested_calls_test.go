@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksNestedCallWithNestedLogical(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksNestedCallWithNestedLogical(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -19,12 +21,14 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)

@@ -23,12 +23,16 @@ func NewOffsetSpanSet(spans []OffsetSpan) OffsetSpanSet {
 		return OffsetSpanSet{}
 	}
 
-	sort.Slice(spans, func(i, j int) bool {
-		if spans[i].Start != spans[j].Start {
-			return spans[i].Start < spans[j].Start
-		}
-		return spans[i].End < spans[j].End
-	})
+	sort.Slice(
+		spans,
+		func(i, j int) bool {
+			if spans[i].Start != spans[j].Start {
+				return spans[i].Start < spans[j].Start
+			}
+
+			return spans[i].End < spans[j].End
+		},
+	)
 
 	merged := spans[:0]
 	for _, s := range spans {
@@ -49,9 +53,9 @@ func NewOffsetSpanSet(spans []OffsetSpan) OffsetSpanSet {
 	return OffsetSpanSet{spans: merged}
 }
 
-// Overlaps reports whether any span in the set intersects the half-open interval
-// [start, end). Intervals where end <= start are treated as empty and never
-// overlap.
+// Overlaps reports whether any span in the set intersects the half-open
+// interval [start, end). Intervals where end <= start are treated as empty and
+// never overlap.
 func (s OffsetSpanSet) Overlaps(start, end int) bool {
 	if len(s.spans) == 0 {
 		return false
@@ -60,14 +64,18 @@ func (s OffsetSpanSet) Overlaps(start, end int) bool {
 		return false
 	}
 
-	// Find the first span whose end is > start; if that span starts < end, the
-	// intervals overlap.
-	idx := sort.Search(len(s.spans), func(i int) bool {
-		return s.spans[i].End > start
-	})
+	// Find the first span whose end is > start; if that span starts < end,
+	// the intervals overlap.
+	idx := sort.Search(
+		len(s.spans),
+		func(i int) bool {
+			return s.spans[i].End > start
+		},
+	)
 	if idx >= len(s.spans) {
 		return false
 	}
+
 	return s.spans[idx].Start < end
 }
 
@@ -77,14 +85,18 @@ func (s OffsetSpanSet) Contains(off int) bool {
 		return false
 	}
 
-	// Find the first span whose end is > off; if that span also starts <= off,
-	// the offset is contained.
-	idx := sort.Search(len(s.spans), func(i int) bool {
-		return s.spans[i].End > off
-	})
+	// Find the first span whose end is > off; if that span also starts <=
+	// off, the offset is contained.
+	idx := sort.Search(
+		len(s.spans),
+		func(i int) bool {
+			return s.spans[i].End > off
+		},
+	)
 	if idx >= len(s.spans) {
 		return false
 	}
+
 	return s.spans[idx].contains(off)
 }
 
@@ -100,5 +112,6 @@ func (s OffsetSpanSet) Union(other OffsetSpanSet) OffsetSpanSet {
 	spans := make([]OffsetSpan, 0, len(s.spans)+len(other.spans))
 	spans = append(spans, s.spans...)
 	spans = append(spans, other.spans...)
+
 	return NewOffsetSpanSet(spans)
 }

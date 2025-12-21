@@ -10,8 +10,9 @@ import (
 )
 
 func TestPipeline_ASTEquivalentAcrossPolicies_ExpressionSnippets(t *testing.T) {
-	// Property-style test: for a variety of valid sources, formatting must keep
-	// the AST structure equivalent, regardless of which pipeline policy is used.
+	// Property-style test: for a variety of valid sources, formatting must
+	// keep the AST structure equivalent, regardless of which pipeline
+	// policy is used.
 	//
 	// This intentionally does not assert exact output strings (non-golden).
 	type policy struct {
@@ -20,10 +21,20 @@ func TestPipeline_ASTEquivalentAcrossPolicies_ExpressionSnippets(t *testing.T) {
 	}
 
 	policies := []policy{
-		{name: "next", cfg: PipelineConfig{ColumnLimit: 48, TabStop: 8}},
+		{
+			name: "next",
+			cfg: PipelineConfig{
+				ColumnLimit: 48,
+				TabStop:     8,
+			},
+		},
 		{
 			name: "next_with_ownership",
-			cfg:  PipelineConfig{ColumnLimit: 48, TabStop: 8, UseOwnershipRegistry: true},
+			cfg: PipelineConfig{
+				ColumnLimit:          48,
+				TabStop:              8,
+				UseOwnershipRegistry: true,
+			},
 		},
 	}
 
@@ -64,17 +75,36 @@ func f() {
 
 					// Parseable output.
 					fset := token.NewFileSet()
-					_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
-					require.NoError(t, err, "formatted output was not parseable:\n%s", string(out))
+					_, err := parser.ParseFile(
+						fset, "out.go", out,
+						parser.AllErrors,
+					)
+					require.NoError(
+						t, err, "formatted output "+
+							"was not parseable:\n%s",
+						string(out),
+					)
 
-					// Semantic equivalence (ignore positions/scopes/comments).
+					// Semantic equivalence (ignore
+					// positions/scopes/comments).
 					requireASTEquivalent(t, []byte(in), out)
 
-					// Second pass should remain semantically equivalent and parseable.
+					// Second pass should remain
+					// semantically equivalent and
+					// parseable.
 					out2 := p.Format(out)
-					_, err = parser.ParseFile(fset, "out2.go", out2, parser.AllErrors)
-					require.NoError(t, err, "second pass output was not parseable:\n%s", string(out2))
-					requireASTEquivalent(t, []byte(in), out2)
+					_, err = parser.ParseFile(
+						fset, "out2.go", out2,
+						parser.AllErrors,
+					)
+					require.NoError(
+						t, err, "second pass output "+
+							"was not parseable:\n%s",
+						string(out2),
+					)
+					requireASTEquivalent(
+						t, []byte(in), out2,
+					)
 				})
 			}
 		})

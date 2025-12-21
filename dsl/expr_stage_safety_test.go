@@ -11,16 +11,19 @@ func gofmtBytes(t *testing.T, src []byte) []byte {
 	t.Helper()
 	out, err := format.Source(src)
 	require.NoError(t, err)
+
 	return out
 }
 
 func TestExprStage_StringConcatReflow(t *testing.T) {
-	src := []byte(`package p
+	src := []byte(
+		`package p
 
 func f() string {
 	return "This is a very long string that " + "spans multiple parts and is " + "concatenated together"
 }
-`)
+`,
+	)
 
 	engine := NewEngine(LongExprRules())
 	engine.ColumnLimit = 60
@@ -34,7 +37,11 @@ func f() string {
 }
 
 func TestExprStage_StringConcatSkipsRawString(t *testing.T) {
-	src := []byte("package p\n\nfunc f() string {\n\treturn `this is a raw string literal that should not be rewritten even if long`\n}\n")
+	src := []byte(
+		"package p\n\nfunc f() string {\n	return `this is a " +
+			"raw string literal that should not be rewritten " +
+			"even if long`\n}\n",
+	)
 
 	engine := NewEngine(LongExprRules())
 	engine.ColumnLimit = 20
@@ -45,7 +52,8 @@ func TestExprStage_StringConcatSkipsRawString(t *testing.T) {
 }
 
 func TestExprStage_SkipsInsideCompositeLiteral(t *testing.T) {
-	src := []byte(`package p
+	src := []byte(
+		`package p
 
 type S struct {
 	Field string
@@ -56,7 +64,8 @@ func f() {
 		Field: "This is a very long string that " + "spans multiple parts and is " + "concatenated together",
 	}
 }
-`)
+`,
+	)
 
 	engine := NewEngine(LongExprRules())
 	engine.ColumnLimit = 60
@@ -68,36 +77,47 @@ func f() {
 }
 
 func TestExprStage_SkipsInsideCallArgs(t *testing.T) {
-	src := []byte(`package p
+	src := []byte(
+		`package p
 
 func f(alpha, beta, gamma, delta bool) {
 	_ = foo(alpha && beta && gamma && delta)
 }
 
 func foo(bool) {}
-`)
+`,
+	)
 
 	engine := NewEngine(LongExprRules())
 	engine.ColumnLimit = 20
 	out, err := engine.Format(src)
 	require.NoError(t, err)
 
-	// Expression stage should not break logical chains inside call arguments.
+	// Expression stage should not break logical chains inside call
+	// arguments.
 	require.NotContains(t, string(out), "&&\n")
 	require.Equal(t, string(src), string(out))
 }
 
 func TestExprStage_AllowLogicalBreaksInsideCallArgs(t *testing.T) {
-	src := []byte(`package p
+	src := []byte(
+		`package p
 
 func f(alpha, beta, gamma, delta bool) {
 	_ = foo(alpha && beta && gamma && delta)
 }
 
 func foo(bool) {}
-`)
+`,
+	)
 
-	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{AllowCallArgs: true}))
+	engine := NewEngine(
+		LongExprRulesWithOptions(
+			LongExprOptions{
+				AllowCallArgs: true,
+			},
+		),
+	)
 	engine.ColumnLimit = 20
 	out, err := engine.Format(src)
 	require.NoError(t, err)
@@ -109,7 +129,8 @@ func foo(bool) {}
 }
 
 func TestExprStage_AllowCallArgsNestedCalls(t *testing.T) {
-	src := []byte(`package p
+	src := []byte(
+		`package p
 
 func f(alpha, beta, gamma, delta bool) {
 	_ = f2(g(alpha && beta && gamma && delta))
@@ -117,9 +138,16 @@ func f(alpha, beta, gamma, delta bool) {
 
 func f2(bool) {}
 func g(bool) bool { return true }
-`)
+`,
+	)
 
-	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{AllowCallArgs: true}))
+	engine := NewEngine(
+		LongExprRulesWithOptions(
+			LongExprOptions{
+				AllowCallArgs: true,
+			},
+		),
+	)
 	engine.ColumnLimit = 20
 	out, err := engine.Format(src)
 	require.NoError(t, err)
@@ -129,20 +157,29 @@ func g(bool) bool { return true }
 }
 
 func TestExprStage_SkipsWhenBlockCommentInsideExpr(t *testing.T) {
-	src := []byte(`package p
+	src := []byte(
+		`package p
 
 func f(alpha, beta, gamma, delta bool) {
 	_ = foo(alpha && /* keep */ beta && gamma && delta)
 }
 
 func foo(bool) {}
-`)
+`,
+	)
 
-	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{AllowCallArgs: true}))
+	engine := NewEngine(
+		LongExprRulesWithOptions(
+			LongExprOptions{
+				AllowCallArgs: true,
+			},
+		),
+	)
 	engine.ColumnLimit = 20
 	out, err := engine.Format(src)
 	require.NoError(t, err)
 
-	// We must not rewrite expressions containing comments, even in allow-call-args mode.
+	// We must not rewrite expressions containing comments, even in
+	// allow-call-args mode.
 	require.Equal(t, string(src), string(out))
 }

@@ -10,24 +10,39 @@ import (
 )
 
 func TestPipeline_RegressionSnippets_MoreASTConstructs(t *testing.T) {
-	// This suite is intentionally non-golden: it aims to widen coverage across
-	// tricky-but-valid Go syntax without over-constraining exact output.
+	// This suite is intentionally non-golden: it aims to widen coverage
+	// across tricky-but-valid Go syntax without over-constraining exact
+	// output.
 	//
 	// We assert only:
 	// - output is parseable (both first and second pass)
 	// - output is idempotent (Format(Format(x)) == Format(x))
 	// - output is AST-equivalent to the input (comments ignored)
 	//
-	// Additionally, a few "directive as comment" cases assert that directives
-	// survive formatting unchanged because reflowing them can break tooling.
+	// Additionally, a few "directive as comment" cases assert that
+	// directives survive formatting unchanged because reflowing them can
+	// break tooling.
 	type policy struct {
 		name string
 		cfg  PipelineConfig
 	}
 
 	policies := []policy{
-		{name: "next", cfg: PipelineConfig{ColumnLimit: 48, TabStop: 8}},
-		{name: "next_with_ownership", cfg: PipelineConfig{ColumnLimit: 48, TabStop: 8, UseOwnershipRegistry: true}},
+		{
+			name: "next",
+			cfg: PipelineConfig{
+				ColumnLimit: 48,
+				TabStop:     8,
+			},
+		},
+		{
+			name: "next_with_ownership",
+			cfg: PipelineConfig{
+				ColumnLimit:          48,
+				TabStop:              8,
+				UseOwnershipRegistry: true,
+			},
+		},
 	}
 
 	type tc struct {
@@ -181,7 +196,9 @@ func ExportedName(x C.int) C.int {
 //line generated.go:123
 func f() int { return 1 }
 `,
-			wantContains: []string{"//line generated.go:123\n"},
+			wantContains: []string{
+				"//line generated.go:123\n",
+			},
 		},
 		{
 			name: "parenthesized_composite_and_func_lits",
@@ -202,31 +219,92 @@ func f() int {
 
 	for policyIndex := range policies {
 		pol := policies[policyIndex]
-		t.Run(pol.name, func(t *testing.T) {
-			p := NewPipeline(pol.cfg)
+		t.Run(
+			pol.name,
+			func(t *testing.T) {
+				p := NewPipeline(pol.cfg)
 
-			for _, c := range cases {
-				t.Run(c.name, func(t *testing.T) {
-					out1 := p.Format([]byte(c.src))
-					out2 := p.Format(out1)
+				for _, c := range cases {
+					t.Run(
+						c.name,
+						func(t *testing.T) {
+							out1 := p.Format(
+								[]byte(c.src),
+							)
+							out2 := p.Format(out1)
 
-					require.NotEmpty(t, out1)
-					require.Equal(t, string(out1), string(out2), "not idempotent")
+							require.NotEmpty(
+								t, out1,
+							)
+							require.Equal(
+								t, string(out1),
+								string(out2),
+								"not idempotent",
+							)
 
-					fset := token.NewFileSet()
-					_, err := parser.ParseFile(fset, "out.go", out1, parser.AllErrors|parser.ParseComments)
-					require.NoError(t, err, "formatted output was not parseable:\n%s", string(out1))
-					_, err = parser.ParseFile(fset, "out2.go", out2, parser.AllErrors|parser.ParseComments)
-					require.NoError(t, err, "second pass output was not parseable:\n%s", string(out2))
+							fset := token.NewFileSet()
+							_, err := parser.ParseFile(
+								fset, "out.go",
+								out1,
+								parser.AllErrors|parser.ParseComments,
+							)
+							require.NoError(
+								t, err, "form"+
+									"atte"+
+									"d "+
+									"outp"+
+									"ut "+
+									"was "+
+									"not "+
+									"pars"+
+									"eabl"+
+									"e:\n%s",
+								string(out1),
+							)
+							_, err = parser.ParseFile(
+								fset, "out2.go",
+								out2,
+								parser.AllErrors|parser.ParseComments,
+							)
+							require.NoError(
+								t, err, "seco"+
+									"nd "+
+									"pass"+
+									" out"+
+									"put "+
+									"was "+
+									"not "+
+									"pars"+
+									"eabl"+
+									"e:\n%s",
+								string(out2),
+							)
 
-					requireASTEquivalent(t, []byte(c.src), out1)
-					requireASTEquivalent(t, []byte(c.src), out2)
+							requireASTEquivalent(
+								t,
+								[]byte(c.src),
+								out1,
+							)
+							requireASTEquivalent(
+								t,
+								[]byte(c.src),
+								out2,
+							)
 
-					for _, want := range c.wantContains {
-						require.Contains(t, string(out1), want, fmt.Sprintf("missing required substring %q", want))
-					}
-				})
-			}
-		})
+							for _, want := range c.wantContains {
+								require.Contains(
+									t, string(
+										out1,
+									), want, fmt.Sprintf(
+										"missing required substring %q",
+										want,
+									),
+								)
+							}
+						},
+					)
+				}
+			},
+		)
 	}
 }

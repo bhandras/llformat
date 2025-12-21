@@ -43,7 +43,7 @@ func TestEditBuilderNoOpsFiltered(t *testing.T) {
 	src := []byte("hello")
 	var b EditBuilder
 	b.Replace(0, 5, []byte("hello")) // no-op
-	b.Insert(5, nil)                // no-op
+	b.Insert(5, nil)                 // no-op
 
 	got, changed, err := b.Apply(src)
 	if err != nil {

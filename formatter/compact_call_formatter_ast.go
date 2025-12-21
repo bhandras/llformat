@@ -16,6 +16,7 @@ func isSelectorChainCallStartOnLine(src []byte, start int) bool {
 	for i >= 0 && (src[i] == ' ' || src[i] == '\t') {
 		i--
 	}
+
 	return i >= 0 && src[i] == '.'
 }
 
@@ -36,6 +37,7 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors)
 	if err != nil || file == nil {
+
 		// Preserve legacy behavior on unparseable input.
 		return formatWithTargetsScan(src, targets)
 	}
@@ -48,6 +50,7 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 		if formatted, err := formatstd.Source(src); err == nil {
 			return formatted
 		}
+
 		return src
 	}
 
@@ -78,7 +81,12 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 		wsIndent := text.LeadingWhitespace(src, lineStart)
 
 		if c.targetMatch != "" {
-			formatted := formatCallGreedy(src[c.start:c.end], string(wsIndent), visualLen(string(indentBytes)))
+			formatted := formatCallGreedy(
+				src[c.start:c.end], string(wsIndent),
+				visualLen(
+					string(indentBytes),
+				),
+			)
 			out.WriteString(formatted)
 			pos = c.end
 			continue
@@ -86,8 +94,9 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 
 		// Legacy fallback formatting for non-target calls.
 		span := src[c.start:c.end]
-		// Avoid rewriting calls that contain inline comments; rewriting these can
-		// cause non-idempotent comment attachment across pipeline runs.
+		// Avoid rewriting calls that contain inline comments; rewriting
+		// these can cause non-idempotent comment attachment across
+		// pipeline runs.
 		if spanHasCommentOutsideStrings(span) {
 			out.Write(span)
 			pos = c.end
@@ -101,28 +110,37 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 			strings.HasSuffix(trimmedPrefix, "return") ||
 			strings.HasSuffix(trimmedPrefix, "go") ||
 			strings.HasSuffix(trimmedPrefix, "defer")
-		if !allowedByPrefix && isSelectorChainCallStartOnLine(src, c.start) {
+		if !allowedByPrefix &&
+			isSelectorChainCallStartOnLine(src, c.start) {
+
 			allowedByPrefix = true
 		}
 		if !allowedByPrefix {
-			// Consume the call but leave it unchanged; this matches the scan-based
-			// fallback behavior (which skips nested target calls inside other calls).
+			// Consume the call but leave it unchanged; this matches
+			// the scan-based fallback behavior (which skips nested
+			// target calls inside other calls).
 			out.Write(span)
 			pos = c.end
 			continue
 		}
 
 		if fallbackNonTargetsExcludeSelectors {
-			// Exclude selector calls, including method-chain calls where the call
-			// start is the selector ident (e.g. ".Execute(") so the callee span
-			// itself contains no '.'.
+			// Exclude selector calls, including method-chain calls
+			// where the call start is the selector ident (e.g.
+			// ".Execute(") so the callee span itself contains no
+			// '.'.
 			if isSelectorChainCallStartOnLine(src, c.start) {
 				out.Write(span)
 				pos = c.end
 				continue
 			}
-			callee := strings.TrimSpace(string(src[c.start:c.lparen]))
-			if callNameContainsAny(callee, fallbackNonTargetsExcludes) {
+			callee := strings.TrimSpace(
+				string(src[c.start:c.lparen]),
+			)
+			if callNameContainsAny(
+				callee, fallbackNonTargetsExcludes,
+			) {
+
 				out.Write(span)
 				pos = c.end
 				continue
@@ -133,8 +151,13 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 				continue
 			}
 		} else {
-			callee := strings.TrimSpace(string(src[c.start:c.lparen]))
-			if callNameContainsAny(callee, fallbackNonTargetsExcludes) {
+			callee := strings.TrimSpace(
+				string(src[c.start:c.lparen]),
+			)
+			if callNameContainsAny(
+				callee, fallbackNonTargetsExcludes,
+			) {
+
 				out.Write(span)
 				pos = c.end
 				continue
@@ -143,23 +166,32 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 
 		tp := strings.TrimSpace(indentPrefix)
 		if tp == ")" || tp == ")." {
-			indentPrefix = string(text.LeadingWhitespace(src, lineStart))
+			indentPrefix = string(
+				text.LeadingWhitespace(src, lineStart),
+			)
 		}
 
 		callText := string(src[c.start:c.end])
-		flat := strings.Join(strings.Fields(stripComments(callText)), " ")
+		flat := strings.Join(
+			strings.Fields(
+				stripComments(callText),
+			), " ",
+		)
 		singleLineLen := visualLen(flat)
 		currentLineLen := visualLen(indentPrefix) + singleLineLen
 		needsWrap := currentLineLen > columnLimit
 		if needsWrap && !isChainedShortCall(src, c.start, c.end) {
-			formatted := formatCallPackedMultiLine(span, string(wsIndent), string(wsIndent), true)
+			formatted := formatCallPackedMultiLine(
+				span, string(wsIndent), string(wsIndent), true,
+			)
 			out.WriteString(formatted)
 			pos = c.end
 			continue
 		}
 
-		// Consume the call but leave it unchanged; this matches the scan-based
-		// fallback behavior (which skips nested target calls inside other calls).
+		// Consume the call but leave it unchanged; this matches the
+		// scan-based fallback behavior (which skips nested target calls
+		// inside other calls).
 		out.Write(span)
 		pos = c.end
 	}
@@ -173,29 +205,40 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 	if formatted, err := formatstd.Source(res); err == nil {
 		return formatted
 	}
+
 	return res
 }
 
-func compactCallCandidatesFromAST(file *ast.File, fset *token.FileSet, src []byte, targets []string) []compactCallCandidate {
+func compactCallCandidatesFromAST(file *ast.File, fset *token.FileSet,
+	src []byte, targets []string) []compactCallCandidate {
+
 	spans := legacyCallSpansFromAST(file, fset, src)
 	candidates := make([]compactCallCandidate, 0, len(spans))
 	for _, s := range spans {
 		targetMatch := ""
 		for _, t := range targets {
-			// The legacy scanner matches a target by exact byte prefix at the
-			// call start, with the '(' immediately after the function name.
-			if s.Start+len(t) <= len(src) && s.Start+len(t)-1 == s.Lparen && string(src[s.Start:s.Start+len(t)]) == t {
+			// The legacy scanner matches a target by exact byte
+			// prefix at the call start, with the '(' immediately
+			// after the function name.
+			if s.Start+len(t) <= len(src) &&
+				s.Start+len(t)-
+					1 == s.Lparen && string(
+				src[s.Start:s.Start+len(t)],
+			) == t {
+
 				targetMatch = t
 				break
 			}
 		}
 
-		candidates = append(candidates, compactCallCandidate{
-			start:       s.Start,
-			end:         s.End,
-			lparen:      s.Lparen,
-			targetMatch: targetMatch,
-		})
+		candidates = append(
+			candidates, compactCallCandidate{
+				start:       s.Start,
+				end:         s.End,
+				lparen:      s.Lparen,
+				targetMatch: targetMatch,
+			},
+		)
 	}
 
 	return candidates

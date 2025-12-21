@@ -58,8 +58,8 @@ type Nest struct {
 
 func (Nest) isDoc() {}
 
-// IfBreak selects between two docs based on the rendering mode.
-// In flat mode, Flat is rendered; in break mode, Broken is rendered.
+// IfBreak selects between two docs based on the rendering mode. In flat mode,
+// Flat is rendered; in break mode, Broken is rendered.
 type IfBreak struct {
 	Broken Doc
 	Flat   Doc
@@ -79,8 +79,8 @@ type Align struct {
 
 func (Align) isDoc() {}
 
-// IndentByCols increases indentation by a fixed number of columns (spaces)
-// for any broken lines within its child.
+// IndentByCols increases indentation by a fixed number of columns (spaces) for
+// any broken lines within its child.
 //
 // This is useful for aligning continuation blocks relative to indentation
 // without needing to know the exact whitespace prefix string.

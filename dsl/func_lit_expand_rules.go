@@ -5,8 +5,10 @@ package dsl
 func ExpandFuncLitBodyRules() []Rule {
 	return []Rule{
 		{
-			Name:     "expand_func_lit_body",
-			Pattern:  &NodePattern{Type: "FuncLit"},
+			Name: "expand_func_lit_body",
+			Pattern: &NodePattern{
+				Type: "FuncLit",
+			},
 			When:     TrueCond{},
 			Priority: 24,
 			Action: &ExpandFuncLitBodyAction{

@@ -6,7 +6,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineNext_Signatures_CollapsesMultilineClosureReturnListWhenItFits(t *testing.T) {
+func TestPipelineNext_Signatures_CollapsesMultilineClosureReturnListWhenItFits(
+	t *testing.T) {
+
 	const in = `package p
 
 type OpenChannelRequest struct{}
@@ -46,15 +48,28 @@ func f(r *rpcServer) {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out, "rp := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
-		"expected the multiline closure return list to be collapsed when it fits under the column limit")
-	require.NotContains(t, out, "rp := func(req *OpenChannelRequest) (\n",
-		"must not keep the split return list for a short closure signature in next profile")
-	require.NotContains(t, out, "rp := func(req *OpenChannelRequest) (*InitFundingMsg, error) {\n\n\t\t_ = req",
-		"must not add a blank line after the opening brace when the closure signature is single-line")
+	require.Contains(
+		t, out, "rp := func(req *OpenChannelRequest) "+
+			"(*InitFundingMsg, error) {", "expected the "+
+			"multiline closure return list to be collapsed when "+
+			"it fits under the column limit",
+	)
+	require.NotContains(
+		t, out, "rp := func(req *OpenChannelRequest) (\n", "must "+
+			"not keep the split return list for a short closure "+
+			"signature in next profile",
+	)
+	require.NotContains(
+		t, out, "rp := func(req *OpenChannelRequest) "+
+			"(*InitFundingMsg, error) {\n\n		_ = req", "mu"+
+			"st not add a blank line after the opening brace "+
+			"when the closure signature is single-line",
+	)
 }
 
-func TestPipelineNext_Signatures_BreaksClosureSignatureWhenPrefixOverflowsColumnLimit(t *testing.T) {
+func TestPipelineNext_Signatures_BreaksClosureSignatureWhenPrefixOverflowsColumnLimit(
+	t *testing.T) {
+
 	const in = `package p
 
 type OpenChannelRequest struct{}
@@ -86,22 +101,38 @@ func f() {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out,
-		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error) {",
-		"expected the closure signature to break when the assignment prefix makes it exceed the column limit")
-	require.NotContains(t, out,
-		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (*InitFundingMsg, error) {",
-		"must not keep the closure signature on a single line when it overflows due to its prefix")
-	require.Contains(t, out,
-		"\trequestParserForFundingInit := func(req *OpenChannelRequest) (\n\t\t*InitFundingMsg, error) {\n\n\t\t_ = req",
-		"expected a blank line after the opening brace for a multiline closure signature")
+	require.Contains(
+		t, out, "	requestParserForFundingInit := func(req "+
+			"*OpenChannelRequest) "+
+			"(\n		*InitFundingMsg, error) {", "expected"+
+			" the closure signature to break when the "+
+			"assignment prefix makes it exceed the column limit",
+	)
+	require.NotContains(
+		t, out, "	requestParserForFundingInit := func(req "+
+			"*OpenChannelRequest) (*InitFundingMsg, error) {", "m"+
+			"ust not keep the closure signature on a single "+
+			"line when it overflows due to its prefix",
+	)
+	require.Contains(
+		t, out, "	requestParserForFundingInit := func(req "+
+			"*OpenChannelRequest) "+
+			"(\n		*InitFundingMsg, error) "+
+			"{\n\n		_ = req", "expected a blank line "+
+			"after the opening brace for a multiline closure "+
+			"signature",
+	)
 
-	require.NotContains(t, out,
-		"\t\t*InitFundingMsg,\n\t\terror",
-		"must not force each return type onto its own line for closure signatures; keep them packed when possible")
+	require.NotContains(
+		t, out, "		*InitFundingMsg,\n		error",
+		"must not force each return type onto its own line for "+
+			"closure signatures; keep them packed when possible",
+	)
 }
 
-func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineClosureSignature(t *testing.T) {
+func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineClosureSignature(
+	t *testing.T) {
+
 	const in = `package p
 
 type SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns struct{}
@@ -135,9 +166,18 @@ func f() {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out,
-		"\talreadyFormatted := func(\n\t\tfirst SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns,\n\t\tsecond AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak) {",
-		"expected the already-multiline closure signature to remain multiline")
-	require.Contains(t, out, ") {\n\n\t\t_ = first",
-		"expected a blank line after the opening brace for an already-multiline closure signature")
+	require.Contains(
+		t, out, "	alreadyFormatted := "+
+			"func(\n		first "+
+			"SomeRidiculouslyLongParameterTypeNameThatForcesLineB"+
+			"reakUnder80Columns,\n		second "+
+			"AnotherRidiculouslyLongParameterTypeNameThatAlsoForc"+
+			"esLineBreak) {", "expected the already-multiline "+
+			"closure signature to remain multiline",
+	)
+	require.Contains(
+		t, out, ") {\n\n		_ = first", "expected a "+
+			"blank line after the opening brace for an "+
+			"already-multiline closure signature",
+	)
 }

@@ -12,7 +12,13 @@ type EditBuilder struct {
 
 // Replace replaces src[start:end] with replace.
 func (b *EditBuilder) Replace(start, end int, replace []byte) {
-	b.edits = append(b.edits, Edit{Start: start, End: end, Replace: replace})
+	b.edits = append(
+		b.edits, Edit{
+			Start:   start,
+			End:     end,
+			Replace: replace,
+		},
+	)
 }
 
 // Insert inserts content at pos.
@@ -41,6 +47,7 @@ func (b *EditBuilder) Apply(src []byte) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
+
 	return out, true, nil
 }
 
@@ -57,6 +64,6 @@ func (b *EditBuilder) filterNoOps(src []byte, edits []Edit) []Edit {
 		}
 		filtered = append(filtered, e)
 	}
+
 	return filtered
 }
-

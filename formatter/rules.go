@@ -15,21 +15,23 @@ type Rule interface {
 	// Match returns true if this rule applies at the given position.
 	Match(src []byte, pos int) bool
 
-	// Apply formats the matched content.
-	// Returns the replacement bytes and the number of source bytes consumed.
-	Apply(src []byte, pos int, cfg BaseConfig) (replacement []byte, consumed int)
+	// Apply formats the matched content. Returns the replacement bytes and
+	// the number of source bytes consumed.
+	Apply(src []byte, pos int,
+		cfg BaseConfig) (replacement []byte, consumed int)
 }
 
 // CallRule formats function calls matching specific patterns.
 type CallRule struct {
-	// Patterns are the function call prefixes to match (e.g., "log.Infof(", "fmt.Errorf(")
+	// Patterns are the function call prefixes to match (e.g., "log.Infof(",
+	// "fmt.Errorf(")
 	Patterns []string
 
 	// Breaker is the strategy for breaking arguments.
 	Breaker Breaker
 
-	// Splitter defines how to split the argument body into elements.
-	// If nil, DefaultCommaSplitter is used.
+	// Splitter defines how to split the argument body into elements. If
+	// nil, DefaultCommaSplitter is used.
 	Splitter ElementSplitter
 
 	// Priority determines application order (higher = applied first).
@@ -41,6 +43,7 @@ func (r *CallRule) Name() string {
 	if len(r.Patterns) > 0 {
 		return "call:" + r.Patterns[0]
 	}
+
 	return "call:unknown"
 }
 
@@ -51,6 +54,7 @@ func (r *CallRule) Match(src []byte, pos int) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -81,7 +85,7 @@ func (r *CallRule) Apply(src []byte, pos int, cfg BaseConfig) ([]byte, int) {
 	}
 
 	// Extract parts
-	funcName := string(src[pos : openIdx])
+	funcName := string(src[pos:openIdx])
 	argsBody := string(src[openIdx+1 : closeIdx])
 
 	// Get indentation context
@@ -163,6 +167,7 @@ func matchPrefixAt(src []byte, pos int, prefix string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -174,6 +179,7 @@ type RuleMatcher struct {
 
 // NewRuleMatcher creates a RuleMatcher with the given rules.
 func NewRuleMatcher(rules []Rule, cfg BaseConfig) *RuleMatcher {
+
 	// Sort rules by priority if needed (higher priority first)
 	return &RuleMatcher{
 		Rules:  rules,
@@ -188,15 +194,17 @@ func (m *RuleMatcher) MatchAt(src []byte, pos int) Rule {
 			return rule
 		}
 	}
+
 	return nil
 }
 
-// ApplyAt applies the first matching rule at position.
-// Returns nil, 0 if no rule matches.
+// ApplyAt applies the first matching rule at position. Returns nil, 0 if no
+// rule matches.
 func (m *RuleMatcher) ApplyAt(src []byte, pos int) ([]byte, int) {
 	rule := m.MatchAt(src, pos)
 	if rule == nil {
 		return nil, 0
 	}
+
 	return rule.Apply(src, pos, m.Config)
 }

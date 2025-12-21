@@ -58,7 +58,8 @@ func TestDSLExprFormatterReflowsLongCall(t *testing.T) {
 		TabStop:     8,
 	})
 
-	src := []byte(`package main
+	src := []byte(
+		`package main
 
 func foo() {
 	result := someVeryLongFunctionName(arg1, arg2, arg3)
@@ -66,7 +67,8 @@ func foo() {
 }
 
 func someVeryLongFunctionName(a, b, c int) int { return 0 }
-`)
+`,
+	)
 	result := f.FormatFile(src)
 
 	// Should reflow the call
@@ -80,12 +82,14 @@ func TestDSLExprFormatterBreaksLogicalChain(t *testing.T) {
 	})
 
 	// Use longer variable names to exceed 40 columns
-	src := []byte(`package main
+	src := []byte(
+		`package main
 
 func foo(alpha, beta, gamma, delta bool) bool {
 	return alpha && beta && gamma && delta
 }
-`)
+`,
+	)
 	result := f.FormatFile(src)
 
 	// Should break after && operator (Go style)
@@ -121,6 +125,6 @@ func TestDSLExprFormatterGolden(t *testing.T) {
 	require.Contains(t, resultStr, "> 0")
 	require.Contains(t, resultStr, "> 10")
 
-	// The code should still be parseable
-	// (gofmt is run internally by the engine)
+	// The code should still be parseable (gofmt is run internally by the
+	// engine)
 }

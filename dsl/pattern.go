@@ -82,82 +82,134 @@ func (p *NodePattern) matchType(n ast.Node) bool {
 	switch p.Type {
 	case "File":
 		_, ok := n.(*ast.File)
+
 		return ok
+
 	case "CallExpr":
 		_, ok := n.(*ast.CallExpr)
+
 		return ok
+
 	case "BinaryExpr":
 		_, ok := n.(*ast.BinaryExpr)
+
 		return ok
+
 	case "UnaryExpr":
 		_, ok := n.(*ast.UnaryExpr)
+
 		return ok
+
 	case "AssignStmt":
 		_, ok := n.(*ast.AssignStmt)
+
 		return ok
+
 	case "IfStmt":
 		_, ok := n.(*ast.IfStmt)
+
 		return ok
+
 	case "ForStmt":
 		_, ok := n.(*ast.ForStmt)
+
 		return ok
+
 	case "ReturnStmt":
 		_, ok := n.(*ast.ReturnStmt)
+
 		return ok
+
 	case "CaseClause":
 		_, ok := n.(*ast.CaseClause)
+
 		return ok
+
 	case "SwitchStmt":
 		_, ok := n.(*ast.SwitchStmt)
+
 		return ok
+
 	case "TypeSwitchStmt":
 		_, ok := n.(*ast.TypeSwitchStmt)
+
 		return ok
+
 	case "FuncDecl":
 		_, ok := n.(*ast.FuncDecl)
+
 		return ok
+
 	case "FuncLit":
 		_, ok := n.(*ast.FuncLit)
+
 		return ok
+
 	case "BasicLit":
 		_, ok := n.(*ast.BasicLit)
+
 		return ok
+
 	case "Ident":
 		_, ok := n.(*ast.Ident)
+
 		return ok
+
 	case "SelectorExpr":
 		_, ok := n.(*ast.SelectorExpr)
+
 		return ok
+
 	case "IndexExpr":
 		_, ok := n.(*ast.IndexExpr)
+
 		return ok
+
 	case "SliceExpr":
 		_, ok := n.(*ast.SliceExpr)
+
 		return ok
+
 	case "CompositeLit":
 		_, ok := n.(*ast.CompositeLit)
+
 		return ok
+
 	case "ParenExpr":
 		_, ok := n.(*ast.ParenExpr)
+
 		return ok
+
 	case "StarExpr":
 		_, ok := n.(*ast.StarExpr)
+
 		return ok
+
 	case "Ellipsis":
 		_, ok := n.(*ast.Ellipsis)
+
 		return ok
+
 	case "FuncType":
 		_, ok := n.(*ast.FuncType)
+
 		return ok
+
 	case "FieldList":
 		_, ok := n.(*ast.FieldList)
+
 		return ok
+
 	case "Field":
 		_, ok := n.(*ast.Field)
+
 		return ok
+
 	case "InterfaceType":
 		_, ok := n.(*ast.InterfaceType)
+
 		return ok
+
 	default:
 		return false
 	}
@@ -171,56 +223,73 @@ func getField(n ast.Node, name string) ast.Node {
 		case "Fun", "func":
 			return node.Fun
 		}
+
 	case *ast.BinaryExpr:
 		switch name {
 		case "X", "left":
 			return node.X
+
 		case "Y", "right":
 			return node.Y
+
 		case "Op", "op":
+
 			// Op is handled specially in matchLiteral
 			return nil
 		}
+
 	case *ast.UnaryExpr:
 		switch name {
 		case "X", "operand":
 			return node.X
+
 		case "Op", "op":
 			return nil
 		}
+
 	case *ast.AssignStmt:
 		switch name {
 		case "Lhs", "lhs":
 			if len(node.Lhs) > 0 {
 				return node.Lhs[0]
 			}
+
 		case "Rhs", "rhs":
 			if len(node.Rhs) > 0 {
 				return node.Rhs[0]
 			}
 		}
+
 	case *ast.IfStmt:
 		switch name {
 		case "Cond", "cond":
 			return node.Cond
+
 		case "Body", "body":
 			return node.Body
+
 		case "Init", "init":
 			return node.Init
+
 		case "Else", "else":
 			return node.Else
 		}
+
 	case *ast.ForStmt:
 		switch name {
 		case "Cond", "cond":
 			return node.Cond
+
 		case "Body", "body":
 			return node.Body
+
 		case "Init", "init":
 			return node.Init
+
 		case "Post", "post":
 			return node.Post
 		}
+
 	case *ast.ReturnStmt:
 		switch name {
 		case "Results", "results":
@@ -228,6 +297,7 @@ func getField(n ast.Node, name string) ast.Node {
 				return node.Results[0]
 			}
 		}
+
 	case *ast.CaseClause:
 		switch name {
 		case "List", "list":
@@ -236,46 +306,58 @@ func getField(n ast.Node, name string) ast.Node {
 				return node.List[0]
 			}
 		}
+
 	case *ast.SelectorExpr:
 		switch name {
 		case "X", "x":
 			return node.X
+
 		case "Sel", "sel":
 			return node.Sel
 		}
+
 	case *ast.ParenExpr:
 		switch name {
 		case "X", "x":
 			return node.X
 		}
+
 	case *ast.StarExpr:
 		switch name {
 		case "X", "x":
 			return node.X
 		}
+
 	case *ast.CompositeLit:
 		switch name {
 		case "Type", "type":
 			return node.Type
 		}
+
 	case *ast.FuncDecl:
 		switch name {
 		case "Type", "type":
 			return node.Type
+
 		case "Name", "name":
 			return node.Name
+
 		case "Recv", "recv":
 			return node.Recv
+
 		case "Body", "body":
 			return node.Body
 		}
+
 	case *ast.FuncType:
 		switch name {
 		case "Params", "params":
 			return node.Params
+
 		case "Results", "results":
 			return node.Results
 		}
+
 	case *ast.FieldList:
 		switch name {
 		case "List", "list":
@@ -284,6 +366,7 @@ func getField(n ast.Node, name string) ast.Node {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -336,6 +419,7 @@ func (a *AnyOf) Match(n ast.Node, fset *token.FileSet) (Captures, bool) {
 			return caps, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -352,5 +436,6 @@ func (h *HasType) Match(n ast.Node, fset *token.FileSet) (Captures, bool) {
 			return Captures{}, true
 		}
 	}
+
 	return nil, false
 }

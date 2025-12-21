@@ -35,7 +35,8 @@ type LeftFlowBreaker struct {
 	TrailingComma bool   // Add trailing comma before closing bracket
 }
 
-// NewLeftFlowBreaker creates a new LeftFlowBreaker with default settings for function calls.
+// NewLeftFlowBreaker creates a new LeftFlowBreaker with default settings for
+// function calls.
 func NewLeftFlowBreaker() *LeftFlowBreaker {
 	return &LeftFlowBreaker{
 		Separator:     ", ",
@@ -78,6 +79,7 @@ func (b *LeftFlowBreaker) formatSingleLine(elements []string) string {
 		sb.WriteString(elem)
 	}
 	sb.WriteString(b.CloseBracket)
+
 	return sb.String()
 }
 
@@ -135,8 +137,8 @@ func (b *LeftFlowBreaker) formatLeftFlow(ctx BreakContext) BreakResult {
 	}
 }
 
-// VerticalBreaker puts each element on its own line.
-// Used for: multi-line function calls (one arg per line).
+// VerticalBreaker puts each element on its own line. Used for: multi-line
+// function calls (one arg per line).
 type VerticalBreaker struct {
 	Separator     string // Separator (e.g., ",")
 	OpenBracket   string // Opening bracket
@@ -205,10 +207,12 @@ func (s *CommaSplitter) Split(content string) []string {
 	if s.RespectAllBrackets {
 		return scanner.SplitTopLevelAny(content)
 	}
+
 	return scanner.SplitTopLevel(content)
 }
 
-// DefaultCommaSplitter creates a comma splitter that respects all bracket types.
+// DefaultCommaSplitter creates a comma splitter that respects all bracket
+// types.
 func DefaultCommaSplitter() *CommaSplitter {
 	return &CommaSplitter{RespectAllBrackets: true}
 }

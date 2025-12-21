@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksSelectorTermInsideArithmeticChain(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksSelectorTermInsideArithmeticChain(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,18 +20,20 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The arithmetic chain should break, and the selector chain term should be
-	// allowed to break within the argument expression.
+	// The arithmetic chain should break, and the selector chain term should
+	// be allowed to break within the argument expression.
 	require.Contains(t, outStr, "+\n\t\t\tsomeReallyLongPackageName.")
 	require.Contains(t, outStr, "someReallyLongTypeName.")
 	require.Contains(t, outStr, "+\n\t\t\tthirdVeryLongIdentifierName")
@@ -43,4 +47,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-

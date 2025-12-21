@@ -17,7 +17,9 @@ type ExpandCompositeLitAction struct {
 }
 
 // Execute implements Action for ExpandCompositeLitAction.
-func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
+func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
+	bool) {
+
 	node := resolveTarget(caps, a.Target)
 	lit, ok := node.(*ast.CompositeLit)
 	if !ok || lit == nil {
@@ -34,14 +36,15 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if orig == "" {
 		return nil, false
 	}
-	// Avoid spans containing inline comments; AST printing doesn't preserve them
-	// inside expressions reliably.
+	// Avoid spans containing inline comments; AST printing doesn't preserve
+	// them inside expressions reliably.
 	if hasLineComment(orig) || hasBlockComment(orig) {
 		return nil, false
 	}
 
-	// Only expand when it helps: either the literal participates in a line that
-	// exceeds the limit, or it's nested inside a multiline composite literal.
+	// Only expand when it helps: either the literal participates in a line
+	// that exceeds the limit, or it's nested inside a multiline composite
+	// literal.
 	if !shouldExpandCompositeLit(lit, ctx) {
 		return nil, false
 	}
@@ -59,13 +62,15 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
 		return nil, false
 	}
+
 	return out, true
 }
 
 func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
-	// Avoid rewriting composite literals inside var/const declarations. gofmt's
-	// alignment behavior in `var (...)` blocks is sensitive to multiline
-	// initializers, and the "next" goldens treat these as stable fixtures.
+	// Avoid rewriting composite literals inside var/const declarations.
+	// gofmt's alignment behavior in `var (...)` blocks is sensitive to
+	// multiline initializers, and the "next" goldens treat these as stable
+	// fixtures.
 	for cur := ast.Node(lit); cur != nil; cur = ctx.Parent(cur) {
 		if _, ok := cur.(*ast.ValueSpec); ok {
 			return false
@@ -77,8 +82,9 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 		}
 	}
 
-	// Avoid rewriting composite literals that are inside call argument lists.
-	// Call formatting owns these and has better context for indentation.
+	// Avoid rewriting composite literals that are inside call argument
+	// lists. Call formatting owns these and has better context for
+	// indentation.
 	for cur := ast.Node(lit); cur != nil; {
 		parent := ctx.Parent(cur)
 		call, ok := parent.(*ast.CallExpr)
@@ -103,8 +109,9 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 		return true
 	}
 
-	// If this literal is nested inside another composite literal that is already
-	// multiline, prefer expanding it as well for readability and consistency.
+	// If this literal is nested inside another composite literal that is
+	// already multiline, prefer expanding it as well for readability and
+	// consistency.
 	for cur := ctx.Parent(lit); cur != nil; cur = ctx.Parent(cur) {
 		if _, ok := cur.(*ast.CompositeLit); ok {
 			if strings.Contains(string(ctx.NodeSource(cur)), "\n") {
@@ -112,6 +119,7 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 			}
 		}
 	}
+
 	return false
 }
 
@@ -163,5 +171,6 @@ func formatCompositeLitMultiline(lit *ast.CompositeLit, ctx *Context) string {
 
 	out.WriteString(wsIndent)
 	out.WriteString("}")
+
 	return out.String()
 }

@@ -16,39 +16,41 @@ import (
 
 // InvoiceDB is the database that stores the information about invoices.
 type InvoiceDB interface {
-	// AddInvoice inserts the targeted invoice into the database.
-	// If the invoice has *any* payment hashes which already exists within
-	// the database, then the insertion will be aborted and rejected due to
-	// the strict policy banning any duplicate payment hashes.
+	// AddInvoice inserts the targeted invoice into the database. If the
+	// invoice has *any* payment hashes which already exists within the
+	// database, then the insertion will be aborted and rejected due to the
+	// strict policy banning any duplicate payment hashes.
 	//
 	// NOTE: A side effect of this function is that it sets AddIndex on
 	// newInvoice.
 	AddInvoice(ctx context.Context, invoice *Invoice,
 		paymentHash lntypes.Hash) (uint64, error)
 
-	// InvoicesAddedSince can be used by callers to seek into the event
-	// time series of all the invoices added in the database. The specified
+	// InvoicesAddedSince can be used by callers to seek into the event time
+	// series of all the invoices added in the database. The specified
 	// sinceAddIndex should be the highest add index that the caller knows
 	// of. This method will return all invoices with an add index greater
 	// than the specified sinceAddIndex.
 	//
 	// NOTE: The index starts from 1, as a result. We enforce that
 	// specifying a value below the starting index value is a noop.
-	InvoicesAddedSince(ctx context.Context, sinceAddIndex uint64) ([]Invoice, error)
+	InvoicesAddedSince(ctx context.Context,
+		sinceAddIndex uint64) ([]Invoice, error)
 
 	// LookupInvoice attempts to look up an invoice according to its 32 byte
 	// payment hash. If an invoice which can settle the HTLC identified by
 	// the passed payment hash isn't found, then an error is returned.
-	// Otherwise, the full invoice is returned.
-	// Before setting the incoming HTLC, the values SHOULD be checked to
-	// ensure the payer meets the agreed upon contractual terms of the
-	// payment.
+	// Otherwise, the full invoice is returned. Before setting the incoming
+	// HTLC, the values SHOULD be checked to ensure the payer meets the
+	// agreed upon contractual terms of the payment.
 	LookupInvoice(ctx context.Context, ref InvoiceRef) (Invoice, error)
 
 	// FetchPendingInvoices returns all invoices that have not yet been
 	// settled or canceled.
-	FetchPendingInvoices(ctx context.Context) (map[lntypes.Hash]Invoice,
-		error)
+	FetchPendingInvoices(ctx context.Context) (
+		map[lntypes.Hash]Invoice,
+		error,
+	)
 
 	// QueryInvoices allows a caller to query the invoice database for
 	// invoices within the specified add index range.
@@ -57,16 +59,15 @@ type InvoiceDB interface {
 	// UpdateInvoice attempts to update an invoice corresponding to the
 	// passed payment hash. If an invoice matching the passed payment hash
 	// doesn't exist within the database, then the action will fail with a
-	// "not found" error.
-	// The setIDHint is used to signal whether AMP HTLCs should be fetched
-	// for the invoice. If a blank setID is passed no HTLCs will be fetched
-	// in case of an AMP invoice. Nil means all HTLCs for all sub AMP
-	// invoices will be fetched and if a specific setID is supplied only
-	// HTLCs for that setID will be fetched.
+	// "not found" error. The setIDHint is used to signal whether AMP HTLCs
+	// should be fetched for the invoice. If a blank setID is passed no
+	// HTLCs will be fetched in case of an AMP invoice. Nil means all HTLCs
+	// for all sub AMP invoices will be fetched and if a specific setID is
+	// supplied only HTLCs for that setID will be fetched.
 	//
 	// The update is performed inside the same database transaction that
-	// fetches the invoice and is therefore atomic. The fields to update
-	// are controlled by the supplied callback.
+	// fetches the invoice and is therefore atomic. The fields to update are
+	// controlled by the supplied callback.
 	//
 	// TODO(positiveblue): abstract this functionality so it makes sense for
 	// other backends like sql.
@@ -80,10 +81,8 @@ type InvoiceDB interface {
 	//
 	// NOTE: The index starts from 1, as a result. We enforce that
 	// specifying a value below the starting index value is a noop.
-	InvoicesSettledSince(ctx context.Context, sinceSettleIndex uint64) (
-		[]Invoice,
-
-		error)
+	InvoicesSettledSince(ctx context.Context,
+		sinceSettleIndex uint64) ([]Invoice, error)
 
 	// DeleteInvoice attempts to delete the passed invoices from the
 	// database in one transaction. The passed delete references hold all
@@ -137,16 +136,16 @@ type InvoiceQuery struct {
 	// starting from the add index.
 	NumMaxInvoices uint64
 
-	// PendingOnly, if set, returns unsettled invoices starting from the
-	// add index.
+	// PendingOnly, if set, returns unsettled invoices starting from the add
+	// index.
 	PendingOnly bool
 
 	// Reversed, if set, indicates that the invoices returned should start
 	// from the IndexOffset and go backwards.
 	Reversed bool
 
-	// CreationDateStart, expressed in Unix seconds, if set, filters out
-	// all invoices with a creation date greater than or equal to it.
+	// CreationDateStart, expressed in Unix seconds, if set, filters out all
+	// invoices with a creation date greater than or equal to it.
 	CreationDateStart int64
 
 	// CreationDateEnd, if set, filters out all invoices with a creation
@@ -208,8 +207,8 @@ type InvoiceUpdater interface {
 	// amount.
 	UpdateInvoiceAmtPaid(amtPaid lnwire.MilliSatoshi) error
 
-	// UpdateAmpState updates the state of the AMP invoice identified by
-	// the setID.
+	// UpdateAmpState updates the state of the AMP invoice identified by the
+	// setID.
 	UpdateAmpState(setID [32]byte, newState InvoiceStateAMP,
 		circuitKey models.CircuitKey) error
 
@@ -252,9 +251,9 @@ type HtlcModifyRequest struct {
 // interceptor after processing the HTLC modify request.
 type HtlcModifyResponse struct {
 	// AmountPaid is the amount that the client has decided the HTLC is
-	// actually worth. This might be different from the amount that the
-	// HTLC was originally sent with, in case additional value is carried
-	// along with it (which might be the case in custom channels).
+	// actually worth. This might be different from the amount that the HTLC
+	// was originally sent with, in case additional value is carried along
+	// with it (which might be the case in custom channels).
 	AmountPaid lnwire.MilliSatoshi
 
 	// CancelSet is a flag the interceptor client can set to force a

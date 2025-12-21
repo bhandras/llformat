@@ -18,17 +18,19 @@ func f() {
 func someFunc(args ...any) any { return nil }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          40,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args-groups-pairs",
-		UseDSLLogCalls:       false,
-		UseDSLExpr:           false,
-		UseDSLComments:       false,
-		UseDSLFuncSigs:       false,
-		UseDSLBlankLines:     false,
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          40,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args-groups-pairs",
+			UseDSLLogCalls:       false,
+			UseDSLExpr:           false,
+			UseDSLComments:       false,
+			UseDSLFuncSigs:       false,
+			UseDSLBlankLines:     false,
+		},
+	)
 
 	out1 := p.Format([]byte(in))
 	out2 := p.Format(out1)
@@ -42,7 +44,9 @@ func someFunc(args ...any) any { return nil }
 	requireASTEquivalent(t, []byte(in), out1)
 }
 
-func TestPipeline_CallArgsGroupingPairs_OddArgCountLeavesLastSolo(t *testing.T) {
+func TestPipeline_CallArgsGroupingPairs_OddArgCountLeavesLastSolo(
+	t *testing.T) {
+
 	t.Parallel()
 
 	const in = `package p
@@ -54,17 +58,19 @@ func f() {
 func someFunc(args ...any) any { return nil }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          40,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args-groups-pairs",
-		UseDSLLogCalls:       false,
-		UseDSLExpr:           false,
-		UseDSLComments:       false,
-		UseDSLFuncSigs:       false,
-		UseDSLBlankLines:     false,
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          40,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args-groups-pairs",
+			UseDSLLogCalls:       false,
+			UseDSLExpr:           false,
+			UseDSLComments:       false,
+			UseDSLFuncSigs:       false,
+			UseDSLBlankLines:     false,
+		},
+	)
 
 	out := string(p.Format([]byte(in)))
 	require.Contains(t, out, "\"a\", 1,")

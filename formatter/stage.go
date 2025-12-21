@@ -13,7 +13,8 @@ type Stage struct {
 	Formatter Formatter
 
 	// Requires lists the names of stages that must run before this one.
-	// This allows explicit dependency declaration rather than implicit ordering.
+	// This allows explicit dependency declaration rather than implicit
+	// ordering.
 	Requires []string
 }
 
@@ -29,11 +30,12 @@ func NewStage(name string, formatter Formatter) Stage {
 // WithRequires returns a new Stage with the given dependencies.
 func (s Stage) WithRequires(requires ...string) Stage {
 	s.Requires = append(s.Requires, requires...)
+
 	return s
 }
 
-// StageOrder validates and returns the execution order for stages.
-// Returns an error if there are cycles or missing dependencies.
+// StageOrder validates and returns the execution order for stages. Returns an
+// error if there are cycles or missing dependencies.
 func StageOrder(stages []Stage) ([]Stage, error) {
 	// Kahn's algorithm with stable ordering.
 	stageMap := make(map[string]Stage, len(stages))
@@ -43,7 +45,8 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 			return nil, fmt.Errorf("stage with empty name")
 		}
 		if _, exists := stageMap[s.Name]; exists {
-			return nil, fmt.Errorf("duplicate stage name: %q", s.Name)
+			return nil, fmt.Errorf("duplicate stage name: %q",
+				s.Name)
 		}
 		stageMap[s.Name] = s
 		order = append(order, s.Name)
@@ -59,7 +62,8 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 	for _, s := range stages {
 		for _, req := range s.Requires {
 			if _, ok := stageMap[req]; !ok {
-				return nil, fmt.Errorf("stage %q requires missing stage %q", s.Name, req)
+				return nil, fmt.Errorf("stage %q requires "+
+					"missing stage %q", s.Name, req)
 			}
 			inDegree[s.Name]++
 			dependents[req] = append(dependents[req], s.Name)
@@ -112,12 +116,14 @@ type StageStyleOptions struct {
 
 	DSLMultiLineStyle string
 	DSLSigsStyle      string
-	// DSLLogCallsMinTailLen controls how aggressively the "next" log/printf call
-	// formatter avoids leaving a tiny remainder segment on the next line when
-	// splitting a long string literal. A value of 0 uses the profile default.
+	// DSLLogCallsMinTailLen controls how aggressively the "next" log/printf
+	// call formatter avoids leaving a tiny remainder segment on the next
+	// line when splitting a long string literal. A value of 0 uses the
+	// profile default.
 	DSLLogCallsMinTailLen int
-	// DSLBlankLinesExtraIfErrReturn controls whether native DSL blank line rules
-	// should insert a blank line before `if err != nil { return ... }` patterns.
+	// DSLBlankLinesExtraIfErrReturn controls whether native DSL blank line
+	// rules should insert a blank line before `if err != nil { return ...
+	// }` patterns.
 	DSLBlankLinesExtraIfErrReturn bool
 
 	DSLExprLogicalStyle       string
@@ -137,16 +143,20 @@ type DSLStageOptions struct {
 	AutoCallArgs  bool
 }
 
-// DefaultStages returns the standard llformat stage configuration.
-// This creates stages from the existing formatters with explicit dependencies.
-func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
-	return DefaultStagesWithOptions(cfg, StageOptions{
-		Selection: StageSelectionOptions{},
-		Style: StageStyleOptions{
-			CommentMoveInline: commentMoveInline,
-			Excludes:          excludes,
+// DefaultStages returns the standard llformat stage configuration. This creates
+// stages from the existing formatters with explicit dependencies.
+func DefaultStages(cfg BaseConfig, commentMoveInline bool,
+	excludes []string) []Stage {
+
+	return DefaultStagesWithOptions(
+		cfg, StageOptions{
+			Selection: StageSelectionOptions{},
+			Style: StageStyleOptions{
+				CommentMoveInline: commentMoveInline,
+				Excludes:          excludes,
+			},
 		},
-	})
+	)
 }
 
 // DefaultStagesWithOptions returns stages with full configuration options.
@@ -154,12 +164,24 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 	dslBundle := ResolveDSLBundle(opts)
 	stagePlan := stagePlanFromOptions(opts)
 
-	commentFormatter := buildCommentStageFormatter("comments", cfg, opts, stagePlan, dslBundle)
-	callFormatter := buildCompactCallStageFormatter("compact-calls", cfg, opts, stagePlan, dslBundle)
-	exprFormatter := buildExpressionStageFormatter("expressions", cfg, opts, stagePlan, dslBundle)
-	multiLineFormatter := buildMultiLineCallStageFormatter("multiline-calls", cfg, opts, stagePlan, dslBundle)
-	signatureFormatter := buildSignatureStageFormatter("signatures", cfg, opts, stagePlan, dslBundle)
-	blankLineFormatter := buildBlankLineStageFormatter("blank-lines", cfg, opts, stagePlan, dslBundle)
+	commentFormatter := buildCommentStageFormatter(
+		"comments", cfg, opts, stagePlan, dslBundle,
+	)
+	callFormatter := buildCompactCallStageFormatter(
+		"compact-calls", cfg, opts, stagePlan, dslBundle,
+	)
+	exprFormatter := buildExpressionStageFormatter(
+		"expressions", cfg, opts, stagePlan, dslBundle,
+	)
+	multiLineFormatter := buildMultiLineCallStageFormatter(
+		"multiline-calls", cfg, opts, stagePlan, dslBundle,
+	)
+	signatureFormatter := buildSignatureStageFormatter(
+		"signatures", cfg, opts, stagePlan, dslBundle,
+	)
+	blankLineFormatter := buildBlankLineStageFormatter(
+		"blank-lines", cfg, opts, stagePlan, dslBundle,
+	)
 
 	return []Stage{
 		{
@@ -170,27 +192,37 @@ func DefaultStagesWithOptions(cfg BaseConfig, opts StageOptions) []Stage {
 		{
 			Name:      "compact-calls",
 			Formatter: callFormatter,
-			Requires:  []string{"comments"}, // After comment formatting
+			Requires: []string{
+				"comments",
+			}, // After comment formatting
 		},
 		{
 			Name:      "expressions",
 			Formatter: exprFormatter,
-			Requires:  []string{"compact-calls"}, // After call formatting
+			Requires: []string{
+				"compact-calls",
+			}, // After call formatting
 		},
 		{
 			Name:      "multiline-calls",
 			Formatter: multiLineFormatter,
-			Requires:  []string{"expressions"}, // After expression formatting
+			Requires: []string{
+				"expressions",
+			}, // After expression formatting
 		},
 		{
 			Name:      "signatures",
 			Formatter: signatureFormatter,
-			Requires:  []string{"multiline-calls"}, // After call formatting
+			Requires: []string{
+				"multiline-calls",
+			}, // After call formatting
 		},
 		{
 			Name:      "blank-lines",
 			Formatter: blankLineFormatter,
-			Requires:  []string{"signatures"}, // After signature formatting
+			Requires: []string{
+				"signatures",
+			}, // After signature formatting
 		},
 	}
 }

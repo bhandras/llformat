@@ -30,8 +30,23 @@ func f(chanBackupsProtos struct{ ChanBackups []int }) {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out, "packedBackupsFromProtoSource := make(\n", "expected the multiline make() call to break right after `make(`")
-	require.Contains(t, out, "\t\t[][]byte, 0,", "expected packed multiline call args (avoid one-arg-per-line where possible)")
-	require.NotContains(t, out, "\t\t[][]byte,\n\t\t0,", "must not force each argument onto its own line for make() calls")
-	require.Contains(t, out, "len(chanBackupsProtos.ChanBackups)", "must not explode nested len(...) into a multiline call when it can remain flat")
+	require.Contains(
+		t, out, "packedBackupsFromProtoSource := make(\n", "expected "+
+			"the multiline make() call to break right after `make(`",
+	)
+	require.Contains(
+		t, out, "		[][]byte, 0,", "expected packed "+
+			"multiline call args (avoid one-arg-per-line where "+
+			"possible)",
+	)
+	require.NotContains(
+		t, out, "		[][]byte,\n		0,", "must "+
+			"not force each argument onto its own line for "+
+			"make() calls",
+	)
+	require.Contains(
+		t, out, "len(chanBackupsProtos.ChanBackups)", "must not "+
+			"explode nested len(...) into a multiline call when "+
+			"it can remain flat",
+	)
 }

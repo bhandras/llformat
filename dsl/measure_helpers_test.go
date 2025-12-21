@@ -31,7 +31,8 @@ func TestCollapsedLineLenAt(t *testing.T) {
 
 	src := []byte("\tX := ")
 	if got := collapsedLineLenAt(src, len(src), "a  b", 8); got != 8+5+3 {
-		// "\tX := " is visual width 8+5 = 13, plus collapsed("a  b") == 3.
+		// "\tX := " is visual width 8+5 = 13, plus collapsed("a b") ==
+		// 3.
 		t.Fatalf("got %d", got)
 	}
 }

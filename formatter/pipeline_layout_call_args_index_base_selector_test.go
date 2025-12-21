@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksSelectorChainBaseInIndexExpr(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksSelectorChainBaseInIndexExpr(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,19 +20,21 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The selector chain base should be allowed to break (after `.`) without
-	// ever inserting a newline between the base and `[` (semicolon insertion
-	// hazard).
+	// The selector chain base should be allowed to break (after `.`)
+	// without ever inserting a newline between the base and `[` (semicolon
+	// insertion hazard).
 	require.Contains(t, outStr, "someReallyLongPackageName.\n")
 	require.Contains(t, outStr, "someReallyLongField[")
 

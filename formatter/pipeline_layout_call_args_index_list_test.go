@@ -18,19 +18,26 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The type-arg list should break at commas, and should never place `]` on its
-	// own line (Go semicolon insertion hazard).
-	require.Contains(t, outStr, "genericThing[\n\t\t\tVeryLongTypeNameOne,\n\t\t\tVeryLongTypeNameTwo,")
+	// The type-arg list should break at commas, and should never place `]`
+	// on its own line (Go semicolon insertion hazard).
+	require.Contains(
+		t, outStr, "genericThing["+
+			"\n"+
+			"			VeryLongTypeNameOne,"+
+			"\n			VeryLongTypeNameTwo,",
+	)
 	require.Contains(t, outStr, "VeryLongTypeNameThree],")
 
 	// Idempotent.

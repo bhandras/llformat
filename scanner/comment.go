@@ -10,8 +10,8 @@ func IsBlockCommentStart(b []byte, i int) bool {
 	return i+1 < len(b) && b[i] == '/' && b[i+1] == '*'
 }
 
-// ScanLineComment advances past a // comment starting at position i.
-// Returns the position after the newline (or end of input).
+// ScanLineComment advances past a // comment starting at position i. Returns
+// the position after the newline (or end of input).
 func ScanLineComment(src []byte, i int) int {
 	for i < len(src) && src[i] != '\n' {
 		i++
@@ -19,6 +19,7 @@ func ScanLineComment(src []byte, i int) int {
 	if i < len(src) {
 		i++ // skip the newline
 	}
+
 	return i
 }
 
@@ -32,5 +33,6 @@ func ScanBlockComment(src []byte, i int) int {
 		}
 		i++
 	}
+
 	return len(src)
 }

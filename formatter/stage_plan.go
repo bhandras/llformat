@@ -45,5 +45,6 @@ func stageModeFromBool(useDSL bool) StageMode {
 	if useDSL {
 		return StageModeDSL
 	}
+
 	return StageModeOff
 }

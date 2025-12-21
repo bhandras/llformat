@@ -13,9 +13,12 @@ import (
 
 func main() {
 	var (
-		outDir = flag.String("out", ".next_goldens", "output directory for generated next goldens (not committed)")
-		col    = flag.Int("col", 80, "column limit")
-		tab    = flag.Int("tab", 8, "tab stop")
+		outDir = flag.String(
+			"out", ".next_goldens", "output directory for "+
+				"generated next goldens (not committed)",
+		)
+		col = flag.Int("col", 80, "column limit")
+		tab = flag.Int("tab", 8, "tab stop")
 	)
 	flag.Parse()
 
@@ -25,14 +28,18 @@ func main() {
 		os.Exit(1)
 	}
 	if len(cases) == 0 {
-		fmt.Fprintln(os.Stderr, "no testdata cases found under ./testdata")
+		fmt.Fprintln(
+			os.Stderr, "no testdata cases found under ./testdata",
+		)
 		os.Exit(1)
 	}
 
-	p := formatter.NewPipeline(formatter.PipelineConfig{
-		ColumnLimit: *col,
-		TabStop:     *tab,
-	})
+	p := formatter.NewPipeline(
+		formatter.PipelineConfig{
+			ColumnLimit: *col,
+			TabStop:     *tab,
+		},
+	)
 
 	for _, dirName := range cases {
 		inPath := filepath.Join("testdata", dirName, "input.go")
@@ -44,11 +51,16 @@ func main() {
 
 		got := p.Format(in)
 
-		// Mirror the testdata layout in the output directory so it's easy to
-		// compare/copy.
-		outPath := filepath.Join(*outDir, "testdata", dirName, "output_next.go")
+		// Mirror the testdata layout in the output directory so it's
+		// easy to compare/copy.
+		outPath := filepath.Join(
+			*outDir, "testdata", dirName, "output_next.go",
+		)
 		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-			fmt.Fprintf(os.Stderr, "mkdir %s: %v\n", filepath.Dir(outPath), err)
+			fmt.Fprintf(
+				os.Stderr, "mkdir %s: %v\n",
+				filepath.Dir(outPath), err,
+			)
 			os.Exit(1)
 		}
 
@@ -83,5 +95,6 @@ func listTestdataCases(root string) ([]string, error) {
 	}
 
 	sort.Strings(cases)
+
 	return cases, nil
 }

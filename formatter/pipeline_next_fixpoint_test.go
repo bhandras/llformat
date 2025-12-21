@@ -7,9 +7,10 @@ import (
 )
 
 func TestPipelineNext_ConvergesWithinSingleRun_WhenEnabled(t *testing.T) {
-	// NewPipeline defaults to a single pass; when explicitly enabled, it should
-	// be able to converge to a stable fixpoint within a single run.
-	in := []byte(`package p
+	// NewPipeline defaults to a single pass; when explicitly enabled, it
+	// should be able to converge to a stable fixpoint within a single run.
+	in := []byte(
+		`package p
 
 import "fmt"
 
@@ -32,14 +33,17 @@ func f(wallet interface{ WithCoinSelectLock(func() error, ...interface{}) error 
 	)
 	return err
 }
-`)
+`,
+	)
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:           60,
-		TabStop:               8,
-		UseOwnershipRegistry:  true,
-		MaxPipelineIterations: 3,
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:           60,
+			TabStop:               8,
+			UseOwnershipRegistry:  true,
+			MaxPipelineIterations: 3,
+		},
+	)
 
 	out1 := p.Format(in)
 	out2 := p.Format(out1)

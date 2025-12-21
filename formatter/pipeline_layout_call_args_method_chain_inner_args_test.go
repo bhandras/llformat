@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksInnerArgsInsideMethodChainArg(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksInnerArgsInsideMethodChainArg(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,20 +20,32 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The argument list for MethodA should be allowed to break, even though it is
-	// nested inside a method chain expression.
-	require.Contains(t, outStr, "MethodA(\n\t\t\t\tfirstConditionThatIsVeryLong &&")
-	require.Contains(t, outStr, "&&\n\t\t\t\t\tsecondConditionThatIsVeryLong")
+	// The argument list for MethodA should be allowed to break, even though
+	// it is nested inside a method chain expression.
+	require.Contains(
+		t, outStr, "MethodA("+
+			"\n"+
+			"				firstConditionThatIs"+
+			"VeryLong &&",
+	)
+	require.Contains(
+		t, outStr, "&&"+
+			"\n"+
+			"					secondCondit"+
+			"ionThatIsVeryLong",
+	)
 	require.Contains(t, outStr, ").\n\t\t\tMethodB()")
 
 	// Idempotent.

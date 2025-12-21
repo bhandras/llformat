@@ -9,16 +9,17 @@ type RuleSet string
 
 const (
 	// RuleSetDefault is the default full DSL rule set (signatures, calls,
-	// expressions, blank lines). It is intended to reproduce legacy behavior
-	// when format functions are injected via DefaultRuleOptions.
+	// expressions, blank lines). It is intended to reproduce legacy
+	// behavior when format functions are injected via DefaultRuleOptions.
 	RuleSetDefault RuleSet = "default"
 
 	// RuleSetExpressionOnly is expression-breaking rules intended to run
-	// alongside other dedicated rule sets (calls/signatures) without overlap.
+	// alongside other dedicated rule sets (calls/signatures) without
+	// overlap.
 	RuleSetExpressionOnly RuleSet = "expression-only"
 
-	// RuleSetExpressionCompat is a conservative expression + signature subset
-	// used for tests that expect legacy-like signature wrapping.
+	// RuleSetExpressionCompat is a conservative expression + signature
+	// subset used for tests that expect legacy-like signature wrapping.
 	RuleSetExpressionCompat RuleSet = "expression-compat"
 )
 
@@ -27,11 +28,15 @@ func RulesFor(set RuleSet, opts DefaultRuleOptions) []Rule {
 	switch set {
 	case RuleSetDefault:
 		return DefaultRulesWithOptions(opts)
+
 	case RuleSetExpressionOnly:
 		return expressionOnlyRules()
+
 	case RuleSetExpressionCompat:
 		return ExpressionRules()
+
 	default:
+
 		// Unknown rule set: fall back to the default for safety.
 		return DefaultRulesWithOptions(opts)
 	}

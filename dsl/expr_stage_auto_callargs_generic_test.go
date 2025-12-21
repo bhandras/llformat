@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExprStage_AutoCallArgs_AllowlistSupportsGenericCallCallee(t *testing.T) {
+func TestExprStage_AutoCallArgs_AllowlistSupportsGenericCallCallee(
+	t *testing.T) {
+
 	t.Parallel()
 
 	const src = `package p
@@ -18,11 +20,15 @@ func f() {
 }
 `
 
-	engine := NewEngine(LongExprRulesWithOptions(LongExprOptions{
-		CallArgsPolicy:    CallArgsPolicyAuto,
-		CallArgsAllowlist: []string{"genericCall"},
-		LogicalChainStyle: "legacy",
-	}))
+	engine := NewEngine(
+		LongExprRulesWithOptions(
+			LongExprOptions{
+				CallArgsPolicy:    CallArgsPolicyAuto,
+				CallArgsAllowlist: []string{"genericCall"},
+				LogicalChainStyle: "legacy",
+			},
+		),
+	)
 	engine.ColumnLimit = 40
 	engine.TabStop = 8
 

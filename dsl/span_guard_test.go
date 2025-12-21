@@ -10,4 +10,3 @@ func TestHasBlockCommentIgnoresStrings(t *testing.T) {
 		t.Fatalf("expected block comment outside string to be detected")
 	}
 }
-

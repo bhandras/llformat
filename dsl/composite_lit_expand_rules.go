@@ -5,8 +5,10 @@ package dsl
 func ExpandCompositeLitRules() []Rule {
 	return []Rule{
 		{
-			Name:     "expand_composite_lit",
-			Pattern:  &NodePattern{Type: "CompositeLit"},
+			Name: "expand_composite_lit",
+			Pattern: &NodePattern{
+				Type: "CompositeLit",
+			},
 			When:     TrueCond{},
 			Priority: 25,
 			Action: &ExpandCompositeLitAction{

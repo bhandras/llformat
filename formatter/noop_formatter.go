@@ -7,4 +7,3 @@ type NoopFormatter struct{}
 func (NoopFormatter) FormatFile(src []byte) []byte {
 	return src
 }
-

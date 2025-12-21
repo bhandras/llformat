@@ -19,18 +19,20 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The nested logical chain should break with continuation indentation within
-	// the argument list.
+	// The nested logical chain should break with continuation indentation
+	// within the argument list.
 	require.Contains(t, outStr, "&&\n\t\t\tsecondConditionThatIsVeryLong")
 
 	// Idempotent.
@@ -42,4 +44,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-

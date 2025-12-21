@@ -30,12 +30,14 @@ type PipelinePlan struct {
 // applying mode/policy bundles and safety adjustments.
 func ResolvePipelinePlan(cfg PipelineConfig) PipelinePlan {
 	p := NewPipeline(cfg)
+
 	return p.Plan()
 }
 
 // Plan returns the resolved plan for this pipeline.
 func (p *Pipeline) Plan() PipelinePlan {
 	plan := stagePlanFromPipelineConfig(p.cfg)
+
 	return PipelinePlan{
 		StagePlan: plan,
 

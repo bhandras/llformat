@@ -15,8 +15,8 @@ type BaseConfig struct {
 	TabStop     int // Tab width for visual calculations (default: 8)
 }
 
-// NewBaseConfig creates a BaseConfig with defaults applied.
-// Zero values are replaced with defaults.
+// NewBaseConfig creates a BaseConfig with defaults applied. Zero values are
+// replaced with defaults.
 func NewBaseConfig(col, tab int) BaseConfig {
 	if col <= 0 {
 		col = DefaultColumnLimit
@@ -24,6 +24,7 @@ func NewBaseConfig(col, tab int) BaseConfig {
 	if tab <= 0 {
 		tab = DefaultTabStop
 	}
+
 	return BaseConfig{
 		ColumnLimit: col,
 		TabStop:     tab,
@@ -35,7 +36,8 @@ func (c BaseConfig) Width(s string) int {
 	return width.VisualLenWithTab(s, c.TabStop)
 }
 
-// WidthFrom returns the visual width after appending content starting from currentCol.
+// WidthFrom returns the visual width after appending content starting from
+// currentCol.
 func (c BaseConfig) WidthFrom(currentCol int, content string) int {
 	return width.AdvanceColsWithTab(currentCol, content, c.TabStop)
 }
@@ -50,6 +52,7 @@ func (c BaseConfig) Remaining(currentCol int) int {
 	if currentCol >= c.ColumnLimit {
 		return 0
 	}
+
 	return c.ColumnLimit - currentCol
 }
 

@@ -20,18 +20,23 @@ func ctxWithParents(t *testing.T, src string) (*Context, *ast.File) {
 
 	parentMap := make(map[ast.Node]ast.Node)
 	var stack []ast.Node
-	ast.Inspect(file, func(n ast.Node) bool {
-		if n != nil {
-			if len(stack) > 0 {
-				parentMap[n] = stack[len(stack)-1]
+	ast.Inspect(
+		file,
+		func(n ast.Node) bool {
+			if n != nil {
+				if len(stack) > 0 {
+					parentMap[n] = stack[len(stack)-1]
+				}
+				stack = append(stack, n)
+			} else if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
 			}
-			stack = append(stack, n)
-		} else if len(stack) > 0 {
-			stack = stack[:len(stack)-1]
-		}
-		return true
-	})
+
+			return true
+		},
+	)
 	ctx.SetParentMap(parentMap)
+
 	return ctx, file
 }
 
@@ -40,30 +45,63 @@ func TestIsSimpleLiteralCond(t *testing.T) {
 		expr   string
 		wantOK bool
 	}{
-		{"0", true},
-		{"42", true},
-		{"3.14", true},
-		{"true", true},
-		{"false", true},
-		{"nil", true},
-		{"-1", true},
-		{"x", false},
-		{"foo()", false},
-		{"a + b", false},
+		{
+			"0",
+			true,
+		},
+		{
+			"42",
+			true,
+		},
+		{
+			"3.14",
+			true,
+		},
+		{
+			"true",
+			true,
+		},
+		{
+			"false",
+			true,
+		},
+		{
+			"nil",
+			true,
+		},
+		{
+			"-1",
+			true,
+		},
+		{
+			"x",
+			false,
+		},
+		{
+			"foo()",
+			false,
+		},
+		{
+			"a + b",
+			false,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.expr, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tt.expr)
-			require.NoError(t, err)
+		t.Run(
+			tt.expr,
+			func(t *testing.T) {
+				expr, err := parser.ParseExpr(tt.expr)
+				require.NoError(t, err)
 
-			caps := Captures{"r": expr}
-			cond := &IsSimpleLiteralCond{Target: "r"}
-			ctx := &Context{}
+				caps := Captures{"r": expr}
+				cond := &IsSimpleLiteralCond{Target: "r"}
+				ctx := &Context{}
 
-			got := cond.Eval(caps, ctx)
-			require.Equal(t, tt.wantOK, got)
-		})
+				got := cond.Eval(caps, ctx)
+				require.Equal(t, tt.wantOK, got)
+			},
+		)
 	}
 }
 
@@ -74,26 +112,47 @@ func TestHasCallExprCond(t *testing.T) {
 		expr   string
 		wantOK bool
 	}{
-		{"foo()", true},
-		{"x.Method()", true},
-		{"len(s) > 0", true},
-		{"a && b && c", false},
-		{"x + y", false},
-		{"42", false},
+		{
+			"foo()",
+			true,
+		},
+		{
+			"x.Method()",
+			true,
+		},
+		{
+			"len(s) > 0",
+			true,
+		},
+		{
+			"a && b && c",
+			false,
+		},
+		{
+			"x + y",
+			false,
+		},
+		{
+			"42",
+			false,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.expr, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tt.expr)
-			require.NoError(t, err)
+		t.Run(
+			tt.expr,
+			func(t *testing.T) {
+				expr, err := parser.ParseExpr(tt.expr)
+				require.NoError(t, err)
 
-			caps := Captures{"node": expr}
-			cond := &HasCallExprCond{Target: "node"}
-			ctx := &Context{Fset: fset}
+				caps := Captures{"node": expr}
+				cond := &HasCallExprCond{Target: "node"}
+				ctx := &Context{Fset: fset}
 
-			got := cond.Eval(caps, ctx)
-			require.Equal(t, tt.wantOK, got)
-		})
+				got := cond.Eval(caps, ctx)
+				require.Equal(t, tt.wantOK, got)
+			},
+		)
 	}
 }
 
@@ -105,26 +164,62 @@ func TestOpIsCond(t *testing.T) {
 		ops    []string
 		wantOK bool
 	}{
-		{"a && b", []string{"&&", "||"}, true},
-		{"a || b", []string{"&&", "||"}, true},
-		{"a + b", []string{"&&", "||"}, false},
-		{"a > b", ComparisonOps(), true},
-		{"a == b", ComparisonOps(), true},
-		{"a + b", ComparisonOps(), false},
+		{
+			"a && b",
+			[]string{
+				"&&",
+				"||",
+			},
+			true,
+		},
+		{
+			"a || b",
+			[]string{
+				"&&",
+				"||",
+			},
+			true,
+		},
+		{
+			"a + b",
+			[]string{
+				"&&",
+				"||",
+			},
+			false,
+		},
+		{
+			"a > b",
+			ComparisonOps(),
+			true,
+		},
+		{
+			"a == b",
+			ComparisonOps(),
+			true,
+		},
+		{
+			"a + b",
+			ComparisonOps(),
+			false,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.expr, func(t *testing.T) {
-			expr, err := parser.ParseExpr(tt.expr)
-			require.NoError(t, err)
+		t.Run(
+			tt.expr,
+			func(t *testing.T) {
+				expr, err := parser.ParseExpr(tt.expr)
+				require.NoError(t, err)
 
-			caps := Captures{"node": expr}
-			cond := &OpIsCond{Target: "node", Operators: tt.ops}
-			ctx := &Context{Fset: fset}
+				caps := Captures{"node": expr}
+				cond := &OpIsCond{Target: "node", Operators: tt.ops}
+				ctx := &Context{Fset: fset}
 
-			got := cond.Eval(caps, ctx)
-			require.Equal(t, tt.wantOK, got)
-		})
+				got := cond.Eval(caps, ctx)
+				require.Equal(t, tt.wantOK, got)
+			},
+		)
 	}
 }
 
@@ -138,7 +233,9 @@ func TestAndCond(t *testing.T) {
 	// Both true
 	cond := &AndCond{
 		Conds: []Condition{
-			&HasCallExprCond{Target: "node"},
+			&HasCallExprCond{
+				Target: "node",
+			},
 			TrueCond{},
 		},
 	}
@@ -164,7 +261,9 @@ func TestOrCond(t *testing.T) {
 	// One true
 	cond := &OrCond{
 		Conds: []Condition{
-			&HasCallExprCond{Target: "node"}, // false
+			&HasCallExprCond{
+				Target: "node",
+			}, // false
 			TrueCond{},
 		},
 	}
@@ -201,19 +300,24 @@ func f() {
 
 	var assign *ast.AssignStmt
 	var ret *ast.ReturnStmt
-	ast.Inspect(file, func(n ast.Node) bool {
-		switch node := n.(type) {
-		case *ast.AssignStmt:
-			if assign == nil && len(node.Rhs) > 0 {
-				if _, ok := node.Rhs[0].(*ast.CallExpr); ok {
-					assign = node
+	ast.Inspect(
+		file,
+		func(n ast.Node) bool {
+			switch node := n.(type) {
+			case *ast.AssignStmt:
+				if assign == nil && len(node.Rhs) > 0 {
+					if _, ok := node.Rhs[0].(*ast.CallExpr); ok {
+						assign = node
+					}
 				}
+
+			case *ast.ReturnStmt:
+				ret = node
 			}
-		case *ast.ReturnStmt:
-			ret = node
-		}
-		return true
-	})
+
+			return true
+		},
+	)
 	require.NotNil(t, assign)
 	require.NotNil(t, ret)
 	require.NotEmpty(t, assign.Rhs)
@@ -228,25 +332,62 @@ func f() {
 	// IsParentTypeCond: ident "foo" is the Fun of rhsCall.
 	funIdent, ok := rhsCall.Fun.(*ast.Ident)
 	require.True(t, ok)
-	require.True(t, (&IsParentTypeCond{Target: "node", Type: "CallExpr"}).Eval(Captures{"node": funIdent}, ctx))
-	require.False(t, (&IsParentTypeCond{Target: "node", Type: "ReturnStmt"}).Eval(Captures{"node": funIdent}, ctx))
+	require.True(
+		t,
+		(&IsParentTypeCond{Target: "node", Type: "CallExpr"}).Eval(Captures{"node": funIdent},
+			ctx,
+		),
+	)
+	require.False(
+		t,
+		(&IsParentTypeCond{Target: "node", Type: "ReturnStmt"}).Eval(Captures{"node": funIdent},
+			ctx,
+		),
+	)
 
-	// IsAncestorTypeCond: literal 1 is nested inside rhsCall as an argument of bar(1).
+	// IsAncestorTypeCond: literal 1 is nested inside rhsCall as an argument
+	// of bar(1).
 	innerCall, ok := rhsCall.Args[0].(*ast.CallExpr)
 	require.True(t, ok)
 	lit, ok := innerCall.Args[0].(*ast.BasicLit)
 	require.True(t, ok)
-	require.True(t, (&IsAncestorTypeCond{Target: "node", Type: "CallExpr"}).Eval(Captures{"node": lit}, ctx))
+	require.True(
+		t,
+		(&IsAncestorTypeCond{Target: "node", Type: "CallExpr"}).Eval(Captures{"node": lit},
+			ctx,
+		),
+	)
 
-	// IsInAssignRHSCond: rhsCall is a direct RHS expression; lhsIdent is not.
-	require.True(t, (&IsInAssignRHSCond{Target: "node"}).Eval(Captures{"node": rhsCall}, ctx))
-	require.False(t, (&IsInAssignRHSCond{Target: "node"}).Eval(Captures{"node": lhsIdent}, ctx))
+	// IsInAssignRHSCond: rhsCall is a direct RHS expression; lhsIdent is
+	// not.
+	require.True(
+		t,
+		(&IsInAssignRHSCond{Target: "node"}).Eval(Captures{"node": rhsCall},
+			ctx,
+		),
+	)
+	require.False(
+		t,
+		(&IsInAssignRHSCond{Target: "node"}).Eval(Captures{"node": lhsIdent},
+			ctx,
+		),
+	)
 
 	// IsInReturnResultsCond: return call is a direct result expression.
 	retCall, ok := ret.Results[0].(*ast.CallExpr)
 	require.True(t, ok)
-	require.True(t, (&IsInReturnResultsCond{Target: "node"}).Eval(Captures{"node": retCall}, ctx))
-	require.False(t, (&IsInReturnResultsCond{Target: "node"}).Eval(Captures{"node": rhsCall}, ctx))
+	require.True(
+		t,
+		(&IsInReturnResultsCond{Target: "node"}).Eval(Captures{"node": retCall},
+			ctx,
+		),
+	)
+	require.False(
+		t,
+		(&IsInReturnResultsCond{Target: "node"}).Eval(Captures{"node": rhsCall},
+			ctx,
+		),
+	)
 }
 
 func TestHasLineCommentCond(t *testing.T) {
@@ -262,12 +403,16 @@ func f() {
 	ctx, file := ctxWithParents(t, src)
 
 	var calls []*ast.CallExpr
-	ast.Inspect(file, func(n ast.Node) bool {
-		if call, ok := n.(*ast.CallExpr); ok {
-			calls = append(calls, call)
-		}
-		return true
-	})
+	ast.Inspect(
+		file,
+		func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				calls = append(calls, call)
+			}
+
+			return true
+		},
+	)
 	require.Len(t, calls, 2)
 
 	cond := &HasLineCommentCond{Target: "node"}

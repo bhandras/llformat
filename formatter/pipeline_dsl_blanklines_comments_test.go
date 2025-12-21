@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDSLBlankLinesNative_InsertsBlankAboveLeadingReturnComment(t *testing.T) {
+func TestDSLBlankLinesNative_InsertsBlankAboveLeadingReturnComment(
+	t *testing.T) {
+
 	const in = `package p
 
 func f(x int) int {
@@ -18,20 +20,27 @@ func f(x int) int {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:            80,
-		TabStop:                8,
-		UseDSLBlankLines:       true,
-		UseDSLBlankLinesNative: true,
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
 
 	first := p.Format([]byte(in))
 	second := p.Format(first)
 	require.Equal(t, string(first), string(second))
 
 	out := string(first)
-	require.Contains(t, out, "x++\n\n\t// comment belongs to return\n\treturn x\n")
-	require.NotContains(t, out, "// comment belongs to return\n\n\treturn x")
+	require.Contains(
+		t, out,
+		"x++\n\n	// comment belongs to return\n	return x\n",
+	)
+	require.NotContains(
+		t, out, "// comment belongs to return\n\n	return x",
+	)
 
 	fset := token.NewFileSet()
 	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
@@ -54,27 +63,36 @@ func f(x int) {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:            80,
-		TabStop:                8,
-		UseDSLBlankLines:       true,
-		UseDSLBlankLinesNative: true,
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
 
 	first := p.Format([]byte(in))
 	second := p.Format(first)
 	require.Equal(t, string(first), string(second))
 
 	out := string(first)
-	require.Contains(t, out, "fmt.Println(\"one\")\n\n\t\t// comment belongs to next case\n\tcase 2:\n")
-	require.NotContains(t, out, "// comment belongs to next case\n\n\tcase 2:")
+	require.Contains(
+		t, out, "fmt.Println(\"one\")\n\n		// comment "+
+			"belongs to next case\n	case 2:\n",
+	)
+	require.NotContains(
+		t, out, "// comment belongs to next case\n\n	case 2:",
+	)
 
 	fset := token.NewFileSet()
 	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
 	require.NoError(t, err)
 }
 
-func TestDSLBlankLinesNative_InsertsBlankAboveLeadingBlockComment(t *testing.T) {
+func TestDSLBlankLinesNative_InsertsBlankAboveLeadingBlockComment(
+	t *testing.T) {
+
 	const in = `package p
 
 func f(x int) int {
@@ -84,20 +102,27 @@ func f(x int) int {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:            80,
-		TabStop:                8,
-		UseDSLBlankLines:       true,
-		UseDSLBlankLinesNative: true,
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
 
 	first := p.Format([]byte(in))
 	second := p.Format(first)
 	require.Equal(t, string(first), string(second))
 
 	out := string(first)
-	require.Contains(t, out, "x++\n\n\t/* comment belongs to return */\n\treturn x\n")
-	require.NotContains(t, out, "/* comment belongs to return */\n\n\treturn x")
+	require.Contains(
+		t, out, "x++\n\n	/* comment belongs to return "+
+			"*/\n	return x\n",
+	)
+	require.NotContains(
+		t, out, "/* comment belongs to return */\n\n	return x",
+	)
 
 	fset := token.NewFileSet()
 	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)

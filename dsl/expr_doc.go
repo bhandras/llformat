@@ -16,9 +16,9 @@ type exprDocInfo struct {
 	// internal breaks are indented by one extra tab relative to the current
 	// indentation.
 	//
-	// For some docs (notably generic CallExpr docs), this is false because the
-	// doc already controls indentation and expects to align closing parens with
-	// the current indentation level.
+	// For some docs (notably generic CallExpr docs), this is false because
+	// the doc already controls indentation and expects to align closing
+	// parens with the current indentation level.
 	NeedsContinuationIndent bool
 }
 
@@ -46,14 +46,21 @@ func exprDoc(expr ast.Expr, ctx *Context) (info exprDocInfo, ok bool) {
 	return exprDocWithKind(expr, ctx, exprDocKindTopLevel)
 }
 
-func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDocInfo, ok bool) {
+func exprDocWithKind(expr ast.Expr, ctx *Context,
+	kind exprDocKind) (info exprDocInfo, ok bool) {
+
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
 		doc, ok := selectorChainDoc(e, ctx)
 		if !ok {
 			return exprDocInfo{}, false
 		}
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: true,
+		}, true
+
 	case *ast.IndexListExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -62,53 +69,87 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
+
 		// IndexListExpr controls its own bracket indentation decisions.
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.CallExpr:
 		if kind == exprDocKindCallArg {
 			if doc, ok := methodChainDocWithKind(e, ctx, kind); ok {
-				return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+				return exprDocInfo{
+					Doc:                     doc,
+					NeedsContinuationIndent: true,
+				}, true
 			}
-			// Fall back to generic call formatting so nested calls can break their
-			// arguments (including generic callees like `f[T, U](...)`).
+			// Fall back to generic call formatting so nested calls
+			// can break their arguments (including generic callees
+			// like `f[T, U](...)`).
 			if doc, ok := genericCallDoc(e, ctx); ok {
-				return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+				return exprDocInfo{
+					Doc:                     doc,
+					NeedsContinuationIndent: false,
+				}, true
 			}
+
 			return exprDocInfo{}, false
 		}
 
-		// Top-level expression rules: call formatting is owned by the call/multiline
-		// stages, but we still support method-call chains (which do not alter call
-		// argument structure).
+		// Top-level expression rules: call formatting is owned by the
+		// call/multiline stages, but we still support method-call
+		// chains (which do not alter call argument structure).
 		if doc, ok := methodChainDoc(e, ctx); ok {
-			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+			return exprDocInfo{
+				Doc:                     doc,
+				NeedsContinuationIndent: true,
+			}, true
 		}
+
 		return exprDocInfo{}, false
+
 	case *ast.BinaryExpr:
-		if kind == exprDocKindCallArg && (e.Op == token.LAND || e.Op == token.LOR) {
+		if kind == exprDocKindCallArg &&
+			(e.Op == token.LAND || e.Op == token.LOR) {
+
 			doc, ok := logicalBinaryExprDoc(e, ctx, kind)
 			if !ok {
 				return exprDocInfo{}, false
 			}
-			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+
+			return exprDocInfo{
+				Doc:                     doc,
+				NeedsContinuationIndent: true,
+			}, true
 		}
 		if kind == exprDocKindCallArg && isComparisonOp(e.Op) {
 			doc, ok := comparisonBinaryExprDoc(e, ctx, kind)
 			if !ok {
 				return exprDocInfo{}, false
 			}
-			return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+
+			return exprDocInfo{
+				Doc:                     doc,
+				NeedsContinuationIndent: true,
+			}, true
 		}
 		doc, ok := sameOpBinaryChainDocWithKind(e, ctx, kind)
 		if !ok {
 			return exprDocInfo{}, false
 		}
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: true}, true
+
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: true,
+		}, true
+
 	case *ast.ParenExpr:
-		// Be conservative with parenthesized calls in call-arg context. These are
-		// particularly prone to producing parse hazards when combined with
-		// argument-list commas and nested call rewrites (Go semicolon insertion is
-		// unforgiving around closing parens).
+		// Be conservative with parenthesized calls in call-arg context.
+		// These are particularly prone to producing parse hazards when
+		// combined with argument-list commas and nested call rewrites
+		// (Go semicolon insertion is unforgiving around closing
+		// parens).
 		if kind == exprDocKindCallArg {
 			if _, ok := e.X.(*ast.CallExpr); ok {
 				return exprDocInfo{}, false
@@ -118,9 +159,14 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
-		// ParenExpr controls its own indentation; callers should treat it like a
-		// self-contained block.
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+
+		// ParenExpr controls its own indentation; callers should treat
+		// it like a self-contained block.
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.KeyValueExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -129,7 +175,12 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.CompositeLit:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -138,8 +189,14 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
-		// CompositeLit includes its own braces and indentation decisions.
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+
+		// CompositeLit includes its own braces and indentation
+		// decisions.
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.UnaryExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -148,7 +205,9 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
+
 		return info, true
+
 	case *ast.StarExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -157,7 +216,9 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
+
 		return info, true
+
 	case *ast.TypeAssertExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -166,8 +227,14 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
-		// TypeAssertExpr includes `.(` and `)` and controls its own indentation.
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+
+		// TypeAssertExpr includes `.(` and `)` and controls its own
+		// indentation.
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.IndexExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -176,8 +243,13 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
+
 		// IndexExpr controls its own bracket indentation decisions.
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.SliceExpr:
 		if kind != exprDocKindCallArg {
 			return exprDocInfo{}, false
@@ -186,12 +258,24 @@ func exprDocWithKind(expr ast.Expr, ctx *Context, kind exprDocKind) (info exprDo
 		if !ok {
 			return exprDocInfo{}, false
 		}
+
 		// SliceExpr controls its own bracket indentation decisions.
-		return exprDocInfo{Doc: doc, NeedsContinuationIndent: false}, true
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+
 	case *ast.Ident, *ast.BasicLit:
-		// Render atomic expressions as-is. These are safe to embed as docs but do
-		// not participate in internal breaking yet.
-		return exprDocInfo{Doc: layout.T(renderNode(expr, ctx.Fset)), NeedsContinuationIndent: false}, true
+
+		// Render atomic expressions as-is. These are safe to embed as
+		// docs but do not participate in internal breaking yet.
+		return exprDocInfo{
+			Doc: layout.T(
+				renderNode(expr, ctx.Fset),
+			),
+			NeedsContinuationIndent: false,
+		}, true
+
 	default:
 		return exprDocInfo{}, false
 	}
@@ -201,6 +285,7 @@ func indentExprDocIfNeeded(info exprDocInfo) layout.Doc {
 	if info.NeedsContinuationIndent {
 		return layout.N("\t", info.Doc)
 	}
+
 	return info.Doc
 }
 
@@ -234,6 +319,7 @@ func selectorChainDoc(sel *ast.SelectorExpr, ctx *Context) (layout.Doc, bool) {
 	for _, name := range sels {
 		docs = append(docs, layout.T("."), layout.SL(), layout.T(name))
 	}
+
 	return layout.G(layout.C(docs...)), true
 }
 
@@ -241,13 +327,16 @@ func methodChainDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	return methodChainDocWithKind(call, ctx, exprDocKindTopLevel)
 }
 
-func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func methodChainDocWithKind(call *ast.CallExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if call == nil {
 		return nil, false
 	}
 
-	// Method chains are a series of CallExpr nodes whose Fun is a SelectorExpr
-	// and whose receiver is another CallExpr (except for the first).
+	// Method chains are a series of CallExpr nodes whose Fun is a
+	// SelectorExpr and whose receiver is another CallExpr (except for the
+	// first).
 
 	var segs []segment
 	cur := call
@@ -259,7 +348,11 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 			return nil, false
 		}
 
-		seg := segment{name: sel.Sel.Name, ellipsis: cur.Ellipsis.IsValid(), args: cur.Args}
+		seg := segment{
+			name:     sel.Sel.Name,
+			ellipsis: cur.Ellipsis.IsValid(),
+			args:     cur.Args,
+		}
 		segs = append(segs, seg)
 
 		next, ok := sel.X.(*ast.CallExpr)
@@ -293,19 +386,22 @@ func methodChainDocWithKind(call *ast.CallExpr, ctx *Context, kind exprDocKind) 
 	return layout.G(layout.C(docs...)), true
 }
 
-func methodChainSegmentDoc(seg segment, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
-	// Each segment is its own group so it can render flat even when the overall
-	// chain breaks at dots.
+func methodChainSegmentDoc(seg segment, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
+	// Each segment is its own group so it can render flat even when the
+	// overall chain breaks at dots.
 	var body []layout.Doc
 	body = append(body, layout.T(seg.name), layout.T("("))
 
 	if len(seg.args) == 0 {
 		body = append(body, layout.T(")"))
+
 		return layout.G(layout.C(body...)), true
 	}
 
-	// Prefer structured docs for supported expression forms so nested expressions
-	// can lay out cleanly within the argument list.
+	// Prefer structured docs for supported expression forms so nested
+	// expressions can lay out cleanly within the argument list.
 	var flatArgs []layout.Doc
 	var brokenArgs []layout.Doc
 	forceBreakArgs := false
@@ -316,9 +412,10 @@ func methodChainSegmentDoc(seg segment, ctx *Context, kind exprDocKind) (layout.
 			return nil, false
 		}
 
-		// For method chains, always build call-arg docs for arguments when
-		// possible. This lets segments like Configure(Config{...}) break their
-		// argument list independently from the chain breaking at dots.
+		// For method chains, always build call-arg docs for arguments
+		// when possible. This lets segments like Configure(Config{...})
+		// break their argument list independently from the chain
+		// breaking at dots.
 		var argDoc layout.Doc
 		if info, ok := exprDocWithKind(arg, ctx, exprDocKindCallArg); ok {
 			argDoc = indentExprDocIfNeeded(info)
@@ -329,17 +426,21 @@ func methodChainSegmentDoc(seg segment, ctx *Context, kind exprDocKind) (layout.
 			argDoc = layout.T(argText)
 		}
 
-		// Prefer breaking argument lists in method-chain segments when they
-		// contain a struct-like composite literal. This keeps segments like:
-		//   client.Configure(Config{...}).Execute(...)
+		// Prefer breaking argument lists in method-chain segments when
+		// they contain a struct-like composite literal. This keeps
+		// segments like: client.Configure(Config{...}).Execute(...)
 		// readable and avoids "just barely fits" single-line chains.
-		if lit, ok := arg.(*ast.CompositeLit); ok && isStructLikeCompositeLit(lit) && len(lit.Elts) >= 2 {
+		if lit, ok := arg.(*ast.CompositeLit); ok &&
+			isStructLikeCompositeLit(lit) && len(lit.Elts) >= 2 {
+
 			forceBreakArgs = true
 		}
 
 		if i > 0 {
 			flatArgs = append(flatArgs, layout.T(", "))
-			brokenArgs = append(brokenArgs, layout.T(","), layout.L())
+			brokenArgs = append(
+				brokenArgs, layout.T(","), layout.L(),
+			)
 		}
 		flatArgs = append(flatArgs, argDoc)
 		brokenArgs = append(brokenArgs, argDoc)
@@ -348,43 +449,49 @@ func methodChainSegmentDoc(seg segment, ctx *Context, kind exprDocKind) (layout.
 	// Handle ellipsis call syntax: f(args...)
 	if seg.ellipsis {
 		if len(flatArgs) > 0 {
-			flatArgs[len(flatArgs)-1] = layout.C(flatArgs[len(flatArgs)-1], layout.T("..."))
+			flatArgs[len(flatArgs)-
+				1] = layout.C(
+				flatArgs[len(flatArgs)-1],
+				layout.T("..."),
+			)
 		}
 		if len(brokenArgs) > 0 {
-			brokenArgs[len(brokenArgs)-1] = layout.C(brokenArgs[len(brokenArgs)-1], layout.T("..."))
+			brokenArgs[len(brokenArgs)-
+				1] = layout.C(
+				brokenArgs[len(brokenArgs)-1],
+				layout.T("..."),
+			)
 		}
 	}
 
 	flat := layout.C(flatArgs...)
 
-	// broken:
-	//   name(
-	//       a,
-	//       b,
-	//   )
+	// broken: name( a, b, )
 	//
-	// The closing `)` is emitted outside the nested block so it aligns with the
-	// segment indentation. This is important for method chains, where we want:
-	//   ...\n\tname(\n\t\targ,\n\t).\n\tNext(...)
+	// The closing `)` is emitted outside the nested block so it aligns with
+	// the segment indentation. This is important for method chains, where
+	// we want: ...\n\tname(\n\t\targ,\n\t).\n\tNext(...)
 	broken := layout.C(
-		layout.N("\t", layout.C(
-			layout.L(),
-			layout.C(brokenArgs...),
-			layout.T(","),
-		)),
-		layout.L(),
+		layout.N(
+			"	",
+			layout.C(
+				layout.L(), layout.C(brokenArgs...),
+				layout.T(","),
+			),
+		), layout.L(),
 	)
 
-	// In flat mode, keep args inline. In broken mode, put each arg on its own
-	// line with a trailing comma, then place `)` on its own line aligned to the
-	// segment indentation. This shape is semicolon-safe because the line before
-	// `)` ends with a comma.
+	// In flat mode, keep args inline. In broken mode, put each arg on its
+	// own line with a trailing comma, then place `)` on its own line
+	// aligned to the segment indentation. This shape is semicolon-safe
+	// because the line before `)` ends with a comma.
 	var argsDoc layout.Doc = layout.IB(broken, flat)
 	if forceBreakArgs {
 		argsDoc = layout.C(layout.FB(), argsDoc)
 	}
 	body = append(body, layout.G(argsDoc))
 	body = append(body, layout.T(")"))
+
 	return layout.G(layout.C(body...)), true
 }
 
@@ -397,17 +504,22 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 	}
 
 	funDoc := layout.T(renderNode(call.Fun, ctx.Fset))
-	// Prefer structured docs for the callee too (useful for generic instantiation
-	// expressions like `f[T, U]`), but keep it tightly coupled to the `(` to
-	// avoid semicolon-insertion hazards (`f\n(` is not valid Go).
+	// Prefer structured docs for the callee too (useful for generic
+	// instantiation expressions like `f[T, U]`), but keep it tightly
+	// coupled to the `(` to avoid semicolon-insertion hazards (`f\n(` is
+	// not valid Go).
 	if call.Fun != nil {
-		if info, ok := exprDocWithKind(call.Fun, ctx, exprDocKindCallArg); ok {
+		if info, ok := exprDocWithKind(
+			call.Fun, ctx, exprDocKindCallArg,
+		); ok {
+
 			funDoc = info.Doc
 		}
 	}
 
-	// Be conservative: skip any comment-containing args, or args that already
-	// contain newlines (we don't try to reindent nested multiline spans yet).
+	// Be conservative: skip any comment-containing args, or args that
+	// already contain newlines (we don't try to reindent nested multiline
+	// spans yet).
 	var argDocs []layout.Doc
 	for i, arg := range call.Args {
 		argText := renderNode(arg, ctx.Fset)
@@ -415,16 +527,22 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 			return nil, false
 		}
 
-		// Prefer a structured doc for supported expression forms so nested
-		// expressions can lay out cleanly within nested calls.
+		// Prefer a structured doc for supported expression forms so
+		// nested expressions can lay out cleanly within nested calls.
 		if expr, okCast := arg.(ast.Expr); okCast {
-			if info, okDoc := exprDocWithKind(expr, ctx, exprDocKindCallArg); okDoc {
+			if info, okDoc := exprDocWithKind(
+				expr, ctx, exprDocKindCallArg,
+			); okDoc {
+
 				d := info.Doc
 				if info.NeedsContinuationIndent {
 					d = layout.N("\t", d)
 				}
 				if i > 0 {
-					argDocs = append(argDocs, layout.T(","), layout.L())
+					argDocs = append(
+						argDocs, layout.T(","),
+						layout.L(),
+					)
 				}
 				argDocs = append(argDocs, d)
 				continue
@@ -443,22 +561,25 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 
 	// Handle ellipsis call syntax: f(args...)
 	if call.Ellipsis.IsValid() && len(argDocs) > 0 {
-		argDocs[len(argDocs)-1] = layout.C(argDocs[len(argDocs)-1], layout.T("..."))
+		argDocs[len(argDocs)-
+			1] = layout.C(argDocs[len(argDocs)-1], layout.T("..."))
 	}
 
-	argsGroup := layout.G(layout.C(
-		layout.SL(),
-		layout.C(argDocs...),
-		layout.IB(layout.T(","), layout.T("")),
-	))
+	argsGroup := layout.G(
+		layout.C(
+			layout.SL(), layout.C(argDocs...),
+			layout.IB(
+				layout.T(","), layout.T(""),
+			),
+		),
+	)
 
-	doc := layout.G(layout.C(
-		funDoc,
-		layout.T("("),
-		layout.N("\t", argsGroup),
-		layout.SL(),
-		layout.T(")"),
-	))
+	doc := layout.G(
+		layout.C(
+			funDoc, layout.T("("), layout.N("\t", argsGroup),
+			layout.SL(), layout.T(")"),
+		),
+	)
 
 	return doc, true
 }
@@ -478,28 +599,35 @@ func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
 	}
 
 	// Keep parens explicit while allowing the inner expression to break:
-	// flat:  (inner)
-	// break: (
-	//          inner
-	//        inner)
+	// flat: (inner) break: ( inner inner)
 	//
-	// Note: we intentionally do not place `)` on its own line; doing so can break
-	// parsing due to Go's semicolon insertion.
-	return layout.G(layout.C(
-		layout.T("("),
-		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
-		layout.T(")"),
-	)), true
+	// Note: we intentionally do not place `)` on its own line; doing so can
+	// break parsing due to Go's semicolon insertion.
+	return layout.G(
+		layout.C(
+			layout.T("("),
+			layout.N(
+				"	",
+				layout.G(
+					layout.C(
+						layout.SL(), inner,
+					),
+				),
+			), layout.T(")"),
+		),
+	), true
 }
 
-func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func compositeLitDoc(lit *ast.CompositeLit, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if lit == nil || ctx == nil {
 		return nil, false
 	}
 
-	// Be conservative: do not attempt to reindent existing multiline composite
-	// literals; leave those to other formatters (or gofmt) to avoid surprising
-	// changes.
+	// Be conservative: do not attempt to reindent existing multiline
+	// composite literals; leave those to other formatters (or gofmt) to
+	// avoid surprising changes.
 	litText := renderNode(lit, ctx.Fset)
 	if strings.Contains(litText, "\n") {
 		return nil, false
@@ -517,9 +645,9 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 		}
 
 		typeDoc = layout.T(typeText)
-		// Prefer structured docs for generic instantiations like `T[A, B]`, but
-		// keep the opening `{` tightly coupled to the type to avoid semicolon
-		// insertion hazards.
+		// Prefer structured docs for generic instantiations like `T[A,
+		// B]`, but keep the opening `{` tightly coupled to the type to
+		// avoid semicolon insertion hazards.
 		if info, ok := exprDocWithKind(lit.Type, ctx, kind); ok {
 			typeDoc = info.Doc
 		}
@@ -535,7 +663,8 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 			return nil, false
 		}
 
-		// Prefer structured docs when possible (e.g. nested calls / logical chains).
+		// Prefer structured docs when possible (e.g. nested calls /
+		// logical chains).
 		if expr, okCast := elt.(ast.Expr); okCast {
 			if info, okDoc := exprDocWithKind(expr, ctx, kind); okDoc {
 				d := info.Doc
@@ -543,7 +672,10 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 					d = layout.N("\t", d)
 				}
 				if i > 0 {
-					eltDocs = append(eltDocs, layout.T(","), layout.L())
+					eltDocs = append(
+						eltDocs, layout.T(","),
+						layout.L(),
+					)
 				}
 				eltDocs = append(eltDocs, d)
 				continue
@@ -557,16 +689,20 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 	}
 
 	forceBreak := false
-	if kind == exprDocKindCallArg && isStructLikeCompositeLit(lit) && len(lit.Elts) >= 2 {
-		// Prefer multiline struct literals in call-arg position even when they
-		// technically fit, to avoid awkward "barely fits" cases in method chains.
+	if kind == exprDocKindCallArg && isStructLikeCompositeLit(lit) &&
+		len(lit.Elts) >= 2 {
+
+		// Prefer multiline struct literals in call-arg position even
+		// when they technically fit, to avoid awkward "barely fits"
+		// cases in method chains.
 		forceBreak = true
 	}
 
 	var bodyDocs []layout.Doc
-	// When the overall composite literal is forced multiline (e.g. struct-like
-	// literals in call-arg position), also force the element list to break so we
-	// produce one-element-per-line with a trailing comma.
+	// When the overall composite literal is forced multiline (e.g.
+	// struct-like literals in call-arg position), also force the element
+	// list to break so we produce one-element-per-line with a trailing
+	// comma.
 	if forceBreak {
 		bodyDocs = append(bodyDocs, layout.FB())
 	}
@@ -576,12 +712,7 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 	)
 	body := layout.G(layout.C(bodyDocs...))
 
-	// flat:  T{a, b}
-	// break:
-	//   T{
-	//       a,
-	//       b,
-	//   }
+	// flat: T{a, b} break: T{ a, b, }
 
 	var prefix []layout.Doc
 	if forceBreak {
@@ -589,22 +720,24 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context, kind exprDocKind) (lay
 	}
 
 	// Emit the trailing comma using the outer group's break/flat mode so we
-	// never end up with:
-	//   T{a,\n}
-	// (which is not a valid composite literal: newlines must follow commas).
+	// never end up with: T{a,\n} (which is not a valid composite literal:
+	// newlines must follow commas).
 	trailingComma := layout.IB(layout.T(","), layout.T(""))
 
-	return layout.G(layout.C(append(prefix,
-		typeDoc,
-		layout.T("{"),
-		layout.N("\t", body),
-		trailingComma,
-		layout.SL(),
-		layout.T("}"),
-	)...)), true
+	return layout.G(
+		layout.C(
+			append(
+				prefix, typeDoc, layout.T("{"),
+				layout.N("\t", body), trailingComma,
+				layout.SL(), layout.T("}"),
+			)...,
+		),
+	), true
 }
 
-func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if kv == nil || ctx == nil || kv.Key == nil || kv.Value == nil {
 		return nil, false
 	}
@@ -627,11 +760,12 @@ func keyValueExprDoc(kv *ast.KeyValueExpr, ctx *Context, kind exprDocKind) (layo
 
 	// Keep `Key: ` on the same line, but allow value to break with an extra
 	// continuation indentation.
-	return layout.G(layout.C(
-		layout.T(keyText),
-		layout.T(": "),
-		layout.N("\t", valueDoc),
-	)), true
+	return layout.G(
+		layout.C(
+			layout.T(keyText), layout.T(": "),
+			layout.N("\t", valueDoc),
+		),
+	), true
 }
 
 func isStructLikeCompositeLit(lit *ast.CompositeLit) bool {
@@ -642,9 +776,10 @@ func isStructLikeCompositeLit(lit *ast.CompositeLit) bool {
 	if _, ok := lit.Type.(*ast.MapType); ok {
 		return false
 	}
-	// A "struct-like" literal is a keyed literal where all keys are identifiers
-	// (field names). This avoids forcing multiline on map literals with complex
-	// keys, while still catching typical `T{Field: ...}` forms.
+	// A "struct-like" literal is a keyed literal where all keys are
+	// identifiers (field names). This avoids forcing multiline on map
+	// literals with complex keys, while still catching typical `T{Field:
+	// ...}` forms.
 	for _, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
 		if !ok {
@@ -654,10 +789,13 @@ func isStructLikeCompositeLit(lit *ast.CompositeLit) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
-func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if bin == nil || ctx == nil {
 		return nil, false
 	}
@@ -678,16 +816,20 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (
 		right = indentExprDocIfNeeded(rightInfo)
 	}
 
-	return layout.G(layout.C(
-		left,
-		layout.T(" "),
-		layout.T(bin.Op.String()),
-		layout.L(),
-		right,
-	)), true
+	return layout.G(
+		layout.C(
+			left, layout.T(" "),
+			layout.T(
+				bin.Op.String(),
+			), layout.L(),
+			right,
+		),
+	), true
 }
 
-func sameOpBinaryChainDoc(bin *ast.BinaryExpr, ctx *Context) (layout.Doc, bool) {
+func sameOpBinaryChainDoc(bin *ast.BinaryExpr,
+	ctx *Context) (layout.Doc, bool) {
+
 	return sameOpBinaryChainDocWithKind(bin, ctx, exprDocKindTopLevel)
 }
 
@@ -695,12 +837,15 @@ func isComparisonOp(op token.Token) bool {
 	switch op {
 	case token.EQL, token.NEQ, token.LSS, token.GTR, token.LEQ, token.GEQ:
 		return true
+
 	default:
 		return false
 	}
 }
 
-func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if bin == nil || ctx == nil || bin.X == nil || bin.Y == nil {
 		return nil, false
 	}
@@ -710,7 +855,9 @@ func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind
 
 	leftText := renderNode(bin.X, ctx.Fset)
 	rightText := renderNode(bin.Y, ctx.Fset)
-	if strings.Contains(leftText, "\n") || strings.Contains(rightText, "\n") {
+	if strings.Contains(leftText, "\n") ||
+		strings.Contains(rightText, "\n") {
+
 		return nil, false
 	}
 	if hasAnyComment(leftText) || hasAnyComment(rightText) {
@@ -727,24 +874,29 @@ func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind
 		rightDoc = indentExprDocIfNeeded(info)
 	}
 
-	// flat:  left == right
-	// break: left ==\nright
-	return layout.G(layout.C(
-		leftDoc,
-		layout.T(" "),
-		layout.T(bin.Op.String()),
-		layout.SL(),
-		rightDoc,
-	)), true
+	// flat: left == right break: left ==\nright
+	return layout.G(
+		layout.C(
+			leftDoc, layout.T(" "),
+			layout.T(
+				bin.Op.String(),
+			), layout.SL(),
+			rightDoc,
+		),
+	), true
 }
 
-func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if bin == nil {
 		return nil, false
 	}
 
 	switch bin.Op {
-	case token.LAND, token.LOR, token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+	case token.LAND, token.LOR, token.ADD, token.SUB, token.MUL, token.QUO,
+		token.REM:
+
 	default:
 		return nil, false
 	}
@@ -758,11 +910,15 @@ func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context, kind exprDo
 	var docs []layout.Doc
 	for i, term := range terms {
 		if i > 0 {
-			docs = append(docs, layout.T(" "), layout.T(opStr), layout.L())
+			docs = append(
+				docs, layout.T(" "), layout.T(opStr),
+				layout.L(),
+			)
 		}
 
-		// In call-arg context, prefer structured docs for terms so selector/method
-		// chains can break within the binary expression.
+		// In call-arg context, prefer structured docs for terms so
+		// selector/method chains can break within the binary
+		// expression.
 		if kind == exprDocKindCallArg {
 			if info, ok := exprDocWithKind(term, ctx, kind); ok {
 				docs = append(docs, indentExprDocIfNeeded(info))
@@ -772,10 +928,13 @@ func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context, kind exprDo
 
 		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
 	}
+
 	return layout.G(layout.C(docs...)), true
 }
 
-func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func indexExprDoc(idx *ast.IndexExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if idx == nil || ctx == nil || idx.X == nil || idx.Index == nil {
 		return nil, false
 	}
@@ -800,20 +959,25 @@ func indexExprDoc(idx *ast.IndexExpr, ctx *Context, kind exprDocKind) (layout.Do
 		indexDoc = indentExprDocIfNeeded(info)
 	}
 
-	// flat:  a[b]
-	// break:
-	//   a[
-	//       b
-	//   ]
-	return layout.G(layout.C(
-		baseDoc,
-		layout.T("["),
-		layout.N("\t", layout.G(layout.C(layout.SL(), indexDoc))),
-		layout.T("]"),
-	)), true
+	// flat: a[b] break: a[ b ]
+	return layout.G(
+		layout.C(
+			baseDoc, layout.T("["),
+			layout.N(
+				"	",
+				layout.G(
+					layout.C(
+						layout.SL(), indexDoc,
+					),
+				),
+			), layout.T("]"),
+		),
+	), true
 }
 
-func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if idx == nil || ctx == nil || idx.X == nil || len(idx.Indices) == 0 {
 		return nil, false
 	}
@@ -831,7 +995,9 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (l
 	var indexDocs []layout.Doc
 	for i, index := range idx.Indices {
 		indexText := renderNode(index, ctx.Fset)
-		if strings.Contains(indexText, "\n") || hasAnyComment(indexText) {
+		if strings.Contains(indexText, "\n") ||
+			hasAnyComment(indexText) {
+
 			return nil, false
 		}
 
@@ -848,22 +1014,21 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context, kind exprDocKind) (l
 
 	inner := layout.G(layout.C(layout.SL(), layout.C(indexDocs...)))
 
-	// flat:  x[T, U]
-	// break:
-	//   x[T,
-	//       U]
+	// flat: x[T, U] break: x[T, U]
 	//
-	// Note: we intentionally do not put `]` on its own line; doing so can break
-	// parsing due to Go's semicolon insertion.
-	return layout.G(layout.C(
-		baseDoc,
-		layout.T("["),
-		layout.N("\t", inner),
-		layout.T("]"),
-	)), true
+	// Note: we intentionally do not put `]` on its own line; doing so can
+	// break parsing due to Go's semicolon insertion.
+	return layout.G(
+		layout.C(
+			baseDoc, layout.T("["), layout.N("\t", inner),
+			layout.T("]"),
+		),
+	), true
 }
 
-func unaryExprDoc(u *ast.UnaryExpr, ctx *Context, kind exprDocKind) (exprDocInfo, bool) {
+func unaryExprDoc(u *ast.UnaryExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
 	if u == nil || ctx == nil || u.X == nil {
 		return exprDocInfo{}, false
 	}
@@ -878,16 +1043,22 @@ func unaryExprDoc(u *ast.UnaryExpr, ctx *Context, kind exprDocKind) (exprDocInfo
 		return exprDocInfo{}, false
 	}
 
-	// Keep the operator tightly coupled to the operand. Internal breaking (if
-	// any) is owned by the operand doc.
+	// Keep the operator tightly coupled to the operand. Internal breaking
+	// (if any) is owned by the operand doc.
 	doc := layout.G(layout.C(
 		layout.T(u.Op.String()),
 		operandInfo.Doc,
 	))
-	return exprDocInfo{Doc: doc, NeedsContinuationIndent: operandInfo.NeedsContinuationIndent}, true
+
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: operandInfo.NeedsContinuationIndent,
+	}, true
 }
 
-func starExprDoc(s *ast.StarExpr, ctx *Context, kind exprDocKind) (exprDocInfo, bool) {
+func starExprDoc(s *ast.StarExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
 	if s == nil || ctx == nil || s.X == nil {
 		return exprDocInfo{}, false
 	}
@@ -906,10 +1077,16 @@ func starExprDoc(s *ast.StarExpr, ctx *Context, kind exprDocKind) (exprDocInfo, 
 		layout.T("*"),
 		operandInfo.Doc,
 	))
-	return exprDocInfo{Doc: doc, NeedsContinuationIndent: operandInfo.NeedsContinuationIndent}, true
+
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: operandInfo.NeedsContinuationIndent,
+	}, true
 }
 
-func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if t == nil || ctx == nil || t.X == nil || t.Type == nil {
 		return nil, false
 	}
@@ -934,23 +1111,29 @@ func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context, kind exprDocKind) (l
 		typeDoc = indentExprDocIfNeeded(info)
 	}
 
-	// flat:  x.(T)
-	// break:
-	//   x.(
-	//       T)
+	// flat: x.(T) break: x.( T)
 	//
-	// Note: we intentionally do not allow a newline between `x` and `.(` (Go
-	// semicolon insertion hazard), and we intentionally do not put `)` on its own
-	// line.
-	return layout.G(layout.C(
-		recvDoc,
-		layout.T(".("),
-		layout.N("\t", layout.G(layout.C(layout.SL(), typeDoc))),
-		layout.T(")"),
-	)), true
+	// Note: we intentionally do not allow a newline between `x` and `.(`
+	// (Go semicolon insertion hazard), and we intentionally do not put `)`
+	// on its own line.
+	return layout.G(
+		layout.C(
+			recvDoc, layout.T(".("),
+			layout.N(
+				"	",
+				layout.G(
+					layout.C(
+						layout.SL(), typeDoc,
+					),
+				),
+			), layout.T(")"),
+		),
+	), true
 }
 
-func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc, bool) {
+func sliceExprDoc(s *ast.SliceExpr, ctx *Context,
+	kind exprDocKind) (layout.Doc, bool) {
+
 	if s == nil || ctx == nil || s.X == nil {
 		return nil, false
 	}
@@ -973,6 +1156,7 @@ func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc,
 		if info, ok := exprDocWithKind(e, ctx, kind); ok {
 			return indentExprDocIfNeeded(info), true
 		}
+
 		return layout.T(text), true
 	}
 
@@ -1013,15 +1197,18 @@ func sliceExprDoc(s *ast.SliceExpr, ctx *Context, kind exprDocKind) (layout.Doc,
 
 	inner := layout.C(docs...)
 
-	// flat:  a[low:high]
-	// break:
-	//   a[
-	//       low:high
-	//   ]
-	return layout.G(layout.C(
-		baseDoc,
-		layout.T("["),
-		layout.N("\t", layout.G(layout.C(layout.SL(), inner))),
-		layout.T("]"),
-	)), true
+	// flat: a[low:high] break: a[ low:high ]
+	return layout.G(
+		layout.C(
+			baseDoc, layout.T("["),
+			layout.N(
+				"	",
+				layout.G(
+					layout.C(
+						layout.SL(), inner,
+					),
+				),
+			), layout.T("]"),
+		),
+	), true
 }

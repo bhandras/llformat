@@ -43,23 +43,23 @@ type EditAction interface {
 	ExecuteEdits(caps Captures, ctx *Context) ([]Edit, bool, error)
 }
 
-// NodeOrder controls the order the DSL engine considers nodes when searching for
-// a matching rule.
+// NodeOrder controls the order the DSL engine considers nodes when searching
+// for a matching rule.
 type NodeOrder int
 
 const (
 	// NodeOrderPreorder processes nodes in AST pre-order (current default).
 	NodeOrderPreorder NodeOrder = iota
 
-	// NodeOrderSourceOrder processes nodes in ascending source offset order.
-	// This more closely matches behavior of the legacy scanner-based formatters
-	// which operate left-to-right through the file.
+	// NodeOrderSourceOrder processes nodes in ascending source offset
+	// order. This more closely matches behavior of the legacy scanner-based
+	// formatters which operate left-to-right through the file.
 	NodeOrderSourceOrder
 
 	// NodeOrderDeepestFirst processes smaller-span nodes before larger-span
-	// nodes. This helps avoid “outer before inner” ordering hazards where an
-	// outer rewrite makes decisions based on inner nodes that have not yet been
-	// rewritten within the same engine run.
+	// nodes. This helps avoid “outer before inner” ordering hazards where
+	// an outer rewrite makes decisions based on inner nodes that have not
+	// yet been rewritten within the same engine run.
 	NodeOrderDeepestFirst
 )
 
@@ -69,18 +69,18 @@ type Context struct {
 	Source      []byte
 	ColumnLimit int
 	TabStop     int
-	// Parseable reports whether ctx.Source parsed without syntax errors when the
-	// engine built this Context for the current iteration.
+	// Parseable reports whether ctx.Source parsed without syntax errors
+	// when the engine built this Context for the current iteration.
 	//
-	// The DSL engine uses this to decide whether to enforce parseability checks
-	// on candidate rewrites: when the input is already syntactically invalid,
-	// we still want to allow whitespace/layout rewrites to run (to support
-	// legacy fixtures that are intentionally unparseable).
+	// The DSL engine uses this to decide whether to enforce parseability
+	// checks on candidate rewrites: when the input is already syntactically
+	// invalid, we still want to allow whitespace/layout rewrites to run (to
+	// support legacy fixtures that are intentionally unparseable).
 	Parseable bool
 
-	// ForbiddenSpans holds the union of spans that this engine instance should
-	// not rewrite. It is populated by the outer pipeline when ownership
-	// boundaries are enabled.
+	// ForbiddenSpans holds the union of spans that this engine instance
+	// should not rewrite. It is populated by the outer pipeline when
+	// ownership boundaries are enabled.
 	ForbiddenSpans llast.OffsetSpanSet
 
 	// atomicNodes tracks nodes that should not be broken.
@@ -89,24 +89,27 @@ type Context struct {
 	// parentMap maps each node to its parent in the AST.
 	parentMap map[ast.Node]ast.Node
 
-	// LastAppliedRule records the most recent transforming rule that applied.
-	// This is used for optional tracing.
+	// LastAppliedRule records the most recent transforming rule that
+	// applied. This is used for optional tracing.
 	LastAppliedRule string
 
 	// LastAppliedRulePriority is the priority of the last applied rule.
 	LastAppliedRulePriority int
 
-	// LastAppliedNodeType is a short node type label (e.g. "*ast.CallExpr").
+	// LastAppliedNodeType is a short node type label (e.g.
+	// "*ast.CallExpr").
 	LastAppliedNodeType string
 
-	// LastAppliedNodeStart/End are byte offsets into Source for the node that
-	// triggered the last applied rule.
+	// LastAppliedNodeStart/End are byte offsets into Source for the node
+	// that triggered the last applied rule.
 	LastAppliedNodeStart int
 	LastAppliedNodeEnd   int
 }
 
 // NewContext creates a new formatting context.
-func NewContext(fset *token.FileSet, source []byte, columnLimit, tabStop int) *Context {
+func NewContext(fset *token.FileSet, source []byte, columnLimit,
+	tabStop int) *Context {
+
 	return &Context{
 		Fset:        fset,
 		Source:      source,
@@ -124,6 +127,7 @@ func (ctx *Context) editOverlapsForbidden(start, end int) bool {
 	if end == start {
 		return ctx.ForbiddenSpans.Contains(start)
 	}
+
 	return ctx.ForbiddenSpans.Overlaps(start, end)
 }
 
@@ -140,6 +144,7 @@ func (ctx *Context) IsAtomic(n ast.Node) bool {
 	if ctx.atomicNodes == nil {
 		return false
 	}
+
 	return ctx.atomicNodes[n]
 }
 
@@ -153,10 +158,12 @@ func (ctx *Context) Parent(n ast.Node) ast.Node {
 	if ctx.parentMap == nil {
 		return nil
 	}
+
 	return ctx.parentMap[n]
 }
 
-// IsChildOfCallExpr checks if node n is a direct child (argument) of a CallExpr.
+// IsChildOfCallExpr checks if node n is a direct child (argument) of a
+// CallExpr.
 func (ctx *Context) IsChildOfCallExpr(n ast.Node) bool {
 	parent := ctx.Parent(n)
 	if parent == nil {
@@ -172,6 +179,7 @@ func (ctx *Context) IsChildOfCallExpr(n ast.Node) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -193,6 +201,7 @@ func (ctx *Context) LineWidth(n ast.Node) int {
 	}
 
 	line := string(ctx.Source[lineStart:lineEnd])
+
 	return visualLen(line, ctx.TabStop)
 }
 
@@ -206,6 +215,7 @@ func (ctx *Context) NodeWidth(n ast.Node) int {
 	if start < 0 || end > len(ctx.Source) || start >= end {
 		return 0
 	}
+
 	return visualLen(string(ctx.Source[start:end]), ctx.TabStop)
 }
 
@@ -229,6 +239,7 @@ func (ctx *Context) IndentAt(n ast.Node) string {
 			break
 		}
 	}
+
 	return string(indent)
 }
 
@@ -242,6 +253,7 @@ func (ctx *Context) NodeSource(n ast.Node) []byte {
 	if start < 0 || end > len(ctx.Source) || start >= end {
 		return nil
 	}
+
 	return ctx.Source[start:end]
 }
 
@@ -260,6 +272,7 @@ func VisualLen(s string, tabStop int) int {
 			width++
 		}
 	}
+
 	return width
 }
 
@@ -286,17 +299,19 @@ func hasLineComment(s string) bool {
 		switch c {
 		case '"', '`':
 			inStr = c
+
 		case '/':
 			if i+1 < len(s) && s[i+1] == '/' {
 				return true
 			}
 		}
 	}
+
 	return false
 }
 
-// hasBlockComment checks if a string contains a block comment (/* */) outside of
-// string literals. This is used to detect inline comments that would be lost
+// hasBlockComment checks if a string contains a block comment (/* */) outside
+// of string literals. This is used to detect inline comments that would be lost
 // during reformatting.
 func hasBlockComment(s string) bool {
 	src := []byte(s)
@@ -305,27 +320,34 @@ func hasBlockComment(s string) bool {
 		case scanner.IsStringStart(src, i):
 			next := scanner.ScanString(src, i)
 			if next == -1 {
-				// Unclosed literal; treat as "no safe comment found" rather than
-				// claiming a comment that might be inside a string.
+
+				// Unclosed literal; treat as "no safe comment
+				// found" rather than claiming a comment that
+				// might be inside a string.
 				return false
 			}
 			i = next
+
 		case scanner.IsLineCommentStart(src, i):
 			next := scanner.ScanLineComment(src, i)
 			if next == -1 {
 				return false
 			}
 			i = next
+
 		case scanner.IsBlockCommentStart(src, i):
 			return true
+
 		default:
 			i++
 		}
 	}
+
 	return false
 }
 
-// anyLineExceedsLimit checks if any line in the given string exceeds the column limit.
+// anyLineExceedsLimit checks if any line in the given string exceeds the column
+// limit.
 func anyLineExceedsLimit(s string, colLimit, tabStop int) bool {
 	lines := strings.Split(s, "\n")
 	for _, line := range lines {
@@ -333,5 +355,6 @@ func anyLineExceedsLimit(s string, colLimit, tabStop int) bool {
 			return true
 		}
 	}
+
 	return false
 }

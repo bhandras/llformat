@@ -6,7 +6,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineNext_Signatures_CollapsesMultilineReturnListWhenItFits(t *testing.T) {
+func TestPipelineNext_Signatures_CollapsesMultilineReturnListWhenItFits(
+	t *testing.T) {
+
 	const in = `package p
 
 type chainSyncInfo struct{}
@@ -37,13 +39,20 @@ func (r *rpcServer) getChainSyncInfo() (
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out, "getChainSyncInfo() (*chainSyncInfo, error) {",
-		"expected the multiline return list to be collapsed when it fits under the column limit")
-	require.NotContains(t, out, "getChainSyncInfo() (\n",
-		"must not keep the split return list for a short signature in next profile")
+	require.Contains(
+		t, out, "getChainSyncInfo() (*chainSyncInfo, error) {", "expe"+
+			"cted the multiline return list to be collapsed "+
+			"when it fits under the column limit",
+	)
+	require.NotContains(
+		t, out, "getChainSyncInfo() (\n", "must not keep the split "+
+			"return list for a short signature in next profile",
+	)
 }
 
-func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineSignature(t *testing.T) {
+func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineSignature(
+	t *testing.T) {
+
 	const in = `package p
 
 type SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns struct{}
@@ -73,9 +82,17 @@ func alreadyFormatted(
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out,
-		"func alreadyFormatted(\n\tfirst SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns,\n\tsecond AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak) {",
-		"expected the already-multiline signature to remain multiline")
-	require.Contains(t, out, ") {\n\n\treturn",
-		"expected a blank line after the opening brace for an already-multiline signature")
+	require.Contains(
+		t, out, "func alreadyFormatted(\n	first "+
+			"SomeRidiculouslyLongParameterTypeNameThatForcesLineB"+
+			"reakUnder80Columns,\n	second "+
+			"AnotherRidiculouslyLongParameterTypeNameThatAlsoForc"+
+			"esLineBreak) {",
+		"expected the already-multiline signature to remain multiline",
+	)
+	require.Contains(
+		t, out, ") {\n\n	return", "expected a blank line "+
+			"after the opening brace for an already-multiline "+
+			"signature",
+	)
 }

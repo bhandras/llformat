@@ -19,26 +19,34 @@ func f(a, b int) {
 `
 
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "in.go", []byte(src), parser.AllErrors)
+	file, err := parser.ParseFile(
+		fset, "in.go", []byte(src), parser.AllErrors,
+	)
 	require.NoError(t, err)
 
 	var simpleCall *ast.CallExpr
 	var complexCall *ast.CallExpr
-	ast.Inspect(file, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
+	ast.Inspect(
+		file,
+		func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if simpleCall == nil {
+				simpleCall = call
+
+				return true
+			}
+			if complexCall == nil {
+				complexCall = call
+
+				return true
+			}
+
 			return true
-		}
-		if simpleCall == nil {
-			simpleCall = call
-			return true
-		}
-		if complexCall == nil {
-			complexCall = call
-			return true
-		}
-		return true
-	})
+		},
+	)
 	require.NotNil(t, simpleCall)
 	require.NotNil(t, complexCall)
 
@@ -48,8 +56,8 @@ func f(a, b int) {
 
 	simpleOut := formatCallAdaptive(simpleCall, indent, ctx)
 	require.Contains(t, simpleOut, "testFn(\n")
-	// With a sufficiently wide column limit, the simple args should pack on the
-	// same continuation line.
+	// With a sufficiently wide column limit, the simple args should pack on
+	// the same continuation line.
 	ctxWide := NewContext(fset, []byte(src), 80, 8)
 	simpleOut = formatCallAdaptive(simpleCall, indent, ctxWide)
 	require.Contains(t, simpleOut, "\t\ta, b,\n\t)")

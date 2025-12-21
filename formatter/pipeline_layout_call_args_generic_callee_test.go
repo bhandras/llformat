@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsFormatsGenericCalleeInNestedCall(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsFormatsGenericCalleeInNestedCall(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,20 +20,26 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The generic callee should be allowed to break its type arguments, and the
-	// call should still keep `](` tightly coupled (no newline between them).
+	// The generic callee should be allowed to break its type arguments, and
+	// the call should still keep `](` tightly coupled (no newline between
+	// them).
 	require.Contains(t, outStr, "genericCall[")
-	require.Contains(t, outStr, "VeryLongTypeNameOne,\n\t\t\tVeryLongTypeNameTwo,")
+	require.Contains(
+		t, outStr,
+		"VeryLongTypeNameOne,\n			VeryLongTypeNameTwo,",
+	)
 	require.Contains(t, outStr, "VeryLongTypeNameThree](")
 
 	// The call arg should also break.

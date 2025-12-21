@@ -11,8 +11,9 @@ import (
 )
 
 func TestDSLSigsStyleDSLAutoIterationsFormatsManySignatures(t *testing.T) {
-	// The signatures stage applies at most one rewrite per iteration, so a file
-	// with >100 long signatures can legitimately require >100 iterations.
+	// The signatures stage applies at most one rewrite per iteration, so a
+	// file with >100 long signatures can legitimately require >100
+	// iterations.
 	//
 	// This test ensures we don't cap out early when native signatures are
 	// enabled with the pure DSL signature formatting style.
@@ -21,16 +22,22 @@ func TestDSLSigsStyleDSLAutoIterationsFormatsManySignatures(t *testing.T) {
 
 	const n = 150
 	for i := 0; i < n; i++ {
-		fmt.Fprintf(&b, "func f%03d(alpha int, beta int, gamma int, delta int, epsilon int, zeta int) int {\n}\n\n", i)
+		fmt.Fprintf(
+			&b, "func f%03d(alpha int, beta int, gamma int, "+
+				"delta int, epsilon int, zeta int) int {\n}\n\n",
+			i,
+		)
 	}
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          40,
-		TabStop:              8,
-		UseDSLFuncSigs:       true,
-		UseDSLFuncSigsNative: true,
-		DSLSigsStyle:         "dsl",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          40,
+			TabStop:              8,
+			UseDSLFuncSigs:       true,
+			UseDSLFuncSigsNative: true,
+			DSLSigsStyle:         "dsl",
+		},
+	)
 
 	first := p.Format([]byte(b.String()))
 	second := p.Format(first)
@@ -52,13 +59,15 @@ type I interface {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          45,
-		TabStop:              8,
-		UseDSLFuncSigs:       true,
-		UseDSLFuncSigsNative: true,
-		DSLSigsStyle:         "dsl",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          45,
+			TabStop:              8,
+			UseDSLFuncSigs:       true,
+			UseDSLFuncSigsNative: true,
+			DSLSigsStyle:         "dsl",
+		},
+	)
 
 	first := p.Format([]byte(in))
 	second := p.Format(first)
@@ -73,22 +82,26 @@ type I interface {
 	require.NoError(t, err)
 }
 
-func TestDSLSigsStyleDSLSignatureSplitIgnoresCommasInBlockComments(t *testing.T) {
-	// Regression: comma-aware splitting must not treat commas inside comments as
-	// parameter separators.
+func TestDSLSigsStyleDSLSignatureSplitIgnoresCommasInBlockComments(
+	t *testing.T) {
+
+	// Regression: comma-aware splitting must not treat commas inside
+	// comments as parameter separators.
 	const in = `package p
 
 func f(alpha int /* comma, inside */, beta int, gamma int, delta int, epsilon int) {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          45,
-		TabStop:              8,
-		UseDSLFuncSigs:       true,
-		UseDSLFuncSigsNative: true,
-		DSLSigsStyle:         "dsl",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          45,
+			TabStop:              8,
+			UseDSLFuncSigs:       true,
+			UseDSLFuncSigsNative: true,
+			DSLSigsStyle:         "dsl",
+		},
+	)
 
 	first := p.Format([]byte(in))
 	second := p.Format(first)

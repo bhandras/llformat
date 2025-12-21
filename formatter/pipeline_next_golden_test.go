@@ -23,34 +23,55 @@ func TestPipelineNextGoldens(t *testing.T) {
 	}
 
 	for _, dirName := range cases {
-		t.Run(dirName, func(t *testing.T) {
-			dir := filepath.Join("..", "testdata", dirName)
-			inPath := filepath.Join(dir, "input.go")
-			outPath := filepath.Join(dir, "output_next.go")
+		t.Run(
+			dirName,
+			func(t *testing.T) {
+				dir := filepath.Join("..", "testdata", dirName)
+				inPath := filepath.Join(dir, "input.go")
+				outPath := filepath.Join(dir, "output_next.go")
 
-			if _, err := os.Stat(inPath); err != nil {
-				t.Skipf("skipping: %s not present", inPath)
-			}
-			if _, err := os.Stat(outPath); err != nil {
-				t.Skipf("skipping: %s not present (add next goldens)", outPath)
-			}
+				if _, err := os.Stat(inPath); err != nil {
+					t.Skipf(
+						"skipping: %s not present",
+						inPath,
+					)
+				}
+				if _, err := os.Stat(outPath); err != nil {
+					t.Skipf(
+						"skipping: %s not present "+
+							"(add next goldens)",
+						outPath,
+					)
+				}
 
-			inData, err := os.ReadFile(inPath)
-			require.NoError(t, err)
+				inData, err := os.ReadFile(inPath)
+				require.NoError(t, err)
 
-			want, err := os.ReadFile(outPath)
-			require.NoError(t, err)
-			if strings.Contains(string(want), placeholderMarker) {
-				t.Skipf("skipping: %s is a placeholder (edit it by hand and remove %q to enable)", outPath, placeholderMarker)
-			}
+				want, err := os.ReadFile(outPath)
+				require.NoError(t, err)
+				if strings.Contains(
+					string(want), placeholderMarker,
+				) {
 
-			p := NewPipeline(PipelineConfig{
-				ColumnLimit: 80,
-				TabStop:     8,
-			})
-			got := p.Format(inData)
+					t.Skipf(
+						"skipping: %s is a "+
+							"placeholder (edit "+
+							"it by hand and "+
+							"remove %q to enable)",
+						outPath, placeholderMarker,
+					)
+				}
 
-			require.Equal(t, string(want), string(got))
-		})
+				p := NewPipeline(
+					PipelineConfig{
+						ColumnLimit: 80,
+						TabStop:     8,
+					},
+				)
+				got := p.Format(inData)
+
+				require.Equal(t, string(want), string(got))
+			},
+		)
 	}
 }

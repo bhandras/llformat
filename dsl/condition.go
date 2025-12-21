@@ -7,25 +7,27 @@ import (
 	"strings"
 )
 
-// CallArgsPolicy controls whether the expression stage may edit expressions that
-// are contained within call argument expressions.
+// CallArgsPolicy controls whether the expression stage may edit expressions
+// that are contained within call argument expressions.
 type CallArgsPolicy int
 
 const (
 	// CallArgsPolicyOff forbids edits inside call argument expressions.
 	CallArgsPolicyOff CallArgsPolicy = iota
 
-	// CallArgsPolicyAuto allows edits inside call argument expressions only when
-	// the enclosing call is known to be ignored by later call-formatting stages.
+	// CallArgsPolicyAuto allows edits inside call argument expressions only
+	// when the enclosing call is known to be ignored by later
+	// call-formatting stages.
 	CallArgsPolicyAuto
 
-	// CallArgsPolicyForce always allows edits inside call argument expressions.
+	// CallArgsPolicyForce always allows edits inside call argument
+	// expressions.
 	CallArgsPolicyForce
 )
 
 // IsCallFuncInListCond checks whether the target node is a CallExpr whose
-// callee name matches one of the provided names (e.g. "foo", "pkg.Foo").
-// If the target is not a CallExpr, it returns false.
+// callee name matches one of the provided names (e.g. "foo", "pkg.Foo"). If the
+// target is not a CallExpr, it returns false.
 type IsCallFuncInListCond struct {
 	Target string
 	Names  []string
@@ -37,6 +39,7 @@ func (c *IsCallFuncInListCond) Eval(caps Captures, ctx *Context) bool {
 	if !ok {
 		return false
 	}
+
 	return stringInSlice(callExprFuncName(call), c.Names)
 }
 
@@ -66,6 +69,7 @@ func (c *IsCallFuncContainsAnyCond) Eval(caps Captures, ctx *Context) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -97,6 +101,7 @@ func (c *AndCond) Eval(caps Captures, ctx *Context) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -112,6 +117,7 @@ func (c *OrCond) Eval(caps Captures, ctx *Context) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -130,7 +136,7 @@ func (c *NotCond) Eval(caps Captures, ctx *Context) bool {
 // only run on parse failures.
 type IsParseableCond struct {
 	// Want indicates the desired parseability:
-	// - Want == true  => condition passes only if the source parses
+	// - Want == true => condition passes only if the source parses
 	// - Want == false => condition passes only if the source does not parse
 	Want bool
 }
@@ -145,6 +151,7 @@ func (c *IsParseableCond) Eval(_ Captures, ctx *Context) bool {
 	if c.Want {
 		return parseable
 	}
+
 	return !parseable
 }
 
@@ -186,13 +193,13 @@ func (c *IsInCallArgsCond) Eval(caps Captures, ctx *Context) bool {
 type ExprEditSafeCond struct {
 	Target string
 
-	// CallArgsPolicy controls whether edits inside call argument expressions are
-	// allowed.
+	// CallArgsPolicy controls whether edits inside call argument
+	// expressions are allowed.
 	CallArgsPolicy CallArgsPolicy
 
-	// CallArgsAllowlist is used when CallArgsPolicy == CallArgsPolicyAuto. When
-	// set, edits are allowed only when the enclosing call's function name matches
-	// an entry.
+	// CallArgsAllowlist is used when CallArgsPolicy == CallArgsPolicyAuto.
+	// When set, edits are allowed only when the enclosing call's function
+	// name matches an entry.
 	CallArgsAllowlist []string
 }
 
@@ -203,37 +210,56 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	// Avoid editing inside call arguments; call formatting is owned by the call
-	// stages and AST-based rewrites can easily change call layout.
+	// Avoid editing inside call arguments; call formatting is owned by the
+	// call stages and AST-based rewrites can easily change call layout.
 	if (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
 		switch c.CallArgsPolicy {
 		case CallArgsPolicyForce:
+
 			// OK.
 		case CallArgsPolicyAuto:
 			call := enclosingCallForArg(node, ctx)
 			if call == nil {
 				return false
 			}
-			if !stringInSlice(callExprFuncName(call), c.CallArgsAllowlist) {
+			if !stringInSlice(
+				callExprFuncName(call), c.CallArgsAllowlist,
+			) {
+
 				return false
 			}
+
 		default:
 			return false
 		}
 	}
 
-	// Avoid composite literals and func literals; these tend to be formatting
-	// sensitive and are not owned by the expression stage.
-	if (&IsAncestorTypeCond{Target: c.Target, Type: "CompositeLit"}).Eval(caps, ctx) {
+	// Avoid composite literals and func literals; these tend to be
+	// formatting sensitive and are not owned by the expression stage.
+	if (&IsAncestorTypeCond{
+		Target: c.Target,
+		Type:   "CompositeLit",
+	}).Eval(caps,
+		ctx,
+	) {
+
 		return false
 	}
-	if (&IsAncestorTypeCond{Target: c.Target, Type: "FuncLit"}).Eval(caps, ctx) {
+	if (&IsAncestorTypeCond{
+		Target: c.Target,
+		Type:   "FuncLit",
+	}).Eval(caps,
+		ctx,
+	) {
+
 		return false
 	}
 
-	// Avoid spans containing inline comments (AST printing does not preserve
-	// them inside expressions/argument lists).
-	if hasLineComment(string(ctx.NodeSource(node))) || hasBlockComment(string(ctx.NodeSource(node))) {
+	// Avoid spans containing inline comments (AST printing does not
+	// preserve them inside expressions/argument lists).
+	if hasLineComment(string(ctx.NodeSource(node))) ||
+		hasBlockComment(string(ctx.NodeSource(node))) {
+
 		return false
 	}
 
@@ -246,6 +272,7 @@ func stringInSlice(s string, list []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -263,6 +290,7 @@ func enclosingCallForArg(node ast.Node, ctx *Context) *ast.CallExpr {
 		}
 		cur = parent
 	}
+
 	return nil
 }
 
@@ -270,6 +298,7 @@ func callExprFuncName(call *ast.CallExpr) string {
 	if call == nil {
 		return ""
 	}
+
 	return callExprFuncNameFromExpr(call.Fun)
 }
 
@@ -281,23 +310,34 @@ func callExprFuncNameFromExpr(fun ast.Expr) string {
 	switch v := fun.(type) {
 	case *ast.Ident:
 		return v.Name
+
 	case *ast.SelectorExpr:
-		// Try to build the same representation as the legacy call scanners
-		// (including selectors like "pkg.Func").
+		// Try to build the same representation as the legacy call
+		// scanners (including selectors like "pkg.Func").
 		prefix := selectorPrefix(v.X)
 		if prefix == "" {
 			return v.Sel.Name
 		}
+
 		return prefix + "." + v.Sel.Name
+
 	case *ast.IndexExpr:
-		// Generic instantiation: f[T](...) is represented as CallExpr{Fun: IndexExpr}.
+
+		// Generic instantiation: f[T](...) is represented as
+		// CallExpr{Fun: IndexExpr}.
 		return callExprFuncNameFromExpr(v.X)
+
 	case *ast.IndexListExpr:
-		// Generic instantiation: f[T, U](...) is represented as CallExpr{Fun: IndexListExpr}.
+
+		// Generic instantiation: f[T, U](...) is represented as
+		// CallExpr{Fun: IndexListExpr}.
 		return callExprFuncNameFromExpr(v.X)
+
 	default:
-		// Unknown callee shape (e.g. type conversions / other expressions). Return
-		// empty to indicate "not allowlist-addressable".
+
+		// Unknown callee shape (e.g. type conversions / other
+		// expressions). Return empty to indicate "not
+		// allowlist-addressable".
 		return ""
 	}
 }
@@ -306,12 +346,15 @@ func selectorPrefix(x ast.Expr) string {
 	switch v := x.(type) {
 	case *ast.Ident:
 		return v.Name
+
 	case *ast.SelectorExpr:
 		p := selectorPrefix(v.X)
 		if p == "" {
 			return v.Sel.Name
 		}
+
 		return p + "." + v.Sel.Name
+
 	default:
 		return ""
 	}
@@ -334,6 +377,7 @@ func (c *IsParentTypeCond) Eval(caps Captures, ctx *Context) bool {
 	if parent == nil {
 		return false
 	}
+
 	return (&NodePattern{Type: c.Type}).matchType(parent)
 }
 
@@ -355,6 +399,7 @@ func (c *IsAncestorTypeCond) Eval(caps Captures, ctx *Context) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -385,8 +430,10 @@ func (c *IsInAssignRHSCond) Eval(caps Captures, ctx *Context) bool {
 				return true
 			}
 		}
+
 		return false
 	}
+
 	return false
 }
 
@@ -416,8 +463,10 @@ func (c *IsInReturnResultsCond) Eval(caps Captures, ctx *Context) bool {
 				return true
 			}
 		}
+
 		return false
 	}
+
 	return false
 }
 
@@ -433,12 +482,14 @@ func (c *HasLineCommentCond) Eval(caps Captures, ctx *Context) bool {
 	if node == nil || ctx == nil {
 		return false
 	}
+
 	return hasLineComment(string(ctx.NodeSource(node)))
 }
 
 // HasAnyCommentCond checks whether the target node's source includes any
 // comment token (line or block) outside of string literals. This is used to
-// conservatively avoid AST-based rewrites that would drop comments inside spans.
+// conservatively avoid AST-based rewrites that would drop comments inside
+// spans.
 type HasAnyCommentCond struct {
 	Target string
 }
@@ -449,6 +500,7 @@ func (c *HasAnyCommentCond) Eval(caps Captures, ctx *Context) bool {
 	if node == nil || ctx == nil {
 		return false
 	}
+
 	return hasAnyComment(string(ctx.NodeSource(node)))
 }
 
@@ -498,9 +550,10 @@ func (c *NodeWidthCond) Eval(caps Captures, ctx *Context) bool {
 	return compareInt(width, c.Op, threshold)
 }
 
-// CollapsedWidthCond checks if a node, when collapsed to a single line (whitespace
-// normalized), would exceed a threshold. This is useful for multiline nodes where
-// the first line might be short but the total content is long.
+// CollapsedWidthCond checks if a node, when collapsed to a single line
+// (whitespace normalized), would exceed a threshold. This is useful for
+// multiline nodes where the first line might be short but the total content is
+// long.
 type CollapsedWidthCond struct {
 	Target string
 	Op     string
@@ -531,7 +584,8 @@ func (c *CollapsedWidthCond) Eval(caps Captures, ctx *Context) bool {
 
 	// Collapse whitespace to estimate single-line width
 	flat := strings.Join(strings.Fields(nodeText), " ")
-	collapsedLen := visualLen(indentPrefix, ctx.TabStop) + visualLen(flat, ctx.TabStop)
+	collapsedLen := visualLen(indentPrefix, ctx.TabStop) +
+		visualLen(flat, ctx.TabStop)
 
 	threshold := c.Value
 	if threshold == 0 {
@@ -544,7 +598,7 @@ func (c *CollapsedWidthCond) Eval(caps Captures, ctx *Context) bool {
 // IsChainedCallReceiverCond checks whether a CallExpr is used as the receiver
 // of another call in a method-chain-like expression, i.e. it appears as:
 //
-//	<call>().Method(...)
+// <call>().Method(...)
 //
 // This is useful to prevent “double ownership” where both the receiver call and
 // the full method chain are rewritten independently, causing oscillation.
@@ -572,6 +626,7 @@ func (c *IsChainedCallReceiverCond) Eval(caps Captures, ctx *Context) bool {
 
 	grandparent := ctx.Parent(sel)
 	_, ok = grandparent.(*ast.CallExpr)
+
 	return ok
 }
 
@@ -583,6 +638,7 @@ type IsSimpleLiteralCond struct {
 // Eval implements Condition for IsSimpleLiteralCond.
 func (c *IsSimpleLiteralCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
+
 	return isSimpleLiteral(node)
 }
 
@@ -590,17 +646,23 @@ func (c *IsSimpleLiteralCond) Eval(caps Captures, ctx *Context) bool {
 func isSimpleLiteral(n ast.Node) bool {
 	switch node := n.(type) {
 	case *ast.BasicLit:
+
 		// Numbers and strings
 		return true
+
 	case *ast.Ident:
+
 		// true, false, nil
-		return node.Name == "true" || node.Name == "false" || node.Name == "nil"
+		return node.Name == "true" || node.Name == "false" ||
+			node.Name == "nil"
+
 	case *ast.UnaryExpr:
 		// -1, +1 etc.
 		if lit, ok := node.X.(*ast.BasicLit); ok {
 			return lit != nil
 		}
 	}
+
 	return false
 }
 
@@ -612,6 +674,7 @@ type HasCallExprCond struct {
 // Eval implements Condition for HasCallExprCond.
 func (c *HasCallExprCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
+
 	return containsCallExpr(node)
 }
 
@@ -624,10 +687,13 @@ func containsCallExpr(n ast.Node) bool {
 	ast.Inspect(n, func(node ast.Node) bool {
 		if _, ok := node.(*ast.CallExpr); ok {
 			found = true
+
 			return false // stop walking
 		}
+
 		return !found
 	})
+
 	return found
 }
 
@@ -640,6 +706,7 @@ type IsCallExprCond struct {
 func (c *IsCallExprCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
 	_, ok := node.(*ast.CallExpr)
+
 	return ok
 }
 
@@ -652,6 +719,7 @@ type IsBinaryExprCond struct {
 func (c *IsBinaryExprCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
 	_, ok := node.(*ast.BinaryExpr)
+
 	return ok
 }
 
@@ -672,8 +740,10 @@ func (c *OpIsCond) Eval(caps Captures, ctx *Context) bool {
 	switch n := node.(type) {
 	case *ast.BinaryExpr:
 		opStr = n.Op.String()
+
 	case *ast.UnaryExpr:
 		opStr = n.Op.String()
+
 	default:
 		return false
 	}
@@ -683,6 +753,7 @@ func (c *OpIsCond) Eval(caps Captures, ctx *Context) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -694,9 +765,18 @@ type IsComparisonOpCond struct {
 // Eval implements Condition for IsComparisonOpCond.
 func (c *IsComparisonOpCond) Eval(caps Captures, ctx *Context) bool {
 	return (&OpIsCond{
-		Target:    c.Target,
-		Operators: []string{"==", "!=", "<", ">", "<=", ">="},
-	}).Eval(caps, ctx)
+		Target: c.Target,
+		Operators: []string{
+			"==",
+			"!=",
+			"<",
+			">",
+			"<=",
+			">=",
+		},
+	}).Eval(caps,
+		ctx,
+	)
 }
 
 // IsLogicalOpCond checks if a binary expression uses a logical operator.
@@ -707,9 +787,14 @@ type IsLogicalOpCond struct {
 // Eval implements Condition for IsLogicalOpCond.
 func (c *IsLogicalOpCond) Eval(caps Captures, ctx *Context) bool {
 	return (&OpIsCond{
-		Target:    c.Target,
-		Operators: []string{"&&", "||"},
-	}).Eval(caps, ctx)
+		Target: c.Target,
+		Operators: []string{
+			"&&",
+			"||",
+		},
+	}).Eval(caps,
+		ctx,
+	)
 }
 
 // IsArithmeticOpCond checks if a binary expression uses an arithmetic operator.
@@ -720,9 +805,17 @@ type IsArithmeticOpCond struct {
 // Eval implements Condition for IsArithmeticOpCond.
 func (c *IsArithmeticOpCond) Eval(caps Captures, ctx *Context) bool {
 	return (&OpIsCond{
-		Target:    c.Target,
-		Operators: []string{"+", "-", "*", "/", "%"},
-	}).Eval(caps, ctx)
+		Target: c.Target,
+		Operators: []string{
+			"+",
+			"-",
+			"*",
+			"/",
+			"%",
+		},
+	}).Eval(caps,
+		ctx,
+	)
 }
 
 // Helper functions
@@ -735,6 +828,7 @@ func resolveTarget(caps Captures, target string) ast.Node {
 	if len(target) > 0 && target[0] == '$' {
 		target = target[1:]
 	}
+
 	return caps[target]
 }
 
@@ -742,16 +836,22 @@ func compareInt(value int, op string, threshold int) bool {
 	switch op {
 	case ">":
 		return value > threshold
+
 	case ">=":
 		return value >= threshold
+
 	case "<":
 		return value < threshold
+
 	case "<=":
 		return value <= threshold
+
 	case "==":
 		return value == threshold
+
 	case "!=":
 		return value != threshold
+
 	default:
 		return false
 	}
@@ -761,10 +861,11 @@ func compareInt(value int, op string, threshold int) bool {
 // node's source range (including continuation lines for multiline constructs).
 //
 // This is useful for cases where:
-// - the node starts on a short line (so LineWidthCond is a false negative), and
-// - collapsing whitespace produces a short estimate (so CollapsedWidthCond is a
-//   false negative), but
-// - an indented continuation line still exceeds the column limit.
+//   - the node starts on a short line (so LineWidthCond is a false negative),
+//     and
+//   - collapsing whitespace produces a short estimate (so CollapsedWidthCond is
+//     a false negative), but
+//   - an indented continuation line still exceeds the column limit.
 type MaxSpanLineWidthCond struct {
 	Target string
 	Op     string
@@ -801,14 +902,16 @@ type IsOutermostBinaryExprCond struct {
 
 // Eval implements Condition for IsOutermostBinaryExprCond.
 func (c *IsOutermostBinaryExprCond) Eval(caps Captures, ctx *Context) bool {
-	// This condition relies on tracking parent nodes during traversal
-	// For now, always return true - the BreakAtOpAction handles finding
-	// the best break point within the whole expression
+
+	// This condition relies on tracking parent nodes during traversal For
+	// now, always return true - the BreakAtOpAction handles finding the
+	// best break point within the whole expression
 	return true
 }
 
-// IsStringConcatCond checks if a binary expression involves string concatenation.
-// String concatenation uses + but should be handled differently than arithmetic.
+// IsStringConcatCond checks if a binary expression involves string
+// concatenation. String concatenation uses + but should be handled differently
+// than arithmetic.
 type IsStringConcatCond struct {
 	Target string
 }
@@ -816,6 +919,7 @@ type IsStringConcatCond struct {
 // Eval implements Condition for IsStringConcatCond.
 func (c *IsStringConcatCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
+
 	return isStringConcat(node)
 }
 
@@ -831,18 +935,23 @@ func isStringConcat(n ast.Node) bool {
 			if bin.Op.String() == "+" {
 				if isStringLit(bin.X) || isStringLit(bin.Y) {
 					found = true
+
 					return false
 				}
 			}
 		}
+
 		return !found
 	})
+
 	return found
 }
 
-// isStringLit checks if a node is a string literal (directly or in concat chain).
+// isStringLit checks if a node is a string literal (directly or in concat
+// chain).
 func isStringLit(n ast.Node) bool {
 	if lit, ok := n.(*ast.BasicLit); ok {
+
 		// STRING is token type 9 in go/token
 		return lit.Kind.String() == "STRING"
 	}
@@ -850,6 +959,7 @@ func isStringLit(n ast.Node) bool {
 	if bin, ok := n.(*ast.BinaryExpr); ok && bin.Op.String() == "+" {
 		return isStringLit(bin.X) || isStringLit(bin.Y)
 	}
+
 	return false
 }
 
@@ -865,11 +975,12 @@ func (c *IsCallArgCond) Eval(caps Captures, ctx *Context) bool {
 	if node == nil {
 		return false
 	}
+
 	return ctx.IsChildOfCallExpr(node)
 }
 
-// IsAfterBlockOpenCond checks if a node is immediately after a block opening brace.
-// This is used to avoid adding blank lines right after { or case:.
+// IsAfterBlockOpenCond checks if a node is immediately after a block opening
+// brace. This is used to avoid adding blank lines right after { or case:.
 type IsAfterBlockOpenCond struct {
 	Target string
 }
@@ -927,13 +1038,14 @@ func trimWhitespace(s string) string {
 	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
 		end--
 	}
+
 	return s[start:end]
 }
 
 // IsFinalReturnCond checks if a return statement is the final statement in its
-// function body (not in a nested block like if/for). Returns true if:
-// 1. It's the last statement in the function body
-// 2. There's more than one statement before it
+// function body (not in a nested block like if/for). Returns true if: 1. It's
+// the last statement in the function body 2. There's more than one statement
+// before it
 type IsFinalReturnCond struct {
 	Target string
 }
@@ -966,7 +1078,8 @@ func (c *IsFinalReturnCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	// Check if the parent of the block is a FuncDecl or FuncLit (function body)
+	// Check if the parent of the block is a FuncDecl or FuncLit (function
+	// body)
 	blockParent := ctx.Parent(blockStmt)
 	if blockParent == nil {
 		return false
@@ -974,9 +1087,13 @@ func (c *IsFinalReturnCond) Eval(caps Captures, ctx *Context) bool {
 
 	switch blockParent.(type) {
 	case *ast.FuncDecl, *ast.FuncLit:
-		// This is a function body, check if there are multiple statements
+
+		// This is a function body, check if there are multiple
+		// statements
 		return len(blockStmt.List) > 1
+
 	default:
+
 		// Inside an if/for/switch block - don't add blank line
 		return false
 	}
@@ -1059,6 +1176,7 @@ func (c *HasMultipleMethodsCond) Eval(caps Captures, ctx *Context) bool {
 	switch n := node.(type) {
 	case *ast.InterfaceType:
 		interfaceType = n
+
 	case *ast.TypeSpec:
 		if it, ok := n.Type.(*ast.InterfaceType); ok {
 			interfaceType = it
@@ -1092,8 +1210,8 @@ func (c *CaseHasBodyCond) Eval(caps Captures, ctx *Context) bool {
 	return len(caseClause.Body) > 0
 }
 
-// IsMethodChainCond checks if a call expression is part of a method chain
-// with at least minCalls chained method calls.
+// IsMethodChainCond checks if a call expression is part of a method chain with
+// at least minCalls chained method calls.
 type IsMethodChainCond struct {
 	Target   string
 	MinCalls int // Minimum number of calls to consider it a chain (default 2)
@@ -1109,7 +1227,9 @@ func (c *IsMethodChainCond) Eval(caps Captures, ctx *Context) bool {
 	call, ok := node.(*ast.CallExpr)
 	if !ok {
 		// Check if it's an assignment with a call on RHS
-		if assign, ok := node.(*ast.AssignStmt); ok && len(assign.Rhs) > 0 {
+		if assign, ok := node.(*ast.AssignStmt); ok &&
+			len(assign.Rhs) > 0 {
+
 			call, ok = assign.Rhs[0].(*ast.CallExpr)
 			if !ok {
 				return false
@@ -1125,6 +1245,7 @@ func (c *IsMethodChainCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	count := countMethodChainCalls(call)
+
 	return count >= minCalls
 }
 
@@ -1154,25 +1275,28 @@ func countMethodChainCalls(call *ast.CallExpr) int {
 	return count
 }
 
-// IsLogOrPrintfCallCond checks if a call expression is a log or printf-style call.
+// IsLogOrPrintfCallCond checks if a call expression is a log or printf-style
+// call.
 type IsLogOrPrintfCallCond struct {
 	Target string
 
-	// MatchAnySelectorPrefix enables suffix-only matching for selector calls.
+	// MatchAnySelectorPrefix enables suffix-only matching for selector
+	// calls.
 	//
-	// When false (default), this condition matches only the canonical patterns:
-	// "log.Infof", "fmt.Sprintf", etc.
+	// When false (default), this condition matches only the canonical
+	// patterns: "log.Infof", "fmt.Sprintf", etc.
 	//
-	// When true, any selector expression whose Sel is one of the known log/printf
-	// function names is matched, regardless of the selector prefix (e.g.
-	// "myLogger.Infof", "rpcLog.Errorf"). This is intentionally opt-in because
-	// some repos include custom loggers that should not be rewritten.
+	// When true, any selector expression whose Sel is one of the known
+	// log/printf function names is matched, regardless of the selector
+	// prefix (e.g. "myLogger.Infof", "rpcLog.Errorf"). This is
+	// intentionally opt-in because some repos include custom loggers that
+	// should not be rewritten.
 	MatchAnySelectorPrefix bool
 
-	// IncludeNonFStringCalls enables matching a small subset of non-`*f` log
-	// calls (e.g. `logger.Error("...")`) when the first argument is a string.
-	// This is intended for "next" where string-call formatting is more broadly
-	// useful.
+	// IncludeNonFStringCalls enables matching a small subset of non-`*f`
+	// log calls (e.g. `logger.Error("...")`) when the first argument is a
+	// string. This is intended for "next" where string-call formatting is
+	// more broadly useful.
 	IncludeNonFStringCalls bool
 }
 
@@ -1206,26 +1330,30 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	// Even when MatchAnySelectorPrefix is enabled (suffix-only matching),
-	// explicitly recognize a small set of well-known non-`*f` string calls that
-	// should use the same formatting behavior (e.g. errors.New("...")).
+	// explicitly recognize a small set of well-known non-`*f` string calls
+	// that should use the same formatting behavior (e.g.
+	// errors.New("...")).
 	if getFuncName(call) == "errors.New" {
 		return true
 	}
 
-	// In "next", optionally treat some non-`*f` log calls as targeted string
-	// calls when their first argument is a string literal/concat. This captures
-	// patterns like:
-	//   rpcLog.Error("long message ...")
-	// without changing legacy/parity behavior.
+	// In "next", optionally treat some non-`*f` log calls as targeted
+	// string calls when their first argument is a string literal/concat.
+	// This captures patterns like: rpcLog.Error("long message ...") without
+	// changing legacy/parity behavior.
 	if c.IncludeNonFStringCalls {
 		if len(call.Args) > 0 && isStringLit(call.Args[0]) {
 			switch fun := call.Fun.(type) {
 			case *ast.SelectorExpr:
-				if fun.Sel != nil && isNonFStringLogName(fun.Sel.Name) {
+				if fun.Sel != nil &&
+					isNonFStringLogName(fun.Sel.Name) {
+
 					return true
 				}
+
 			case *ast.Ident:
-				// Support dot-imported variants (e.g. `Error(...)`) when enabled.
+				// Support dot-imported variants (e.g.
+				// `Error(...)`) when enabled.
 				if isNonFStringLogName(fun.Name) {
 					return true
 				}
@@ -1236,10 +1364,14 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	if c.MatchAnySelectorPrefix {
 		switch fun := call.Fun.(type) {
 		case *ast.Ident:
-			// Support dot-imported variants (e.g. `Infof(...)`) when enabled.
+
+			// Support dot-imported variants (e.g. `Infof(...)`)
+			// when enabled.
 			return isLogPrintfName(fun.Name)
+
 		case *ast.SelectorExpr:
 			return fun.Sel != nil && isLogPrintfName(fun.Sel.Name)
+
 		default:
 			return false
 		}
@@ -1262,8 +1394,11 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 
 func isLogPrintfName(name string) bool {
 	switch name {
-	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf", "Sprintf":
+	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf",
+		"Sprintf":
+
 		return true
+
 	default:
 		return false
 	}
@@ -1273,18 +1408,21 @@ func isNonFLogName(name string) bool {
 	switch name {
 	case "Info", "Debug", "Trace", "Error", "Warn", "Fatal", "Panic":
 		return true
+
 	default:
 		return false
 	}
 }
 
 func isNonFStringLogName(name string) bool {
-	// Keep this intentionally small and string-oriented; these are typically used
-	// as message-only calls. We intentionally do not include Fatal/Panic to avoid
-	// surprising changes in control-flow-adjacent code.
+	// Keep this intentionally small and string-oriented; these are
+	// typically used as message-only calls. We intentionally do not include
+	// Fatal/Panic to avoid surprising changes in control-flow-adjacent
+	// code.
 	switch name {
 	case "Info", "Debug", "Trace", "Warn", "Error":
 		return true
+
 	default:
 		return false
 	}
@@ -1309,20 +1447,23 @@ func (c *IsNonFLogCallCond) Eval(caps Captures, ctx *Context) bool {
 	if !ok || ident == nil {
 		return false
 	}
+
 	return ident.Name == "log"
 }
 
-// getFuncName extracts the function name from a call expression.
-// Returns "pkg.Func" for selector expressions or "Func" for identifiers.
+// getFuncName extracts the function name from a call expression. Returns
+// "pkg.Func" for selector expressions or "Func" for identifiers.
 func getFuncName(call *ast.CallExpr) string {
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 		return fun.Name
+
 	case *ast.SelectorExpr:
 		if x, ok := fun.X.(*ast.Ident); ok {
 			return x.Name + "." + fun.Sel.Name
 		}
 	}
+
 	return ""
 }
 
@@ -1366,6 +1507,7 @@ func (c *IsInterfaceMethodCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	_, isInterface := grandparent.(*ast.InterfaceType)
+
 	return isInterface
 }
 
@@ -1376,7 +1518,9 @@ type HasPrecedingInterfaceFieldCond struct {
 }
 
 // Eval implements Condition for HasPrecedingInterfaceFieldCond.
-func (c *HasPrecedingInterfaceFieldCond) Eval(caps Captures, ctx *Context) bool {
+func (c *HasPrecedingInterfaceFieldCond) Eval(caps Captures,
+	ctx *Context) bool {
+
 	node := resolveTarget(caps, c.Target)
 	if node == nil {
 		return false
@@ -1408,9 +1552,9 @@ func (c *HasPrecedingInterfaceFieldCond) Eval(caps Captures, ctx *Context) bool 
 	return false
 }
 
-// AnyLineWidthCond checks if ANY line of a node exceeds a threshold.
-// This is useful for multiline nodes like function signatures where one line
-// might be short but another line exceeds the limit.
+// AnyLineWidthCond checks if ANY line of a node exceeds a threshold. This is
+// useful for multiline nodes like function signatures where one line might be
+// short but another line exceeds the limit.
 type AnyLineWidthCond struct {
 	Target string
 	Op     string
@@ -1460,15 +1604,16 @@ func (c *AnyLineWidthCond) Eval(caps Captures, ctx *Context) bool {
 }
 
 // HasNestedMultilineTypeCond checks if a FuncDecl has parameters containing
-// func types with multiline nested content (like multiline structs).
-// This is useful to trigger formatting for readability even when no line
-// exceeds the column limit.
+// func types with multiline nested content (like multiline structs). This is
+// useful to trigger formatting for readability even when no line exceeds the
+// column limit.
 type HasNestedMultilineTypeCond struct {
 	Target string
 }
 
-// HasMultilineFuncSignatureCond checks if a function declaration signature spans
-// multiple lines (i.e. there is a newline between `func` and the opening brace).
+// HasMultilineFuncSignatureCond checks if a function declaration signature
+// spans multiple lines (i.e. there is a newline between `func` and the opening
+// brace).
 //
 // This is intentionally signature-specific: checking the entire FuncDecl node
 // text would always see newlines in the function body.
@@ -1479,7 +1624,9 @@ type HasMultilineFuncSignatureCond struct {
 func (c *HasMultilineFuncSignatureCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
 	decl, ok := node.(*ast.FuncDecl)
-	if !ok || decl == nil || decl.Body == nil || !decl.Body.Lbrace.IsValid() {
+	if !ok || decl == nil || decl.Body == nil ||
+		!decl.Body.Lbrace.IsValid() {
+
 		return false
 	}
 
@@ -1490,6 +1637,7 @@ func (c *HasMultilineFuncSignatureCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	sig := string(ctx.Source[start:brace])
+
 	return strings.Contains(sig, "\n")
 }
 
@@ -1503,7 +1651,9 @@ type AnyLineWidthFuncLitSignatureCond struct {
 	Value  int // If 0, uses ctx.ColumnLimit
 }
 
-func (c *AnyLineWidthFuncLitSignatureCond) Eval(caps Captures, ctx *Context) bool {
+func (c *AnyLineWidthFuncLitSignatureCond) Eval(caps Captures,
+	ctx *Context) bool {
+
 	node := resolveTarget(caps, c.Target)
 	lit, ok := node.(*ast.FuncLit)
 	if !ok || lit == nil || lit.Body == nil || !lit.Body.Lbrace.IsValid() {
@@ -1537,16 +1687,20 @@ func (c *AnyLineWidthFuncLitSignatureCond) Eval(caps Captures, ctx *Context) boo
 			return true
 		}
 	}
+
 	return false
 }
 
 // HasMultilineFuncLitSignatureCond checks if a function literal signature spans
-// multiple lines (i.e. there is a newline between `func` and the opening brace).
+// multiple lines (i.e. there is a newline between `func` and the opening
+// brace).
 type HasMultilineFuncLitSignatureCond struct {
 	Target string
 }
 
-func (c *HasMultilineFuncLitSignatureCond) Eval(caps Captures, ctx *Context) bool {
+func (c *HasMultilineFuncLitSignatureCond) Eval(caps Captures,
+	ctx *Context) bool {
+
 	node := resolveTarget(caps, c.Target)
 	lit, ok := node.(*ast.FuncLit)
 	if !ok || lit == nil || lit.Body == nil || !lit.Body.Lbrace.IsValid() {
@@ -1560,6 +1714,7 @@ func (c *HasMultilineFuncLitSignatureCond) Eval(caps Captures, ctx *Context) boo
 	}
 
 	sig := string(ctx.Source[start:brace])
+
 	return strings.Contains(sig, "\n")
 }
 
@@ -1573,7 +1728,9 @@ type HasMultilineInterfaceMethodCond struct {
 	Target string
 }
 
-func (c *HasMultilineInterfaceMethodCond) Eval(caps Captures, ctx *Context) bool {
+func (c *HasMultilineInterfaceMethodCond) Eval(caps Captures,
+	ctx *Context) bool {
+
 	node := resolveTarget(caps, c.Target)
 	field, ok := node.(*ast.Field)
 	if !ok || field == nil {
@@ -1587,6 +1744,7 @@ func (c *HasMultilineInterfaceMethodCond) Eval(caps Captures, ctx *Context) bool
 	}
 
 	sig := string(ctx.Source[start:end])
+
 	return strings.Contains(sig, "\n")
 }
 
@@ -1604,6 +1762,7 @@ func (c *HasMultilineIfHeaderCond) Eval(caps Captures, ctx *Context) bool {
 	}
 	start := ctx.Fset.Position(ifStmt.Pos())
 	lbrace := ctx.Fset.Position(ifStmt.Body.Lbrace)
+
 	return start.Line != lbrace.Line
 }
 
@@ -1621,6 +1780,7 @@ func (c *HasMultilineForHeaderCond) Eval(caps Captures, ctx *Context) bool {
 	}
 	start := ctx.Fset.Position(forStmt.Pos())
 	lbrace := ctx.Fset.Position(forStmt.Body.Lbrace)
+
 	return start.Line != lbrace.Line
 }
 
@@ -1638,6 +1798,7 @@ func (c *HasMultilineCaseHeaderCond) Eval(caps Captures, ctx *Context) bool {
 	}
 	start := ctx.Fset.Position(cc.Pos())
 	colon := ctx.Fset.Position(cc.Colon)
+
 	return start.Line != colon.Line
 }
 
@@ -1649,7 +1810,9 @@ func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	funcDecl, ok := node.(*ast.FuncDecl)
-	if !ok || funcDecl == nil || funcDecl.Type == nil || funcDecl.Type.Params == nil {
+	if !ok || funcDecl == nil || funcDecl.Type == nil ||
+		funcDecl.Type.Params == nil {
+
 		return false
 	}
 
@@ -1658,13 +1821,17 @@ func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 		// Get the parameter type source
 		typeStart := ctx.Fset.Position(param.Type.Pos()).Offset
 		typeEnd := ctx.Fset.Position(param.Type.End()).Offset
-		if typeStart < 0 || typeEnd > len(ctx.Source) || typeStart >= typeEnd {
+		if typeStart < 0 || typeEnd > len(ctx.Source) ||
+			typeStart >= typeEnd {
+
 			continue
 		}
 		typeText := string(ctx.Source[typeStart:typeEnd])
 
 		// Check if it's a func type with multiline nested content
-		if strings.Contains(typeText, "func(") && strings.Contains(typeText, "struct") {
+		if strings.Contains(typeText, "func(") &&
+			strings.Contains(typeText, "struct") {
+
 			if strings.Contains(typeText, "\n") {
 				return true
 			}
@@ -1675,9 +1842,8 @@ func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 }
 
 // IsReturnNeedingBlankCond checks if a return statement needs a blank line
-// before it. This is true if:
-// 1. It's not immediately after a block open ({ or case:)
-// 2. It's not already preceded by a blank line
+// before it. This is true if: 1. It's not immediately after a block open ({ or
+// case:) 2. It's not already preceded by a blank line
 type IsReturnNeedingBlankCond struct {
 	Target string
 }
@@ -1703,8 +1869,8 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 		lineStart--
 	}
 
-	// Check if there's a { on the SAME line before the return
-	// This handles single-line functions: func foo() { return bar }
+	// Check if there's a { on the SAME line before the return This handles
+	// single-line functions: func foo() { return bar }
 	sameLineBefore := string(ctx.Source[lineStart:nodeStart])
 	if strings.Contains(sameLineBefore, "{") {
 		return false
@@ -1753,6 +1919,7 @@ type IsIfErrReturnNeedingBlankCond struct {
 
 func isIdentName(expr ast.Expr, name string) bool {
 	id, ok := expr.(*ast.Ident)
+
 	return ok && id != nil && id.Name == name
 }
 
@@ -1764,6 +1931,7 @@ func isErrNotNilCond(expr ast.Expr) bool {
 	if be.Op != token.NEQ {
 		return false
 	}
+
 	return (isIdentName(be.X, "err") && isIdentName(be.Y, "nil")) ||
 		(isIdentName(be.X, "nil") && isIdentName(be.Y, "err"))
 }
@@ -1773,6 +1941,7 @@ func ifBodyIsSingleReturn(body *ast.BlockStmt) bool {
 		return false
 	}
 	_, ok := body.List[0].(*ast.ReturnStmt)
+
 	return ok
 }
 
@@ -1799,8 +1968,8 @@ func (c *IsIfErrReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	// Require a preceding statement in the containing block; we don't want to
-	// insert a blank line at the start of a block.
+	// Require a preceding statement in the containing block; we don't want
+	// to insert a blank line at the start of a block.
 	parent := ctx.Parent(node)
 	block, ok := parent.(*ast.BlockStmt)
 	if !ok || block == nil {

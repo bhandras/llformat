@@ -20,5 +20,6 @@ func visualLen(s string) int {
 	if ts <= 0 {
 		ts = 8
 	}
+
 	return width.VisualLenWithTab(s, ts)
 }

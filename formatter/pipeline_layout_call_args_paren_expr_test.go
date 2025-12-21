@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsParenExprDoesNotPutCloseParenOnOwnLine(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsParenExprDoesNotPutCloseParenOnOwnLine(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -18,18 +20,20 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The inner logical chain should break, but `)` should not be on its own line
-	// (Go semicolon insertion hazard).
+	// The inner logical chain should break, but `)` should not be on its
+	// own line (Go semicolon insertion hazard).
 	require.Contains(t, outStr, "&&\n\t\t\tsecondConditionThatIsVeryLong")
 	require.Contains(t, outStr, "thirdConditionThatIsVeryLong)")
 	require.NotContains(t, outStr, "\n\t\t)\n")
@@ -43,4 +47,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-

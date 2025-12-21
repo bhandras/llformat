@@ -20,20 +20,25 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          30,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          30,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	require.Contains(t, outStr, "veryLongFunctionNameForTestingPurposes(\n\t\ta,")
-	// The layout formatter may keep args packed on a single continuation line
-	// if they fit, but it must still emit a trailing comma for a multiline call
-	// and place the closing paren on its own line.
+	require.Contains(
+		t, outStr,
+		"veryLongFunctionNameForTestingPurposes(\n		a,",
+	)
+	// The layout formatter may keep args packed on a single continuation
+	// line if they fit, but it must still emit a trailing comma for a
+	// multiline call and place the closing paren on its own line.
 	require.Contains(t, outStr, "d,")
 	require.Contains(t, outStr, "\n\t)")
 

@@ -46,17 +46,21 @@ func DefaultPreset() Preset {
 func NewPreset(columnLimit, tabStop int) Preset {
 	preset := DefaultPreset()
 	preset.Config = NewBaseConfig(columnLimit, tabStop)
+
 	return preset
 }
 
 // WithCallPatterns returns a new Preset with additional call patterns.
-func (p Preset) WithCallPatterns(patterns []string, breaker Breaker, priority int) Preset {
+func (p Preset) WithCallPatterns(patterns []string, breaker Breaker,
+	priority int) Preset {
+
 	rule := CallRule{
 		Patterns: patterns,
 		Breaker:  breaker,
 		Priority: priority,
 	}
 	p.CallRules = append(p.CallRules, rule)
+
 	return p
 }
 
@@ -66,6 +70,7 @@ func (p Preset) ToRules() []Rule {
 	for i := range p.CallRules {
 		rules[i] = &p.CallRules[i]
 	}
+
 	return rules
 }
 

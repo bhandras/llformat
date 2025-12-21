@@ -15,7 +15,9 @@ func requireParseableGo(t *testing.T, src []byte) {
 	require.NoError(t, err)
 }
 
-func TestPipeline_Invariants_ParseableIdempotentASTEquivalent_AcrossModes(t *testing.T) {
+func TestPipeline_Invariants_ParseableIdempotentASTEquivalent_AcrossModes(
+	t *testing.T) {
+
 	t.Parallel()
 
 	snippets := []string{
@@ -63,30 +65,64 @@ func f(xs []int, i, j int) int {
 		name string
 		cfg  PipelineConfig
 	}{
-		{name: "next", cfg: PipelineConfig{ColumnLimit: 60, TabStop: 8}},
+		{
+			name: "next",
+			cfg: PipelineConfig{
+				ColumnLimit: 60,
+				TabStop:     8,
+			},
+		},
 		{
 			name: "next_with_ownership",
-			cfg:  PipelineConfig{ColumnLimit: 60, TabStop: 8, UseOwnershipRegistry: true},
+			cfg: PipelineConfig{
+				ColumnLimit:          60,
+				TabStop:              8,
+				UseOwnershipRegistry: true,
+			},
 		},
 	}
 
 	for _, cfg := range configs {
 		cfg := cfg
-		t.Run(cfg.name, func(t *testing.T) {
-			t.Parallel()
+		t.Run(
+			cfg.name,
+			func(t *testing.T) {
+				t.Parallel()
 
-			p := NewPipeline(cfg.cfg)
-			for _, in := range snippets {
-				in := in
-				t.Run("snippet", func(t *testing.T) {
-					out1 := p.Format([]byte(in))
-					out2 := p.Format(out1)
+				p := NewPipeline(cfg.cfg)
+				for _, in := range snippets {
+					in := in
+					t.Run(
+						"snippet",
+						func(t *testing.T) {
+							out1 := p.Format(
+								[]byte(in),
+							)
+							out2 := p.Format(out1)
 
-					requireParseableGo(t, out1)
-					require.Equal(t, string(out1), string(out2), "not idempotent for config=%s", cfg.name)
-					requireASTEquivalent(t, []byte(in), out1)
-				})
-			}
-		})
+							requireParseableGo(
+								t, out1,
+							)
+							require.Equal(
+								t, string(out1),
+								string(out2),
+								"not "+
+									"idem"+
+									"pote"+
+									"nt "+
+									"for "+
+									"conf"+
+									"ig=%s",
+								cfg.name,
+							)
+							requireASTEquivalent(
+								t, []byte(in),
+								out1,
+							)
+						},
+					)
+				}
+			},
+		)
 	}
 }

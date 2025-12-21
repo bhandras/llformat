@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksIndexExprWithLogicalIndex(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksIndexExprWithLogicalIndex(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -19,19 +21,24 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The logical chain should break and the index expression should wrap with
-	// bracket-aware indentation.
-	require.Contains(t, outStr, "m[firstConditionThatIsVeryLong &&\n\t\t\tsecondConditionThatIsVeryLong")
+	// The logical chain should break and the index expression should wrap
+	// with bracket-aware indentation.
+	require.Contains(
+		t, outStr, "m[firstConditionThatIsVeryLong "+
+			"&&\n			secondConditionThatIsVeryLong",
+	)
 
 	// Idempotent.
 	out2 := p.Format(out)
@@ -43,7 +50,9 @@ func f() {
 	require.NoError(t, err)
 }
 
-func TestPipelineDSLMultiLineLayoutArgsBreaksSliceExprWithLogicalHigh(t *testing.T) {
+func TestPipelineDSLMultiLineLayoutArgsBreaksSliceExprWithLogicalHigh(
+	t *testing.T) {
+
 	const in = `package p
 
 func f() {
@@ -53,19 +62,24 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          60,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// The slice expression should wrap and allow the high expression to break
-	// within the brackets.
-	require.Contains(t, outStr, "m[:firstConditionThatIsVeryLong &&\n\t\t\tsecondConditionThatIsVeryLong")
+	// The slice expression should wrap and allow the high expression to
+	// break within the brackets.
+	require.Contains(
+		t, outStr, "m[:firstConditionThatIsVeryLong "+
+			"&&\n			secondConditionThatIsVeryLong",
+	)
 
 	// Idempotent.
 	out2 := p.Format(out)

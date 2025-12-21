@@ -11,10 +11,11 @@ type Indent struct {
 	TabStop int    // Tab width for visual width calculations
 }
 
-// IndentFromLine extracts the indentation from a line in the source.
-// lineStart is the position of the first character of the line.
+// IndentFromLine extracts the indentation from a line in the source. lineStart
+// is the position of the first character of the line.
 func IndentFromLine(src []byte, lineStart int, tabStop int) Indent {
 	ws := text.LeadingWhitespace(src, lineStart)
+
 	return Indent{
 		Base:    string(ws),
 		TabStop: tabStop,
@@ -24,6 +25,7 @@ func IndentFromLine(src []byte, lineStart int, tabStop int) Indent {
 // IndentFromSource extracts the indentation for the line containing pos.
 func IndentFromSource(src []byte, pos int, tabStop int) Indent {
 	lineStart := text.LastLineStart(src, pos)
+
 	return IndentFromLine(src, lineStart, tabStop)
 }
 
@@ -45,7 +47,8 @@ func (i Indent) String() string {
 	return i.Base
 }
 
-// Continuation returns a new Indent with one additional tab for continuation lines.
+// Continuation returns a new Indent with one additional tab for continuation
+// lines.
 func (i Indent) Continuation() Indent {
 	return Indent{
 		Base:    i.Base + "\t",
@@ -67,6 +70,7 @@ func (i Indent) WithSpaces(n int) Indent {
 	for j := 0; j < n; j++ {
 		spaces += " "
 	}
+
 	return i.WithExtra(spaces)
 }
 
@@ -80,7 +84,8 @@ func (i Indent) Bytes() []byte {
 	return []byte(i.Base)
 }
 
-// FitsContent checks if content starting after this indentation fits within the column limit.
+// FitsContent checks if content starting after this indentation fits within the
+// column limit.
 func (i Indent) FitsContent(content string, cfg BaseConfig) bool {
 	return cfg.FitsInLimit(i.Width(), content)
 }

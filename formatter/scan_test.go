@@ -65,20 +65,42 @@ func TestScannerSkipLiteral(t *testing.T) {
 		wantPos int
 		wantOK  bool
 	}{
-		{`"hello" rest`, 7, true},
-		{"`raw` rest", 5, true},
-		{"// comment\nrest", 11, true},
-		{"/* block */ rest", 11, true},
-		{"regular code", 0, false},
+		{
+			`"hello" rest`,
+			7,
+			true,
+		},
+		{
+			"`raw` rest",
+			5,
+			true,
+		},
+		{
+			"// comment\nrest",
+			11,
+			true,
+		},
+		{
+			"/* block */ rest",
+			11,
+			true,
+		},
+		{
+			"regular code",
+			0,
+			false,
+		},
 	}
 	for _, tt := range tests {
 		s := NewScanner([]byte(tt.input))
 		ok := s.SkipLiteral()
 		if ok != tt.wantOK {
-			t.Errorf("SkipLiteral(%q) = %v, want %v", tt.input, ok, tt.wantOK)
+			t.Errorf("SkipLiteral(%q) = %v, want %v", tt.input, ok,
+				tt.wantOK)
 		}
 		if ok && s.Pos() != tt.wantPos {
-			t.Errorf("SkipLiteral(%q) pos = %d, want %d", tt.input, s.Pos(), tt.wantPos)
+			t.Errorf("SkipLiteral(%q) pos = %d, want %d", tt.input,
+				s.Pos(), tt.wantPos)
 		}
 	}
 }
@@ -107,22 +129,50 @@ func TestScannerIsAt(t *testing.T) {
 		wantLineComm  bool
 		wantBlockComm bool
 	}{
-		{`"hello"`, true, false, false},
-		{"`raw`", true, false, false},
-		{"// comment", false, true, false},
-		{"/* block */", false, false, true},
-		{"code", false, false, false},
+		{
+			`"hello"`,
+			true,
+			false,
+			false,
+		},
+		{
+			"`raw`",
+			true,
+			false,
+			false,
+		},
+		{
+			"// comment",
+			false,
+			true,
+			false,
+		},
+		{
+			"/* block */",
+			false,
+			false,
+			true,
+		},
+		{
+			"code",
+			false,
+			false,
+			false,
+		},
 	}
 	for _, tt := range tests {
 		s := NewScanner([]byte(tt.input))
 		if got := s.IsAtString(); got != tt.wantString {
-			t.Errorf("IsAtString(%q) = %v, want %v", tt.input, got, tt.wantString)
+			t.Errorf("IsAtString(%q) = %v, want %v", tt.input, got,
+				tt.wantString)
 		}
 		if got := s.IsAtLineComment(); got != tt.wantLineComm {
-			t.Errorf("IsAtLineComment(%q) = %v, want %v", tt.input, got, tt.wantLineComm)
+			t.Errorf("IsAtLineComment(%q) = %v, want %v", tt.input,
+				got, tt.wantLineComm)
 		}
 		if got := s.IsAtBlockComment(); got != tt.wantBlockComm {
-			t.Errorf("IsAtBlockComment(%q) = %v, want %v", tt.input, got, tt.wantBlockComm)
+			t.Errorf("IsAtBlockComment(%q) = %v, want %v", tt.input,
+				got, tt.wantBlockComm)
 		}
 	}
 }
@@ -140,7 +190,8 @@ func TestScannerSkipWhitespace(t *testing.T) {
 	s2 := NewScanner(src2)
 	s2.SkipWhitespace()
 	if s2.Pos() != 2 {
-		t.Errorf("Pos() after SkipWhitespace with newline = %d, want 2", s2.Pos())
+		t.Errorf("Pos() after SkipWhitespace with newline = %d, want 2",
+			s2.Pos())
 	}
 }
 
@@ -152,7 +203,8 @@ func TestScannerSkipToNewline(t *testing.T) {
 		t.Errorf("Pos() after SkipToNewline = %d, want 5", s.Pos())
 	}
 	if s.Peek() != '\n' {
-		t.Errorf("Peek() after SkipToNewline = %q, want '\\n'", s.Peek())
+		t.Errorf("Peek() after SkipToNewline = %q, want '\\n'",
+			s.Peek())
 	}
 }
 
@@ -167,7 +219,8 @@ func TestScannerSkipPastNewline(t *testing.T) {
 		t.Errorf("Pos() after SkipPastNewline = %d, want 6", s.Pos())
 	}
 	if s.Peek() != 'w' {
-		t.Errorf("Peek() after SkipPastNewline = %q, want 'w'", s.Peek())
+		t.Errorf("Peek() after SkipPastNewline = %q, want 'w'",
+			s.Peek())
 	}
 }
 

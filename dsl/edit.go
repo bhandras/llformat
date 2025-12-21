@@ -25,12 +25,16 @@ func ApplyEdits(src []byte, edits []Edit) ([]byte, error) {
 
 	sorted := make([]Edit, len(edits))
 	copy(sorted, edits)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].Start != sorted[j].Start {
-			return sorted[i].Start < sorted[j].Start
-		}
-		return sorted[i].End < sorted[j].End
-	})
+	sort.Slice(
+		sorted,
+		func(i, j int) bool {
+			if sorted[i].Start != sorted[j].Start {
+				return sorted[i].Start < sorted[j].Start
+			}
+
+			return sorted[i].End < sorted[j].End
+		},
+	)
 
 	if err := validateEdits(src, sorted); err != nil {
 		return nil, err
@@ -52,10 +56,14 @@ func ApplyEdits(src []byte, edits []Edit) ([]byte, error) {
 
 // ApplySingleEdit is a convenience wrapper around ApplyEdits for the common
 // single-span replacement case.
-func ApplySingleEdit(src []byte, start, end int, replace []byte) ([]byte, error) {
-	return ApplyEdits(src, []Edit{
-		{Start: start, End: end, Replace: replace},
-	})
+func ApplySingleEdit(src []byte, start, end int,
+	replace []byte) ([]byte, error) {
+
+	return ApplyEdits(
+		src, []Edit{
+			{Start: start, End: end, Replace: replace},
+		},
+	)
 }
 
 func estimatedSize(srcLen int, edits []Edit) int {
@@ -66,25 +74,33 @@ func estimatedSize(srcLen int, edits []Edit) int {
 	if size < 0 {
 		return 0
 	}
+
 	return size
 }
 
 func validateEdits(src []byte, edits []Edit) error {
 	srcLen := len(src)
 	for i, e := range edits {
-		if e.Start < 0 || e.End < 0 || e.Start > srcLen || e.End > srcLen {
-			return fmt.Errorf("edit %d out of bounds: [%d:%d] (len=%d)", i, e.Start, e.End, srcLen)
+		if e.Start < 0 || e.End < 0 || e.Start > srcLen ||
+			e.End > srcLen {
+
+			return fmt.Errorf("edit %d out of bounds: [%d:%d] "+
+				"(len=%d)", i, e.Start, e.End, srcLen)
 		}
 		if e.Start > e.End {
-			return fmt.Errorf("edit %d invalid range: start=%d end=%d", i, e.Start, e.End)
+			return fmt.Errorf("edit %d invalid range: "+
+				"start=%d end=%d", i, e.Start, e.End)
 		}
 		if i == 0 {
 			continue
 		}
 		prev := edits[i-1]
 		if prev.End > e.Start {
-			return fmt.Errorf("edits overlap: prev=[%d:%d] next=[%d:%d]", prev.Start, prev.End, e.Start, e.End)
+			return fmt.Errorf("edits overlap: prev=[%d:%d] "+
+				"next=[%d:%d]", prev.Start, prev.End, e.Start,
+				e.End)
 		}
 	}
+
 	return nil
 }

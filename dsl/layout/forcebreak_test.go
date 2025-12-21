@@ -10,10 +10,13 @@ func TestForceBreakForcesGroupToBreak(t *testing.T) {
 		FB(),
 	))
 
-	// Without ForceBreak, this would render as "a b" under a sufficiently large
-	// column limit. ForceBreak should force break mode so the Line is a newline.
+	// Without ForceBreak, this would render as "a b" under a sufficiently
+	// large column limit. ForceBreak should force break mode so the Line is
+	// a newline.
 	out := Render(doc, 80, 8, "")
 	if out != "a\nb" {
-		t.Fatalf("expected forced break output %q, got %q", "a\\nb", out)
+		t.Fatalf(
+			"expected forced break output %q, got %q", "a\\nb", out,
+		)
 	}
 }

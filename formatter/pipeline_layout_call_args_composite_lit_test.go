@@ -25,18 +25,23 @@ func f() {
 }
 `
 
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:          50,
-		TabStop:              8,
-		UseDSLMultiLineCalls: true,
-		DSLMultiLineStyle:    "layout-args",
-	})
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:          50,
+			TabStop:              8,
+			UseDSLMultiLineCalls: true,
+			DSLMultiLineStyle:    "layout-args",
+		},
+	)
 
 	out := p.Format([]byte(in))
 	outStr := string(out)
 
-	// Ensure the call breaks and the composite literal is formatted as a block.
-	require.Contains(t, outStr, "outerFunctionNameThatIsVeryLong(\n\t\tcfg{")
+	// Ensure the call breaks and the composite literal is formatted as a
+	// block.
+	require.Contains(
+		t, outStr, "outerFunctionNameThatIsVeryLong(\n		cfg{",
+	)
 	require.Contains(t, outStr, "\n\t\t\tA: 1,")
 	require.Contains(t, outStr, "\n\t\t\tB: 2,")
 	require.Contains(t, outStr, "\n\t\t\tC: 3,")
@@ -52,4 +57,3 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
-
