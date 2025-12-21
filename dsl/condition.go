@@ -1003,10 +1003,7 @@ func (c *IsAfterBlockOpenCond) Eval(caps Captures, ctx *Context) bool {
 	nodeStart := pos.Offset
 
 	// Find the start of this line
-	lineStart := nodeStart
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
-	}
+	lineStart := lineStartOffset(ctx.Source, nodeStart)
 
 	// Look at the previous line
 	if lineStart == 0 {
@@ -1015,10 +1012,7 @@ func (c *IsAfterBlockOpenCond) Eval(caps Captures, ctx *Context) bool {
 
 	// Find start of previous line
 	prevLineEnd := lineStart - 1
-	prevLineStart := prevLineEnd
-	for prevLineStart > 0 && ctx.Source[prevLineStart-1] != '\n' {
-		prevLineStart--
-	}
+	prevLineStart := lineStartOffset(ctx.Source, prevLineEnd)
 
 	// Get the previous line content, trimming whitespace
 	prevLine := string(ctx.Source[prevLineStart:prevLineEnd])
