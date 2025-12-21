@@ -309,13 +309,7 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 			continue
 		}
 
-		matched := ""
-		for _, t := range targets {
-			if hasPrefixAt(src, i, t) {
-				matched = t
-				break
-			}
-		}
+		matched := findTargetAt(src, i, targets)
 		if matched == "" {
 			// If enabled, try fallback formatting for non-target
 			// calls.
@@ -331,37 +325,13 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 			continue
 		}
 
-		// We found a target call. Find its full extent (balanced
-		// parentheses).
-		callStart := i
-		// Find the opening parenthesis index right after the target.
-		openIdx := callStart + len(matched) - 1 // points to '('
-		endIdx := scanner.ScanBalancedParen(src, openIdx)
-		if endIdx <= openIdx {
-			// Could not find a balanced call; copy verbatim and
-			// continue to avoid mangling.
-			out.Write(src[callStart : callStart+len(matched)])
-			i = callStart + len(matched)
+		if next, handled := formatTargetCall(
+			&out, src, i, matched,
+		); handled {
+
+			i = next
 			continue
 		}
-
-		// Split around to get indent and call head.
-		lineStart := text.LastLineStart(src, callStart)
-		// indentBytes is the entire slice from line start to call start
-		// (may include non-whitespace like "return ").
-		indentBytes := src[lineStart:callStart]
-		// wsIndent is only the leading whitespace of the line.
-		wsIndent := text.LeadingWhitespace(src, lineStart)
-
-		// Build formatted call.
-		formatted := formatCallGreedy(
-			src[callStart:endIdx+1], string(wsIndent),
-			visualLen(
-				string(indentBytes),
-			),
-		)
-		out.WriteString(formatted)
-		i = endIdx + 1
 	}
 	res := out.Bytes()
 
@@ -373,6 +343,54 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 	}
 
 	return res
+}
+
+func findTargetAt(src []byte, i int, targets []string) string {
+	for _, t := range targets {
+		if hasPrefixAt(src, i, t) {
+			return t
+		}
+	}
+
+	return ""
+}
+
+func formatTargetCall(out *bytes.Buffer, src []byte, callStart int,
+	matched string) (next int, handled bool) {
+
+	if matched == "" {
+		return 0, false
+	}
+
+	// Find the opening parenthesis index right after the target.
+	openIdx := callStart + len(matched) - 1 // points to '('
+	endIdx := scanner.ScanBalancedParen(src, openIdx)
+	if endIdx <= openIdx {
+		// Could not find a balanced call; copy verbatim and continue to
+		// avoid mangling.
+		out.Write(src[callStart : callStart+len(matched)])
+
+		return callStart + len(matched), true
+	}
+
+	// Split around to get indent and call head.
+	lineStart := text.LastLineStart(src, callStart)
+	// indentBytes is the entire slice from line start to call start (may
+	// include non-whitespace like "return ").
+	indentBytes := src[lineStart:callStart]
+	// wsIndent is only the leading whitespace of the line.
+	wsIndent := text.LeadingWhitespace(src, lineStart)
+
+	// Build formatted call.
+	formatted := formatCallGreedy(
+		src[callStart:endIdx+1], string(wsIndent),
+		visualLen(
+			string(indentBytes),
+		),
+	)
+	out.WriteString(formatted)
+
+	return endIdx + 1, true
 }
 
 func copyNonCodeSpan(out *bytes.Buffer, src []byte,

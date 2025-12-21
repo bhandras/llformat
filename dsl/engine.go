@@ -394,60 +394,28 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte,
 
 		caps := Captures{"node": nil}
 		if !rule.When.Eval(caps, ctx) {
-			if e.TraceReasons &&
-				reasonsPrinted < maxReasonsPerIter {
-
-				reasonsPrinted++
-				fmt.Fprintf(
-					os.Stderr, "dsl: stage=%s iter=%d "+
-						"skip rule=%s prio=%d "+
-						"node=%s nodeSpan=[%d:%d] "+
-						"@%d:%d reason=%s\n",
-					e.StageName, iter, rule.Name,
-					rule.Priority, "File", 0,
-					len(ctx.Source), 1, 1, "when=false",
-				)
-			}
+			e.traceSkipFileRule(
+				iter, ctx, rule, "when=false", &reasonsPrinted,
+				maxReasonsPerIter,
+			)
 			continue
 		}
 
 		out, changed := rule.Action.Execute(caps, ctx)
 		if !changed || out == nil {
-			if e.TraceReasons &&
-				reasonsPrinted < maxReasonsPerIter {
-
-				reasonsPrinted++
-				fmt.Fprintf(
-					os.Stderr, "dsl: stage=%s iter=%d "+
-						"skip rule=%s prio=%d "+
-						"node=%s nodeSpan=[%d:%d] "+
-						"@%d:%d reason=%s\n",
-					e.StageName, iter, rule.Name,
-					rule.Priority, "File", 0,
-					len(ctx.Source), 1, 1,
-					"action=no_change",
-				)
-			}
+			e.traceSkipFileRule(
+				iter, ctx, rule, "action=no_change",
+				&reasonsPrinted, maxReasonsPerIter,
+			)
 			continue
 		}
 
 		start, endBefore, _ := changedSpan(ctx.Source, out)
 		if ctx.editOverlapsForbidden(start, endBefore) {
-			if e.TraceReasons &&
-				reasonsPrinted < maxReasonsPerIter {
-
-				reasonsPrinted++
-				fmt.Fprintf(
-					os.Stderr, "dsl: stage=%s iter=%d "+
-						"skip rule=%s prio=%d "+
-						"node=%s nodeSpan=[%d:%d] "+
-						"@%d:%d reason=%s\n",
-					e.StageName, iter, rule.Name,
-					rule.Priority, "File", 0,
-					len(ctx.Source), 1, 1,
-					"blocked_by_ownership",
-				)
-			}
+			e.traceSkipFileRule(
+				iter, ctx, rule, "blocked_by_ownership",
+				&reasonsPrinted, maxReasonsPerIter,
+			)
 			continue
 		}
 
@@ -461,6 +429,24 @@ func (e *Engine) applyOneFileRuleWithoutAST(iter int, ctx *Context) ([]byte,
 	}
 
 	return nil, false
+}
+
+func (e *Engine) traceSkipFileRule(iter int, ctx *Context, rule Rule,
+	reason string, reasonsPrinted *int, maxReasons int) {
+
+	if !e.TraceReasons || reasonsPrinted == nil ||
+		*reasonsPrinted >= maxReasons {
+
+		return
+	}
+	*reasonsPrinted++
+
+	fmt.Fprintf(
+		os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d "+
+			"node=%s nodeSpan=[%d:%d] @%d:%d reason=%s\n",
+		e.StageName, iter, rule.Name, rule.Priority, "File", 0,
+		len(ctx.Source), 1, 1, reason,
+	)
 }
 
 // changedSpan finds a minimal differing span between before and after. It

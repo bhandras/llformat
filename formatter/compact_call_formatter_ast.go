@@ -54,6 +54,21 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 		return src
 	}
 
+	res := formatCompactCallCandidates(src, candidates)
+
+	if skipGofmt {
+		return res
+	}
+	if formatted, err := formatstd.Source(res); err == nil {
+		return formatted
+	}
+
+	return res
+}
+
+func formatCompactCallCandidates(src []byte,
+	candidates []compactCallCandidate) []byte {
+
 	var out bytes.Buffer
 	out.Grow(len(src))
 	pos := 0
@@ -66,147 +81,156 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 			continue
 		}
 
-		considerAsCall := c.targetMatch != ""
-		if !considerAsCall && fallbackNonTargets {
-			considerAsCall = true
-		}
-		if !considerAsCall {
+		if !shouldFormatCandidate(c) {
 			continue
 		}
 
 		out.Write(src[pos:c.start])
 
-		lineStart := text.LastLineStart(src, c.start)
-		indentBytes := src[lineStart:c.start]
-		wsIndent := text.LeadingWhitespace(src, lineStart)
+		pos = formatCompactCallCandidate(&out, src, c)
+	}
 
-		if c.targetMatch != "" {
-			formatted := formatCallGreedy(
-				src[c.start:c.end], string(wsIndent),
-				visualLen(
-					string(indentBytes),
-				),
-			)
-			out.WriteString(formatted)
-			pos = c.end
-			continue
-		}
+	out.Write(src[pos:])
 
-		// Legacy fallback formatting for non-target calls.
-		span := src[c.start:c.end]
-		// Avoid rewriting calls that contain inline comments; rewriting
-		// these can cause non-idempotent comment attachment across
-		// pipeline runs.
-		if spanHasCommentOutsideStrings(span) {
-			out.Write(span)
-			pos = c.end
-			continue
-		}
-		indentPrefix := string(indentBytes)
-		trimmedPrefix := strings.TrimSpace(indentPrefix)
-		allowedByPrefix := trimmedPrefix == "" ||
-			strings.HasSuffix(trimmedPrefix, ":=") ||
-			strings.HasSuffix(trimmedPrefix, "=") ||
-			strings.HasSuffix(trimmedPrefix, "return") ||
-			strings.HasSuffix(trimmedPrefix, "go") ||
-			strings.HasSuffix(trimmedPrefix, "defer")
-		if !allowedByPrefix &&
-			isSelectorChainCallStartOnLine(src, c.start) {
+	return out.Bytes()
+}
 
-			allowedByPrefix = true
-		}
-		if !allowedByPrefix {
-			// Consume the call but leave it unchanged; this matches
-			// the scan-based fallback behavior (which skips nested
-			// target calls inside other calls).
-			out.Write(span)
-			pos = c.end
-			continue
-		}
+func shouldFormatCandidate(c compactCallCandidate) bool {
+	if c.targetMatch != "" {
+		return true
+	}
 
-		if fallbackNonTargetsExcludeSelectors {
-			// Exclude selector calls, including method-chain calls
-			// where the call start is the selector ident (e.g.
-			// ".Execute(") so the callee span itself contains no
-			// '.'.
-			if isSelectorChainCallStartOnLine(src, c.start) {
-				out.Write(span)
-				pos = c.end
-				continue
-			}
-			callee := strings.TrimSpace(
-				string(src[c.start:c.lparen]),
-			)
-			if callNameContainsAny(
-				callee, fallbackNonTargetsExcludes,
-			) {
+	return fallbackNonTargets
+}
 
-				out.Write(span)
-				pos = c.end
-				continue
-			}
-			if strings.Contains(callee, ".") {
-				out.Write(span)
-				pos = c.end
-				continue
-			}
-		} else {
-			callee := strings.TrimSpace(
-				string(src[c.start:c.lparen]),
-			)
-			if callNameContainsAny(
-				callee, fallbackNonTargetsExcludes,
-			) {
+func formatCompactCallCandidate(out *bytes.Buffer, src []byte,
+	c compactCallCandidate) int {
 
-				out.Write(span)
-				pos = c.end
-				continue
-			}
-		}
+	lineStart := text.LastLineStart(src, c.start)
+	indentBytes := src[lineStart:c.start]
+	wsIndent := text.LeadingWhitespace(src, lineStart)
 
-		tp := strings.TrimSpace(indentPrefix)
-		if tp == ")" || tp == ")." {
-			indentPrefix = string(
-				text.LeadingWhitespace(src, lineStart),
-			)
-		}
-
-		callText := string(src[c.start:c.end])
-		flat := strings.Join(
-			strings.Fields(
-				stripComments(callText),
-			), " ",
+	if c.targetMatch != "" {
+		formatted := formatCallGreedy(
+			src[c.start:c.end], string(wsIndent),
+			visualLen(
+				string(indentBytes),
+			),
 		)
-		singleLineLen := visualLen(flat)
-		currentLineLen := visualLen(indentPrefix) + singleLineLen
-		needsWrap := currentLineLen > columnLimit
-		if needsWrap && !isChainedShortCall(src, c.start, c.end) {
-			formatted := formatCallPackedMultiLine(
-				span, string(wsIndent), string(wsIndent), true,
-			)
-			out.WriteString(formatted)
-			pos = c.end
-			continue
-		}
+		out.WriteString(formatted)
 
+		return c.end
+	}
+
+	return formatFallbackCompactCall(
+		out, src, c, lineStart, indentBytes, wsIndent,
+	)
+}
+
+func formatFallbackCompactCall(out *bytes.Buffer, src []byte,
+	c compactCallCandidate, lineStart int, indentBytes []byte,
+	wsIndent []byte) int {
+
+	span := src[c.start:c.end]
+	// Avoid rewriting calls that contain inline comments; rewriting these
+	// can cause non-idempotent comment attachment across pipeline runs.
+	if spanHasCommentOutsideStrings(span) {
+		out.Write(span)
+
+		return c.end
+	}
+
+	indentPrefix := string(indentBytes)
+	if !fallbackCallPrefixAllowed(indentPrefix, src, c.start) {
 		// Consume the call but leave it unchanged; this matches the
 		// scan-based fallback behavior (which skips nested target calls
 		// inside other calls).
 		out.Write(span)
-		pos = c.end
+
+		return c.end
+	}
+	if !fallbackCallCalleeAllowed(src, c) {
+		out.Write(span)
+
+		return c.end
 	}
 
-	out.Write(src[pos:])
-	res := out.Bytes()
-
-	if skipGofmt {
-		return res
-	}
-	if formatted, err := formatstd.Source(res); err == nil {
-		return formatted
+	tp := strings.TrimSpace(indentPrefix)
+	if tp == ")" || tp == ")." {
+		indentPrefix = string(
+			text.LeadingWhitespace(src, lineStart),
+		)
 	}
 
-	return res
+	callText := string(src[c.start:c.end])
+	flat := strings.Join(
+		strings.Fields(
+			stripComments(callText),
+		), " ",
+	)
+	singleLineLen := visualLen(flat)
+	currentLineLen := visualLen(indentPrefix) + singleLineLen
+	needsWrap := currentLineLen > columnLimit
+	if needsWrap && !isChainedShortCall(src, c.start, c.end) {
+		formatted := formatCallPackedMultiLine(
+			span, string(wsIndent), string(wsIndent), true,
+		)
+		out.WriteString(formatted)
+
+		return c.end
+	}
+
+	// Consume the call but leave it unchanged; this matches the scan-based
+	// fallback behavior (which skips nested target calls inside other
+	// calls).
+	out.Write(span)
+
+	return c.end
+}
+
+func fallbackCallPrefixAllowed(indentPrefix string, src []byte,
+	callStart int) bool {
+
+	trimmedPrefix := strings.TrimSpace(indentPrefix)
+	allowedByPrefix := trimmedPrefix == "" ||
+		strings.HasSuffix(trimmedPrefix, ":=") ||
+		strings.HasSuffix(trimmedPrefix, "=") ||
+		strings.HasSuffix(trimmedPrefix, "return") ||
+		strings.HasSuffix(trimmedPrefix, "go") ||
+		strings.HasSuffix(trimmedPrefix, "defer")
+	if !allowedByPrefix &&
+		isSelectorChainCallStartOnLine(src, callStart) {
+
+		return true
+	}
+
+	return allowedByPrefix
+}
+
+func fallbackCallCalleeAllowed(src []byte, c compactCallCandidate) bool {
+	callee := strings.TrimSpace(
+		string(src[c.start:c.lparen]),
+	)
+	if callNameContainsAny(
+		callee, fallbackNonTargetsExcludes,
+	) {
+
+		return false
+	}
+
+	if fallbackNonTargetsExcludeSelectors {
+		// Exclude selector calls, including method-chain calls where
+		// the call start is the selector ident (e.g. ".Execute(") so
+		// the callee span itself contains no '.'.
+		if isSelectorChainCallStartOnLine(src, c.start) {
+			return false
+		}
+		if strings.Contains(callee, ".") {
+			return false
+		}
+	}
+
+	return true
 }
 
 func compactCallCandidatesFromAST(file *ast.File, fset *token.FileSet,
