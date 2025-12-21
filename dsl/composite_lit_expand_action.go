@@ -87,13 +87,10 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 	// indentation.
 	for cur := ast.Node(lit); cur != nil; {
 		parent := ctx.Parent(cur)
-		call, ok := parent.(*ast.CallExpr)
-		if ok && call != nil {
-			for _, arg := range call.Args {
-				if arg == cur {
-					return false
-				}
-			}
+		if call, ok := parent.(*ast.CallExpr); ok &&
+			isCallArg(call, cur) {
+
+			return false
 		}
 		cur = parent
 	}
