@@ -1,0 +1,49 @@
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gocognit
+    - gocyclo
+    - govet
+    - ineffassign
+    - nestif
+    - staticcheck
+    - unused
+  settings:
+    gocognit:
+      # Keep thresholds above current hotspots to prevent regressions; tighten
+      # as refactors land.
+      min-complexity: 271
+    gocyclo:
+      min-complexity: 101
+    nestif:
+      min-complexity: 109
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - testdata
+      - third_party$
+      - builtin$
+      - examples$
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

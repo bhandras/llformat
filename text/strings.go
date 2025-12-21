@@ -59,10 +59,7 @@ func SplitQuotedString(text string, startCol int, contIndent string, colLimit,
 	stringContIndent := contIndent + "\t"
 	contStart := width.VisualLenWithTab(stringContIndent, tabStop)
 
-	for {
-		if rest == "" {
-			break
-		}
+	for rest != "" {
 		// If the whole rest fits as a quoted literal on this line, emit
 		// and finish.
 		quoted := QuoteGoString(rest)

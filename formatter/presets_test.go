@@ -81,7 +81,7 @@ func TestPresetRuleMatcher(t *testing.T) {
 	matcher := preset.RuleMatcher()
 
 	if matcher == nil {
-		t.Error("RuleMatcher() returned nil")
+		t.Fatal("RuleMatcher() returned nil")
 	}
 	if len(matcher.Rules) != 2 {
 		t.Errorf("len(matcher.Rules) = %d, want 2", len(matcher.Rules))

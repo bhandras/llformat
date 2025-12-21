@@ -326,6 +326,8 @@ func expressionOnlyRules() []Rule {
 }
 
 // expressionRules returns the expression formatting rules.
+//
+//nolint:unused // Historical legacy rule bundle; kept temporarily during next-mode migration.
 func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 	// Create the left-flow call action with optional legacy formatter
 	leftFlowAction := &LeftFlowCallAction{Target: "node"}
@@ -1219,7 +1221,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 	// outer call argument lists (via `BreakCallArgsLayoutAction` + expr
 	// docs), and rewriting the chain independently can introduce parse
 	// hazards and oscillation.
-	if !(opts.CallArgsStyle == "layout" && opts.MethodChainStyle == "") {
+	if opts.CallArgsStyle != "layout" || opts.MethodChainStyle != "" {
 		rules = append(
 			rules, Rule{
 				Name:    "long_method_chain",

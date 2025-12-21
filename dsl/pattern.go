@@ -219,155 +219,274 @@ func (p *NodePattern) matchType(n ast.Node) bool {
 func getField(n ast.Node, name string) ast.Node {
 	switch node := n.(type) {
 	case *ast.CallExpr:
-		switch name {
-		case "Fun", "func":
-			return node.Fun
-		}
+		return getFieldCallExpr(node, name)
 
 	case *ast.BinaryExpr:
-		switch name {
-		case "X", "left":
-			return node.X
-
-		case "Y", "right":
-			return node.Y
-
-		case "Op", "op":
-
-			// Op is handled specially in matchLiteral
-			return nil
-		}
+		return getFieldBinaryExpr(node, name)
 
 	case *ast.UnaryExpr:
-		switch name {
-		case "X", "operand":
-			return node.X
-
-		case "Op", "op":
-			return nil
-		}
+		return getFieldUnaryExpr(node, name)
 
 	case *ast.AssignStmt:
-		switch name {
-		case "Lhs", "lhs":
-			if len(node.Lhs) > 0 {
-				return node.Lhs[0]
-			}
-
-		case "Rhs", "rhs":
-			if len(node.Rhs) > 0 {
-				return node.Rhs[0]
-			}
-		}
+		return getFieldAssignStmt(node, name)
 
 	case *ast.IfStmt:
-		switch name {
-		case "Cond", "cond":
-			return node.Cond
-
-		case "Body", "body":
-			return node.Body
-
-		case "Init", "init":
-			return node.Init
-
-		case "Else", "else":
-			return node.Else
-		}
+		return getFieldIfStmt(node, name)
 
 	case *ast.ForStmt:
-		switch name {
-		case "Cond", "cond":
-			return node.Cond
-
-		case "Body", "body":
-			return node.Body
-
-		case "Init", "init":
-			return node.Init
-
-		case "Post", "post":
-			return node.Post
-		}
+		return getFieldForStmt(node, name)
 
 	case *ast.ReturnStmt:
-		switch name {
-		case "Results", "results":
-			if len(node.Results) > 0 {
-				return node.Results[0]
-			}
-		}
+		return getFieldReturnStmt(node, name)
 
 	case *ast.CaseClause:
-		switch name {
-		case "List", "list":
-			// Return first element or nil
-			if len(node.List) > 0 {
-				return node.List[0]
-			}
-		}
+		return getFieldCaseClause(node, name)
 
 	case *ast.SelectorExpr:
-		switch name {
-		case "X", "x":
-			return node.X
-
-		case "Sel", "sel":
-			return node.Sel
-		}
+		return getFieldSelectorExpr(node, name)
 
 	case *ast.ParenExpr:
-		switch name {
-		case "X", "x":
-			return node.X
-		}
+		return getFieldParenExpr(node, name)
 
 	case *ast.StarExpr:
-		switch name {
-		case "X", "x":
-			return node.X
-		}
+		return getFieldStarExpr(node, name)
 
 	case *ast.CompositeLit:
-		switch name {
-		case "Type", "type":
-			return node.Type
-		}
+		return getFieldCompositeLit(node, name)
 
 	case *ast.FuncDecl:
-		switch name {
-		case "Type", "type":
-			return node.Type
-
-		case "Name", "name":
-			return node.Name
-
-		case "Recv", "recv":
-			return node.Recv
-
-		case "Body", "body":
-			return node.Body
-		}
+		return getFieldFuncDecl(node, name)
 
 	case *ast.FuncType:
-		switch name {
-		case "Params", "params":
-			return node.Params
-
-		case "Results", "results":
-			return node.Results
-		}
+		return getFieldFuncType(node, name)
 
 	case *ast.FieldList:
-		switch name {
-		case "List", "list":
-			if len(node.List) > 0 {
-				return node.List[0]
-			}
-		}
+		return getFieldFieldList(node, name)
 	}
 
 	return nil
+}
+
+// Field extraction is intentionally explicit rather than reflection-based:
+// patterns form part of the formatter's "language" and we want failures to be
+// obvious and deterministic.
+func getFieldCallExpr(node *ast.CallExpr, name string) ast.Node {
+	switch name {
+	case "Fun", "func":
+		return node.Fun
+
+	default:
+		return nil
+	}
+}
+
+func getFieldBinaryExpr(node *ast.BinaryExpr, name string) ast.Node {
+	switch name {
+	case "X", "left":
+		return node.X
+
+	case "Y", "right":
+		return node.Y
+
+	case "Op", "op":
+
+		// Op is handled specially in matchLiteral.
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+func getFieldUnaryExpr(node *ast.UnaryExpr, name string) ast.Node {
+	switch name {
+	case "X", "operand":
+		return node.X
+
+	case "Op", "op":
+
+		// Op is handled specially in matchLiteral.
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+func getFieldAssignStmt(node *ast.AssignStmt, name string) ast.Node {
+	switch name {
+	case "Lhs", "lhs":
+		if len(node.Lhs) > 0 {
+			return node.Lhs[0]
+		}
+
+		return nil
+
+	case "Rhs", "rhs":
+		if len(node.Rhs) > 0 {
+			return node.Rhs[0]
+		}
+
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+func getFieldIfStmt(node *ast.IfStmt, name string) ast.Node {
+	switch name {
+	case "Cond", "cond":
+		return node.Cond
+
+	case "Body", "body":
+		return node.Body
+
+	case "Init", "init":
+		return node.Init
+
+	case "Else", "else":
+		return node.Else
+
+	default:
+		return nil
+	}
+}
+
+func getFieldForStmt(node *ast.ForStmt, name string) ast.Node {
+	switch name {
+	case "Cond", "cond":
+		return node.Cond
+
+	case "Body", "body":
+		return node.Body
+
+	case "Init", "init":
+		return node.Init
+
+	case "Post", "post":
+		return node.Post
+
+	default:
+		return nil
+	}
+}
+
+func getFieldReturnStmt(node *ast.ReturnStmt, name string) ast.Node {
+	switch name {
+	case "Results", "results":
+		if len(node.Results) > 0 {
+			return node.Results[0]
+		}
+
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+func getFieldCaseClause(node *ast.CaseClause, name string) ast.Node {
+	switch name {
+	case "List", "list":
+		if len(node.List) > 0 {
+			return node.List[0]
+		}
+
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+func getFieldSelectorExpr(node *ast.SelectorExpr, name string) ast.Node {
+	switch name {
+	case "X", "x":
+		return node.X
+
+	case "Sel", "sel":
+		return node.Sel
+
+	default:
+		return nil
+	}
+}
+
+func getFieldParenExpr(node *ast.ParenExpr, name string) ast.Node {
+	switch name {
+	case "X", "x":
+		return node.X
+
+	default:
+		return nil
+	}
+}
+
+func getFieldStarExpr(node *ast.StarExpr, name string) ast.Node {
+	switch name {
+	case "X", "x":
+		return node.X
+
+	default:
+		return nil
+	}
+}
+
+func getFieldCompositeLit(node *ast.CompositeLit, name string) ast.Node {
+	switch name {
+	case "Type", "type":
+		return node.Type
+
+	default:
+		return nil
+	}
+}
+
+func getFieldFuncDecl(node *ast.FuncDecl, name string) ast.Node {
+	switch name {
+	case "Type", "type":
+		return node.Type
+
+	case "Name", "name":
+		return node.Name
+
+	case "Recv", "recv":
+		return node.Recv
+
+	case "Body", "body":
+		return node.Body
+
+	default:
+		return nil
+	}
+}
+
+func getFieldFuncType(node *ast.FuncType, name string) ast.Node {
+	switch name {
+	case "Params", "params":
+		return node.Params
+
+	case "Results", "results":
+		return node.Results
+
+	default:
+		return nil
+	}
+}
+
+func getFieldFieldList(node *ast.FieldList, name string) ast.Node {
+	switch name {
+	case "List", "list":
+		if len(node.List) > 0 {
+			return node.List[0]
+		}
+
+		return nil
+
+	default:
+		return nil
+	}
 }
 
 // matchLiteral checks if a field matches a literal value.

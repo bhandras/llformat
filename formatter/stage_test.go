@@ -116,7 +116,7 @@ func TestDefaultStages(t *testing.T) {
 	}
 
 	// Check dependencies are set
-	if stages[0].Requires != nil && len(stages[0].Requires) > 0 {
+	if len(stages[0].Requires) > 0 {
 		t.Error("First stage should have no dependencies")
 	}
 	if len(stages[1].Requires) == 0 {

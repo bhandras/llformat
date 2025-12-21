@@ -99,9 +99,11 @@ func (f *FuncSigFormatter) FormatFile(src []byte) []byte {
 		} else if inInterface {
 			// Count braces to track when we exit the interface
 			for _, c := range trimmed {
-				if c == '{' {
+				switch c {
+				case '{':
 					braceDepth++
-				} else if c == '}' {
+
+				case '}':
 					braceDepth--
 					if braceDepth == 0 {
 						inInterface = false
@@ -454,7 +456,7 @@ func isFuncLitSignature(signature string) bool {
 	rest = rest[i:]
 	rest = strings.TrimLeft(rest, " \t")
 
-	return !(len(rest) > 0 && rest[0] == '(')
+	return len(rest) == 0 || rest[0] != '('
 }
 
 // hasNewlineOutsideBraces reports whether s contains a newline at brace nesting
@@ -539,9 +541,10 @@ func collapseSignatureWhitespace(sig string) string {
 		}
 
 		if c == '"' || c == '`' || c == '\'' {
-			if pendingSpace && hasWritten && lastWritten != ' ' {
+			if pendingSpace && hasWritten &&
+				lastWritten != ' ' {
+
 				b.WriteByte(' ')
-				lastWritten = ' '
 			}
 			pendingSpace = false
 
@@ -559,7 +562,6 @@ func collapseSignatureWhitespace(sig string) string {
 
 		if pendingSpace && hasWritten && lastWritten != ' ' {
 			b.WriteByte(' ')
-			lastWritten = ' '
 		}
 		pendingSpace = false
 
@@ -1514,9 +1516,11 @@ func (f *FuncSigFormatter) findMatchingParen(s string, start int) int {
 			continue
 		}
 
-		if c == '(' {
+		switch c {
+		case '(':
 			depth++
-		} else if c == ')' {
+
+		case ')':
 			depth--
 			if depth == 0 {
 				return i
@@ -1600,12 +1604,15 @@ func (f *FuncSigFormatter) splitFuncParamList(params string) []string {
 		// goldens).
 		if isBareName(cur) && i+1 < len(parts) {
 			next := strings.TrimSpace(parts[i+1])
-			if strings.IndexAny(next, " \t\n") >= 0 {
-				typePart := next[strings.IndexAny(
-					next, " 	\n",
-				):]
+			if typeStart := strings.IndexAny(
+				next, " 	\n",
+			); typeStart >= 0 {
+
+				typePart := next[typeStart:]
 				if isComplexSharedType(typePart) {
-					merged = append(merged, cur+", "+next)
+					merged = append(
+						merged, cur+", "+next,
+					)
 					i++
 					continue
 				}

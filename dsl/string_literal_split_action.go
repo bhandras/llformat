@@ -129,10 +129,7 @@ func buildSplitQuotedForCallArgDSL(text string, startCol int, wsIndent string,
 		out.WriteString(stringContIndent)
 	}
 
-	for {
-		if rest == "" {
-			break
-		}
+	for rest != "" {
 
 		// If indentation already exceeds the available width budget,
 		// splitting can't help.

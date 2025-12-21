@@ -586,77 +586,20 @@ func (e *Engine) applyAtomicMarkers(file *ast.File, ctx *Context) {
 func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte,
 	bool) {
 
-	var result []byte
-	changed := false
-
 	const maxReasonsPerIter = 60
 	reasonsPrinted := 0
 
-	// Build parent map and collect nodes
-	parentMap := make(map[ast.Node]ast.Node)
-	var nodes []ast.Node
-	var stack []ast.Node
-	ast.Inspect(file, func(n ast.Node) bool {
-		if n != nil {
-			// Set parent for this node (parent is top of stack)
-			if len(stack) > 0 {
-				parentMap[n] = stack[len(stack)-1]
-			}
-			stack = append(stack, n)
-			nodes = append(nodes, n)
-		} else {
-			// Pop from stack when leaving a node
-			if len(stack) > 0 {
-				stack = stack[:len(stack)-1]
-			}
-		}
-
-		return true
-	})
+	nodes, parentMap := collectNodesAndParents(file)
 	ctx.SetParentMap(parentMap)
 
-	// Try each node
-	if e.NodeOrder == NodeOrderSourceOrder {
-		sort.SliceStable(
-			nodes,
-			func(i, j int) bool {
-				pi := nodeOrderOffset(ctx, nodes[i])
-				pj := nodeOrderOffset(ctx, nodes[j])
-
-				return pi < pj
-			},
-		)
-	}
-	if e.NodeOrder == NodeOrderDeepestFirst {
-		sort.SliceStable(nodes, func(i, j int) bool {
-			si, ei := nodeSpanOffsets(ctx, nodes[i])
-			sj, ej := nodeSpanOffsets(ctx, nodes[j])
-			li := ei - si
-			lj := ej - sj
-			if li != lj {
-				return li < lj
-			}
-			// Tie-break by source order for determinism.
-			pi := nodeOrderOffset(ctx, nodes[i])
-			pj := nodeOrderOffset(ctx, nodes[j])
-
-			return pi < pj
-		})
-	}
+	sortNodesForOrder(nodes, ctx, e.NodeOrder)
 
 	for _, n := range nodes {
-		if changed {
-			break
-		}
-
-		// Skip nodes marked as atomic
 		if ctx.IsAtomic(n) {
 			continue
 		}
 
-		// Try each rule
 		for _, rule := range e.Rules {
-			// Skip keep_together rules (handled in first pass)
 			if _, ok := rule.Action.(*KeepTogetherAction); ok {
 				continue
 			}
@@ -666,34 +609,13 @@ func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte,
 				continue
 			}
 
-			// Add matched node to captures
 			caps["node"] = n
 
-			// Evaluate condition
 			if !rule.When.Eval(caps, ctx) {
-				if e.TraceReasons &&
-					reasonsPrinted < maxReasonsPerIter {
-
-					reasonsPrinted++
-					start, end := nodeSpanOffsets(ctx, n)
-					line, col := offsetToLineCol(
-						ctx.Source, start,
-					)
-					fmt.Fprintf(
-						os.Stderr, "dsl: stage=%s "+
-							"iter=%d skip "+
-							"rule=%s prio=%d "+
-							"node=%T "+
-							"nodeSpan=[%d:%d] "+
-							"@%d:%d reason=%s "+
-							"snippet=%q\n",
-						e.StageName, iter, rule.Name,
-						rule.Priority, n, start, end,
-						line, col, "when=false", snippetForRange(
-							ctx.Source, start, end,
-						),
-					)
-				}
+				e.traceSkipRule(
+					iter, ctx, rule, n, "when=false",
+					&reasonsPrinted, maxReasonsPerIter,
+				)
 				continue
 			}
 
@@ -701,40 +623,19 @@ func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte,
 				rule, caps, ctx,
 			)
 			if !ok {
-				if e.TraceReasons &&
-					reasonsPrinted < maxReasonsPerIter {
-
-					reasonsPrinted++
-					start, end := nodeSpanOffsets(ctx, n)
-					line, col := offsetToLineCol(
-						ctx.Source, start,
-					)
-					fmt.Fprintf(
-						os.Stderr, "dsl: stage=%s "+
-							"iter=%d skip "+
-							"rule=%s prio=%d "+
-							"node=%T "+
-							"nodeSpan=[%d:%d] "+
-							"@%d:%d reason=%s "+
-							"snippet=%q\n",
-						e.StageName, iter, rule.Name,
-						rule.Priority, n, start, end,
-						line, col, reason, snippetForRange(
-							ctx.Source, start, end,
-						),
-					)
-				}
+				e.traceSkipRule(
+					iter, ctx, rule, n, reason,
+					&reasonsPrinted, maxReasonsPerIter,
+				)
 				continue
 			}
 			if actionChanged {
-				result = modified
-				changed = true
-				break
+				return modified, true
 			}
 		}
 	}
 
-	return result, changed
+	return nil, false
 }
 
 func nodeOrderOffset(ctx *Context, n ast.Node) int {
@@ -773,68 +674,11 @@ func nodeSpanOffsets(ctx *Context, n ast.Node) (start, end int) {
 func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (
 	modified []byte, changed bool, ok bool, reason string) {
 
-	n, _ := caps["node"]
-	if ctx != nil && n != nil {
-		pos := ctx.Fset.Position(n.Pos()).Offset
-		end := ctx.Fset.Position(n.End()).Offset
-		if pos < 0 {
-			pos = 0
-		}
-		if end < pos {
-			end = pos
-		}
-		if pos > len(ctx.Source) {
-			pos = len(ctx.Source)
-		}
-		if end > len(ctx.Source) {
-			end = len(ctx.Source)
-		}
-
-		ctx.LastAppliedRule = rule.Name
-		ctx.LastAppliedRulePriority = rule.Priority
-		ctx.LastAppliedNodeType = fmt.Sprintf("%T", n)
-		ctx.LastAppliedNodeStart = pos
-		ctx.LastAppliedNodeEnd = end
-	}
+	e.recordLastApplied(ctx, rule, caps["node"])
 
 	// Prefer edit-based actions when available.
 	if editAction, okCast := rule.Action.(EditAction); okCast {
-		edits, changedEdits, err := editAction.ExecuteEdits(caps, ctx)
-		if err != nil {
-			return nil, false, false, "edit_action_error=" + err.Error()
-		}
-		if !changedEdits {
-			return nil, false, false, "edit_action=no_edits"
-		}
-		for _, e := range edits {
-			if ctx.editOverlapsForbidden(e.Start, e.End) {
-				return nil, false, false, "blocked_by_ownership"
-			}
-		}
-		applied, err := ApplyEdits(ctx.Source, edits)
-		if err != nil {
-			return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
-		}
-		// Never accept a transformation that produces syntactically
-		// invalid Go when the input was parseable. This ensures the DSL
-		// engine won't "brick" a file even if a rule is imperfect or
-		// interacts badly with semicolon insertion.
-		//
-		// However, some legacy fixtures are intentionally unparseable
-		// and are still expected to be formatted by scanner-based
-		// rules. In those cases, we allow transformations that keep the
-		// file unparseable.
-		if ctx.Parseable {
-			fset := token.NewFileSet()
-			if _, err := parser.ParseFile(
-				fset, "", applied, parser.ParseComments,
-			); err != nil {
-
-				return nil, false, false, "edit_action=parse_failed=" + err.Error()
-			}
-		}
-
-		return applied, true, true, ""
+		return e.executeEditAction(editAction, caps, ctx)
 	}
 
 	modified, actionChanged := rule.Action.Execute(caps, ctx)
@@ -856,6 +700,171 @@ func (e *Engine) executeAction(rule Rule, caps Captures, ctx *Context) (
 	}
 
 	return modified, true, true, ""
+}
+
+func collectNodesAndParents(file *ast.File) ([]ast.Node,
+	map[ast.Node]ast.Node) {
+
+	// We need parent links for conditions like parent()/scope(). Capture
+	// parents while traversing the AST once to avoid repeated reflection-
+	// heavy searches later.
+	parentMap := make(map[ast.Node]ast.Node)
+	var nodes []ast.Node
+	var stack []ast.Node
+	ast.Inspect(
+		file,
+		func(n ast.Node) bool {
+			if n == nil {
+				if len(stack) > 0 {
+					stack = stack[:len(stack)-1]
+				}
+
+				return true
+			}
+
+			if len(stack) > 0 {
+				parentMap[n] = stack[len(stack)-1]
+			}
+			stack = append(stack, n)
+			nodes = append(nodes, n)
+
+			return true
+		},
+	)
+
+	return nodes, parentMap
+}
+
+func sortNodesForOrder(nodes []ast.Node, ctx *Context, order NodeOrder) {
+	switch order {
+	case NodeOrderSourceOrder:
+		// Stable sort keeps deterministic results when multiple nodes
+		// have identical "order" offsets.
+		sort.SliceStable(
+			nodes,
+			func(i, j int) bool {
+				pi := nodeOrderOffset(ctx, nodes[i])
+				pj := nodeOrderOffset(ctx, nodes[j])
+
+				return pi < pj
+			},
+		)
+
+	case NodeOrderDeepestFirst:
+		sort.SliceStable(nodes, func(i, j int) bool {
+			si, ei := nodeSpanOffsets(ctx, nodes[i])
+			sj, ej := nodeSpanOffsets(ctx, nodes[j])
+			li := ei - si
+			lj := ej - sj
+			if li != lj {
+				return li < lj
+			}
+			// Tie-break by source order for determinism.
+			pi := nodeOrderOffset(ctx, nodes[i])
+			pj := nodeOrderOffset(ctx, nodes[j])
+
+			return pi < pj
+		})
+
+	default:
+	}
+}
+
+func (e *Engine) traceSkipRule(iter int, ctx *Context, rule Rule, n ast.Node,
+	reason string, reasonsPrinted *int, maxReasons int) {
+
+	if !e.TraceReasons || reasonsPrinted == nil ||
+		*reasonsPrinted >= maxReasons {
+
+		return
+	}
+	*reasonsPrinted++
+
+	start, end := nodeSpanOffsets(ctx, n)
+	line, col := offsetToLineCol(ctx.Source, start)
+	fmt.Fprintf(
+		os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d "+
+			"node=%T nodeSpan=[%d:%d] @%d:%d reason=%s snippet=%q\n",
+		e.StageName, iter, rule.Name, rule.Priority, n, start, end,
+		line, col, reason, snippetForRange(ctx.Source, start, end),
+	)
+}
+
+func (e *Engine) recordLastApplied(ctx *Context, rule Rule, node any) {
+	if ctx == nil || ctx.Fset == nil || node == nil {
+		return
+	}
+
+	// Offsets are clamped to the current source bytes so trace/debug output
+	// never panics on partially-invalid AST spans.
+	n, ok := node.(ast.Node)
+	if !ok || n == nil {
+		return
+	}
+
+	pos := ctx.Fset.Position(n.Pos()).Offset
+	end := ctx.Fset.Position(n.End()).Offset
+	if pos < 0 {
+		pos = 0
+	}
+	if end < pos {
+		end = pos
+	}
+	if pos > len(ctx.Source) {
+		pos = len(ctx.Source)
+	}
+	if end > len(ctx.Source) {
+		end = len(ctx.Source)
+	}
+
+	ctx.LastAppliedRule = rule.Name
+	ctx.LastAppliedRulePriority = rule.Priority
+	ctx.LastAppliedNodeType = fmt.Sprintf("%T", n)
+	ctx.LastAppliedNodeStart = pos
+	ctx.LastAppliedNodeEnd = end
+}
+
+func (e *Engine) executeEditAction(editAction EditAction, caps Captures,
+	ctx *Context) (modified []byte, changed bool, ok bool, reason string) {
+
+	edits, changedEdits, err := editAction.ExecuteEdits(caps, ctx)
+	if err != nil {
+		return nil, false, false, "edit_action_error=" + err.Error()
+	}
+	if !changedEdits {
+		return nil, false, false, "edit_action=no_edits"
+	}
+
+	for _, edit := range edits {
+		if ctx.editOverlapsForbidden(edit.Start, edit.End) {
+			return nil, false, false, "blocked_by_ownership"
+		}
+	}
+
+	applied, err := ApplyEdits(ctx.Source, edits)
+	if err != nil {
+		return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
+	}
+
+	// Never accept a transformation that produces syntactically invalid Go
+	// when the input was parseable. This ensures the DSL engine won't
+	// "brick" a file even if a rule is imperfect or interacts badly with
+	// semicolon insertion.
+	//
+	// However, some legacy fixtures are intentionally unparseable and are
+	// still expected to be formatted by scanner-based rules. In those
+	// cases, we allow transformations that keep the file unparseable.
+	if ctx.Parseable {
+		fset := token.NewFileSet()
+		if _, err := parser.ParseFile(
+			fset, "", applied, parser.ParseComments,
+		); err != nil {
+
+			return nil, false, false, "edit_action=parse_failed=" + err.Error()
+		}
+	}
+
+	return applied, true, true, ""
 }
 
 // FormatFile is a convenience method that reads, formats, and returns source.

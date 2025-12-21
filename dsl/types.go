@@ -3,7 +3,6 @@ package dsl
 import (
 	"go/ast"
 	"go/token"
-	"strings"
 
 	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/scanner"
@@ -340,19 +339,6 @@ func hasBlockComment(s string) bool {
 
 		default:
 			i++
-		}
-	}
-
-	return false
-}
-
-// anyLineExceedsLimit checks if any line in the given string exceeds the column
-// limit.
-func anyLineExceedsLimit(s string, colLimit, tabStop int) bool {
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
-		if visualLen(line, tabStop) > colLimit {
-			return true
 		}
 	}
 

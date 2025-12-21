@@ -207,7 +207,7 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 		)
 
 		// Reflow already-multiline signatures + func literals.
-		var funcAction dsl.Action = rules[0].Action
+		funcAction := rules[0].Action
 		var methodAction dsl.Action
 		if len(rules) > 1 {
 			methodAction = rules[1].Action

@@ -170,26 +170,14 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 // findCallToReflow finds a call in a method chain that benefits from reflowing.
 // Returns the first call where reflowing reduces line width below the limit.
 func findCallToReflow(call *ast.CallExpr, ctx *Context) *ast.CallExpr {
-	// Collect all calls in the method chain (innermost to outermost)
-	var calls []*ast.CallExpr
-	current := call
-	for current != nil {
-		calls = append(calls, current)
-		// Check if this call's Fun is another call (method chain)
-		if sel, ok := current.Fun.(*ast.SelectorExpr); ok {
-			if nextCall, ok := sel.X.(*ast.CallExpr); ok {
-				current = nextCall
-				continue
-			}
-		}
-		break
+	chain := collectMethodChainCalls(call)
+	if len(chain) == 0 {
+		return nil
 	}
 
-	// Process from outermost call first (calls[0] is outermost) This way we
-	// reflow the call that keeps most of the chain intact
-
-	// Try each call - return the first one where reflowing helps
-	for _, c := range calls {
+	// Try each call from the outermost inward; we prefer keeping the most
+	// structure of the chain intact.
+	for _, c := range chain {
 		if len(c.Args) == 0 {
 			continue
 		}
@@ -199,63 +187,111 @@ func findCallToReflow(call *ast.CallExpr, ctx *Context) *ast.CallExpr {
 			continue
 		}
 
-		// Try reflowing this call and see if it helps
 		indent := ctx.IndentAt(c)
-		formatted := formatCallOnePerLine(c, indent, ctx)
-
 		start := ctx.Fset.Position(c.Pos()).Offset
 		end := ctx.Fset.Position(c.End()).Offset
+		if start < 0 || end < 0 || start >= end ||
+			end > len(ctx.Source) {
+
+			continue
+		}
+
+		formatted := formatCallOnePerLine(c, indent, ctx)
 		original := string(ctx.Source[start:end])
 
 		if formatted == original {
 			continue
 		}
 
-		// Verify the reflow actually reduces line width Build temporary
-		// result and check.
-		newBytes, err := ApplySingleEdit(
-			ctx.Source, start, end, []byte(formatted),
-		)
-		if err != nil {
-			continue
-		}
-		newFset := token.NewFileSet()
-		newFile, err := parser.ParseFile(newFset, "", newBytes, 0)
-		if err != nil {
+		if !reflowedCallFitsAnyLineWithinLimit(
+			ctx, start, formatted, end,
+		) {
+
 			continue
 		}
 
-		// Find the first line width in the reformatted area
-		newCtx := NewContext(
-			newFset, newBytes, ctx.ColumnLimit, ctx.TabStop,
-		)
-		improved := false
-		ast.Inspect(newFile, func(n ast.Node) bool {
-			if nc, ok := n.(*ast.CallExpr); ok {
-				// Check if this is our reformatted call (by
-				// position approximation)
-				pos := newFset.Position(nc.Pos())
-				if pos.Offset >= start && pos.Offset <= start+len(
-					formatted,
-				) {
-
-					if newCtx.LineWidth(nc) <= ctx.ColumnLimit {
-						improved = true
-
-						return false
-					}
-				}
-			}
-
-			return true
-		})
-
-		if improved {
-			return c
-		}
+		return c
 	}
 
 	return nil
+}
+
+func collectMethodChainCalls(call *ast.CallExpr) []*ast.CallExpr {
+	// Given an outermost call like `a().b().c()`, walk the `SelectorExpr`
+	// receiver chain and return calls from outermost to innermost: `[c(),
+	// b(), a()]`.
+	var calls []*ast.CallExpr
+	for current := call; current != nil; {
+		calls = append(calls, current)
+
+		sel, ok := current.Fun.(*ast.SelectorExpr)
+		if !ok {
+			break
+		}
+
+		nextCall, ok := sel.X.(*ast.CallExpr)
+		if !ok {
+			break
+		}
+
+		current = nextCall
+	}
+
+	return calls
+}
+
+func reflowedCallFitsAnyLineWithinLimit(ctx *Context, start int,
+	replacement string, end int) bool {
+
+	newBytes, err := ApplySingleEdit(
+		ctx.Source, start, end, []byte(replacement),
+	)
+	if err != nil {
+		return false
+	}
+
+	newFset := token.NewFileSet()
+	newFile, err := parser.ParseFile(newFset, "", newBytes, 0)
+	if err != nil {
+		return false
+	}
+
+	newCtx := NewContext(newFset, newBytes, ctx.ColumnLimit, ctx.TabStop)
+
+	// We only need a coarse sanity check: if *any* call in the rewritten
+	// region now fits within the column limit, the rewrite is considered an
+	// improvement.
+	//
+	// Note: we identify the rewritten call by position approximation (byte
+	// offsets in the rewritten region). This is sufficient here because we
+	// only use it as a filter; the actual call rewrite is applied later by
+	// a separate action.
+	rewrittenEnd := start + len(replacement)
+	improved := false
+	ast.Inspect(
+		newFile,
+		func(n ast.Node) bool {
+			nc, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			pos := newFset.Position(nc.Pos()).Offset
+			if pos < start || pos > rewrittenEnd {
+				return true
+			}
+
+			if newCtx.LineWidth(nc) <= ctx.ColumnLimit {
+				improved = true
+
+				return false
+			}
+
+			return true
+		},
+	)
+
+	return improved
 }
 
 // formatCallOnePerLine formats a call with each argument on its own line.
@@ -1139,7 +1175,7 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 	// width (useful for single-line nodes with extra spacing) and the
 	// collapsed width (useful for multiline nodes where the first line may
 	// be short).
-	if (&OrCond{Conds: []Condition{
+	if !(&OrCond{Conds: []Condition{
 		&LineWidthCond{
 			Target: a.Target,
 			Op:     ">",
@@ -1152,7 +1188,7 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 		},
 	}}).Eval(caps,
 		ctx,
-	) == false {
+	) {
 
 		return nil, false
 	}
@@ -1651,7 +1687,9 @@ func (a *ReflowNestedCallsAction) Execute(caps Captures, ctx *Context) ([]byte,
 // Helper to render an AST node back to source.
 func renderNode(n ast.Node, fset *token.FileSet) string {
 	var buf bytes.Buffer
-	printer.Fprint(&buf, fset, n)
+	if err := printer.Fprint(&buf, fset, n); err != nil {
+		return ""
+	}
 
 	return buf.String()
 }
@@ -1765,7 +1803,7 @@ func normalizeCallWithGofmt(call string, wsIndent string) string {
 	start := idx + len(marker)
 
 	// Find the closing brace. The call ends just before "\n}\n" or "\n}"
-	end := len(s)
+	var end int
 	if strings.HasSuffix(s, "\n}\n") {
 		end = len(s) - 3
 	} else if strings.HasSuffix(s, "\n}") {
@@ -2120,62 +2158,22 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 		return nil, false
 	}
 
-	// Get source positions
-	start := ctx.Fset.Position(call.Pos()).Offset
-	end := ctx.Fset.Position(call.End()).Offset
-	if start < 0 || end > len(ctx.Source) || start >= end {
+	start, end, ok := callSpanOffsets(ctx, call)
+	if !ok {
 		return nil, false
 	}
 
-	original := ctx.Source[start:end]
-	wsIndent := ctx.IndentAt(call)
-
 	// Skip calls that contain inline comments - reformatting would lose
 	// them
+	original := ctx.Source[start:end]
 	if hasAnyComment(string(original)) {
 		return nil, false
 	}
 
-	// Check if call fits on one line - if so, skip formatting
+	wsIndent := ctx.IndentAt(call)
 	callText := string(original)
-	if strings.Contains(callText, "\n") {
-		// For already-multiline calls, we must be careful:
-		// - A collapsed single-line estimate can be a false negative:
-		//   indentation on continuation lines can push a specific line
-		//   over the limit even when the collapsed form fits.
-		// - Conversely, only checking the existing per-line widths can
-		//   be a false positive for "should wrap" decisions: earlier
-		//   formatting stages (e.g. string splitting) can introduce
-		//   newlines inside a still-too-long call, making each
-		//   individual line fit while the canonical single-line call
-		//   would still exceed the limit. In those cases we still want
-		//   to apply packed multiline call formatting to enforce the
-		//   house style.
-		//
-		// So: treat the call as fitting only if BOTH the collapsed
-		// single-line estimate fits AND no continuation line currently
-		// exceeds the limit.
-		collapsedLen := collapsedLineLenAt(
-			ctx.Source, start, callText, ctx.TabStop,
-		)
-		maxLen := maxVisualLineLenInSpan(
-			ctx.Source, start, end, ctx.TabStop,
-		)
-		if collapsedLen <= ctx.ColumnLimit &&
-			maxLen <= ctx.ColumnLimit {
-
-			return nil, false
-		}
-	} else {
-		// Collapse whitespace to estimate single-line width.
-		currentLineLen := collapsedLineLenAt(
-			ctx.Source, start, callText, ctx.TabStop,
-		)
-		if currentLineLen <= ctx.ColumnLimit {
-
-			// Call fits on one line, no need to wrap.
-			return nil, false
-		}
+	if callFitsSingleLineWithinLimit(ctx, start, end, callText) {
+		return nil, false
 	}
 
 	// If the call itself would fit on a clean continuation line, and the
@@ -2187,73 +2185,18 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 	// turning the call into: graph.FetchX( arg, ) is a net readability
 	// loss.
 	if !a.DisableBreakBeforeCallOnLongMultiAssignPrefix {
-		ls := lineStart(ctx.Source, start)
-		prefixLine := string(ctx.Source[ls:start])
-		trimmedPrefix := strings.TrimSpace(prefixLine)
-		trimmedPrefixNoWS := strings.TrimRightFunc(
-			prefixLine, unicode.IsSpace,
-		)
-		isAssignmentPrefix := strings.HasSuffix(trimmedPrefixNoWS, ":=") ||
-			(strings.HasSuffix(trimmedPrefixNoWS, "=") &&
-				!strings.HasSuffix(trimmedPrefixNoWS, "==") &&
-				!strings.HasSuffix(trimmedPrefixNoWS, "!=") &&
-				!strings.HasSuffix(trimmedPrefixNoWS, "<=") &&
-				!strings.HasSuffix(trimmedPrefixNoWS, ">="))
-		isMultiAssignPrefix := isAssignmentPrefix &&
-			strings.Contains(trimmedPrefix, ",")
-		if isMultiAssignPrefix && len(call.Args) == 1 {
-			contIndent := wsIndent + "\t"
-			collapsed := strings.Join(strings.Fields(callText), " ")
-			callFitsOnContLine := visualLen(contIndent, ctx.TabStop)+
-				visualLen(collapsed, ctx.TabStop) <= ctx.ColumnLimit
-			if callFitsOnContLine {
-				replaceStart := start
-				for replaceStart > ls &&
-					(ctx.Source[replaceStart-1] == ' ' ||
-						ctx.Source[replaceStart-
-							1] == '\t') {
+		if out, changed, ok := maybeBreakBeforeCallForLongMultiAssignPrefix(
+			ctx, start, end, wsIndent, callText, len(call.Args),
+		); ok {
 
-					replaceStart--
-				}
-				if replaceStart < start {
-					var b EditBuilder
-					b.Replace(
-						replaceStart, start,
-						[]byte("\n"+contIndent),
-					)
-					// If the call was already multiline,
-					// collapse it to a single line now that
-					// it has moved to a clean continuation
-					// line.
-					if strings.Contains(callText, "\n") {
-						b.Replace(
-							start, end,
-							[]byte(collapsed),
-						)
-					}
-					out, changed, err := b.Apply(ctx.Source)
-					if err != nil {
-						return nil, false
-					}
-
-					return out, changed
-				}
-			}
+			return out, changed
 		}
 	}
 
-	var formatted string
-	if a.FormatFunc != nil {
-		// Use the provided formatter (legacy formatter)
-		formatted = a.FormatFunc(
-			original, wsIndent, ctx.ColumnLimit, ctx.TabStop,
-		)
-	} else {
-		// Fallback to ReflowCallAction with StrategyLeftFlow
-		formatted = formatCallPackedSimple(call, wsIndent, ctx)
-	}
-
-	if formatted == string(original) {
+	formatted := formatPackedCall(
+		original, wsIndent, ctx, call, a.FormatFunc,
+	)
+	if formatted == callText {
 		return nil, false
 	}
 
@@ -2278,6 +2221,129 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	return out, true
+}
+
+func callSpanOffsets(ctx *Context, call *ast.CallExpr) (start, end int,
+	ok bool) {
+
+	if ctx == nil || ctx.Fset == nil || call == nil {
+		return 0, 0, false
+	}
+
+	start = ctx.Fset.Position(call.Pos()).Offset
+	end = ctx.Fset.Position(call.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return 0, 0, false
+	}
+
+	return start, end, true
+}
+
+func callFitsSingleLineWithinLimit(ctx *Context, start, end int,
+	callText string) bool {
+
+	// For already-multiline calls, we must be careful:
+	// - A collapsed single-line estimate can be a false negative:
+	//   indentation on continuation lines can push a specific line over the
+	//   limit even when the collapsed form fits.
+	// - Conversely, only checking the existing per-line widths can be a
+	//   false positive for "should wrap" decisions: earlier formatting
+	//   stages (e.g. string splitting) can introduce newlines inside a
+	//   still-too-long call, making each individual line fit while the
+	//   canonical single-line call would still exceed the limit. In those
+	//   cases we still want to apply packed multiline call formatting to
+	//   enforce the house style.
+	//
+	// So: treat the call as fitting only if BOTH the collapsed single-line
+	// estimate fits AND no continuation line currently exceeds the limit.
+	if strings.Contains(callText, "\n") {
+		collapsedLen := collapsedLineLenAt(
+			ctx.Source, start, callText, ctx.TabStop,
+		)
+		maxLen := maxVisualLineLenInSpan(
+			ctx.Source, start, end, ctx.TabStop,
+		)
+
+		return collapsedLen <= ctx.ColumnLimit &&
+			maxLen <= ctx.ColumnLimit
+	}
+
+	currentLineLen := collapsedLineLenAt(
+		ctx.Source, start, callText, ctx.TabStop,
+	)
+
+	return currentLineLen <= ctx.ColumnLimit
+}
+
+func maybeBreakBeforeCallForLongMultiAssignPrefix(ctx *Context, start, end int,
+	wsIndent string, callText string, argCount int) (out []byte,
+	changed bool, ok bool) {
+
+	ls := lineStart(ctx.Source, start)
+	prefixLine := string(ctx.Source[ls:start])
+	trimmedPrefix := strings.TrimSpace(prefixLine)
+	trimmedPrefixNoWS := strings.TrimRightFunc(prefixLine, unicode.IsSpace)
+
+	isAssignmentPrefix := strings.HasSuffix(trimmedPrefixNoWS, ":=") ||
+		(strings.HasSuffix(trimmedPrefixNoWS, "=") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, "==") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, "!=") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, "<=") &&
+			!strings.HasSuffix(trimmedPrefixNoWS, ">="))
+
+	isMultiAssignPrefix := isAssignmentPrefix &&
+		strings.Contains(trimmedPrefix, ",")
+	if !isMultiAssignPrefix || argCount != 1 {
+		return nil, false, false
+	}
+
+	contIndent := wsIndent + "\t"
+	collapsed := strings.Join(strings.Fields(callText), " ")
+	callFitsOnContLine := visualLen(contIndent, ctx.TabStop)+
+		visualLen(collapsed, ctx.TabStop) <= ctx.ColumnLimit
+	if !callFitsOnContLine {
+		return nil, false, false
+	}
+
+	replaceStart := start
+	for replaceStart > ls &&
+		(ctx.Source[replaceStart-1] == ' ' ||
+			ctx.Source[replaceStart-1] == '\t') {
+
+		replaceStart--
+	}
+	if replaceStart >= start {
+		return nil, false, false
+	}
+
+	var b EditBuilder
+	b.Replace(replaceStart, start, []byte("\n"+contIndent))
+
+	// If the call was already multiline, collapse it to a single line now
+	// that it has moved to a clean continuation line.
+	if strings.Contains(callText, "\n") {
+		b.Replace(start, end, []byte(collapsed))
+	}
+
+	out, changed, err := b.Apply(ctx.Source)
+	if err != nil {
+		return nil, false, false
+	}
+
+	return out, changed, true
+}
+
+func formatPackedCall(original []byte, wsIndent string, ctx *Context,
+	call *ast.CallExpr,
+	legacyFormatFunc func(original []byte, wsIndent string, colLimit int, tabStop int) string) string {
+
+	if legacyFormatFunc != nil {
+		return legacyFormatFunc(
+			original, wsIndent, ctx.ColumnLimit, ctx.TabStop,
+		)
+	}
+
+	return formatCallPackedSimple(call, wsIndent, ctx)
 }
 
 // OnePerLineMultiLineCallAction formats a call as a multiline call with one
@@ -2534,6 +2600,58 @@ type BreakFuncLitSignatureAction struct {
 	FormatFunc SignatureFormatFunc
 }
 
+func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
+	formatted string, signatureUnchanged bool) ([]byte, bool, error) {
+
+	// Check for an existing newline after the signature's opening brace,
+	// and if the following line contains code, insert an additional blank
+	// line to separate a multiline signature header from the body.
+	pos := afterBrace
+	for pos < len(ctx.Source) &&
+		(ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
+
+		pos++
+	}
+	if pos >= len(ctx.Source) || ctx.Source[pos] != '\n' {
+		return nil, false, nil
+	}
+
+	// There's already a newline after brace; check the next line.
+	pos++
+	lineContentStart := pos
+	for pos < len(ctx.Source) &&
+		(ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
+
+		pos++
+	}
+	if pos >= len(ctx.Source) || ctx.Source[pos] == '\n' ||
+		ctx.Source[pos] == '}' {
+
+		return nil, false, nil
+	}
+
+	var b EditBuilder
+	if !signatureUnchanged {
+		b.Replace(lineStart, afterBrace, []byte(formatted))
+	}
+	b.Insert(lineContentStart, []byte("\n"))
+
+	out, changed, err := b.Apply(ctx.Source)
+	if err != nil {
+		return nil, false, err
+	}
+	if !changed {
+		return nil, false, nil
+	}
+
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+		return nil, false, err
+	}
+
+	return out, true, nil
+}
+
 // Execute implements Action for BreakFuncLitSignatureAction.
 func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 	[]byte, bool) {
@@ -2561,10 +2679,6 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 		lineStart--
 	}
 	prefix := string(ctx.Source[lineStart:start])
-	trimmedPrefix := strings.TrimSpace(prefix)
-	isFieldPrefix := strings.Contains(trimmedPrefix, ":") &&
-		!strings.Contains(trimmedPrefix, ":=")
-
 	// Extract the signature including the opening brace (starting at
 	// `func`).
 	signature := strings.TrimSpace(string(ctx.Source[start : bracePos+1]))
@@ -2640,8 +2754,6 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 		formatted = prefix + strings.TrimPrefix(formatted, wsIndent)
 	}
 
-	_ = isFieldPrefix
-
 	// For function literals, treat "signature is multiline" as requiring
 	// the readability blank line after the opening brace, regardless of how
 	// the injected signature formatter computes needsBlank. The native
@@ -2675,49 +2787,15 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 		}
 	}
 	if needsBlank && !hasNestedMultiline {
-		pos := afterBrace
-		for pos < len(ctx.Source) &&
-			(ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
-
-			pos++
+		out, changed, err := tryInsertBlankLineAfterBrace(
+			ctx, lineStart, afterBrace, formatted,
+			signatureUnchanged,
+		)
+		if err != nil {
+			return nil, false
 		}
-		if pos < len(ctx.Source) && ctx.Source[pos] == '\n' {
-			pos++
-			lineContentStart := pos
-			for pos < len(ctx.Source) &&
-				(ctx.Source[pos] == ' ' ||
-					ctx.Source[pos] == '\t') {
-
-				pos++
-			}
-			if pos < len(ctx.Source) && ctx.Source[pos] != '\n' &&
-				ctx.Source[pos] != '}' {
-
-				var b EditBuilder
-				if !signatureUnchanged {
-					b.Replace(
-						lineStart, afterBrace,
-						[]byte(formatted),
-					)
-				}
-				b.Insert(lineContentStart, []byte("\n"))
-				out, changed, err := b.Apply(ctx.Source)
-				if err != nil {
-					return nil, false
-				}
-				if changed {
-					fset := token.NewFileSet()
-					if _, err := parser.ParseFile(
-						fset, "out.go", out,
-						parser.AllErrors,
-					); err != nil {
-
-						return nil, false
-					}
-				}
-
-				return out, changed
-			}
+		if changed {
+			return out, true
 		}
 	}
 
@@ -2770,65 +2848,6 @@ func stripLeadingNonWhitespaceUpToFuncKeyword(formatted,
 	first = wsIndent + firstNoIndent[idx:]
 
 	return first + rest
-}
-
-func filterNonEmptyTrimmedStrings(items []string) []string {
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		out = append(out, item)
-	}
-
-	return out
-}
-
-func findMatchingParenOutsideStrings(s string, open int) int {
-	if open < 0 || open >= len(s) || s[open] != '(' {
-		return -1
-	}
-	depth := 0
-	inString := byte(0)
-	escaped := false
-	for i := open; i < len(s); i++ {
-		c := s[i]
-
-		if inString != 0 {
-			if escaped {
-				escaped = false
-				continue
-			}
-			if c == '\\' && inString == '"' {
-				escaped = true
-				continue
-			}
-			if c == inString {
-				inString = 0
-			}
-			continue
-		}
-
-		switch c {
-		case '"', '\'', '`':
-			inString = c
-
-		case '(':
-			depth++
-
-		case ')':
-			depth--
-			if depth == 0 {
-				return i
-			}
-			if depth < 0 {
-				return -1
-			}
-		}
-	}
-
-	return -1
 }
 
 // Execute implements Action for BreakFuncSignatureAction.
@@ -2885,59 +2904,15 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	// If multi-line and there's content after the brace, add a blank line
 	// for readability.
 	if needsBlank {
-		// Check if next non-whitespace is a newline
-		pos := afterBrace
-		for pos < len(ctx.Source) &&
-			(ctx.Source[pos] == ' ' || ctx.Source[pos] == '\t') {
-
-			pos++
+		out, changed, err := tryInsertBlankLineAfterBrace(
+			ctx, lineStart, afterBrace, formatted,
+			signatureUnchanged,
+		)
+		if err != nil {
+			return nil, false
 		}
-		if pos < len(ctx.Source) && ctx.Source[pos] == '\n' {
-			// There's already a newline after brace, check next
-			// line
-			pos++
-			// Skip leading whitespace on next line
-			lineContentStart := pos
-			for pos < len(ctx.Source) &&
-				(ctx.Source[pos] == ' ' ||
-					ctx.Source[pos] == '\t') {
-
-				pos++
-			}
-			if pos < len(ctx.Source) && ctx.Source[pos] != '\n' &&
-				ctx.Source[pos] != '}' {
-
-				// Next line has content and is not just a
-				// closing brace. Apply two non-overlapping
-				// edits: 1) Replace the signature (including
-				// the opening brace). 2) Insert one extra
-				// newline after the existing newline following
-				// the brace.
-				var b EditBuilder
-				if !signatureUnchanged {
-					b.Replace(
-						lineStart, afterBrace,
-						[]byte(formatted),
-					)
-				}
-				b.Insert(lineContentStart, []byte("\n"))
-				out, changed, err := b.Apply(ctx.Source)
-				if err != nil {
-					return nil, false
-				}
-				if changed {
-					fset := token.NewFileSet()
-					if _, err := parser.ParseFile(
-						fset, "out.go", out,
-						parser.AllErrors,
-					); err != nil {
-
-						return nil, false
-					}
-				}
-
-				return out, changed
-			}
+		if changed {
+			return out, true
 		}
 	}
 
@@ -2957,27 +2932,6 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	return out, true
-}
-
-// normalizeSignature normalizes a signature for comparison.
-func normalizeSignature(sig, indent string) string {
-	// Remove all leading/trailing whitespace and normalize internal spaces
-	sig = strings.TrimPrefix(sig, indent)
-	var normalized strings.Builder
-	inSpace := false
-	for _, c := range sig {
-		if c == ' ' || c == '\t' || c == '\n' {
-			if !inSpace {
-				normalized.WriteByte(' ')
-				inSpace = true
-			}
-		} else {
-			normalized.WriteRune(c)
-			inSpace = false
-		}
-	}
-
-	return strings.TrimSpace(normalized.String())
 }
 
 func lastLineText(s string) string {
@@ -3197,8 +3151,8 @@ func scanIdent(s string, i int) int {
 	if i >= len(s) {
 		return i
 	}
-	if !(s[i] == '_' || (s[i] >= 'A' && s[i] <= 'Z') ||
-		(s[i] >= 'a' && s[i] <= 'z')) {
+	if s[i] != '_' && (s[i] < 'A' || s[i] > 'Z') &&
+		(s[i] < 'a' || s[i] > 'z') {
 
 		return i
 	}
@@ -3240,7 +3194,6 @@ func formatPackedMultilineTypeList(elems []string, itemIndent,
 			// Separator before the next element.
 			if isMultiline {
 				b.WriteString(",\n")
-				atLineStart = true
 				b.WriteString(itemIndent)
 				lineWidth = indentWidth
 				atLineStart = false
@@ -3249,7 +3202,6 @@ func formatPackedMultilineTypeList(elems []string, itemIndent,
 					visualLen(elem, tabStop) // ", " + elem
 				if lineWidth+need > colLimit {
 					b.WriteString(",\n")
-					atLineStart = true
 					b.WriteString(itemIndent)
 					lineWidth = indentWidth
 					atLineStart = false
@@ -3664,9 +3616,6 @@ func formatSignatureSimple(sig, indent string, colLimit,
 						returnsOut, contIndent,
 					),
 				)
-				currentLine = currentLine + " " + lastLineText(
-					returnsOut,
-				)
 			} else {
 				// Build multiline return list if needed. We
 				// prefer a multiline result list when:
@@ -3718,9 +3667,6 @@ func formatSignatureSimple(sig, indent string, colLimit,
 						result.WriteString(elem)
 					}
 					result.WriteString(")")
-					currentLine = currentLine + " (" + strings.Join(
-						formattedElems, ", ",
-					) + ")"
 				} else {
 					// Keep the opening "(" on the same line
 					// as ")" to avoid semicolon insertion
@@ -3733,7 +3679,6 @@ func formatSignatureSimple(sig, indent string, colLimit,
 							colLimit, tabStop,
 						),
 					)
-					currentLine = contIndent + ")"
 				}
 			}
 		} else {
@@ -3742,10 +3687,9 @@ func formatSignatureSimple(sig, indent string, colLimit,
 			// triggers Go's semicolon insertion.
 			result.WriteByte(' ')
 			result.WriteString(
-				indentContinuationLines(returnsOut, contIndent),
-			)
-			currentLine = currentLine + " " + lastLineText(
-				returnsOut,
+				indentContinuationLines(
+					returnsOut, contIndent,
+				),
 			)
 		}
 	}
@@ -3836,9 +3780,11 @@ func splitTopLevelSimple(s string) []string {
 			}
 		}
 
-		if c == '(' || c == '[' || c == '{' {
+		switch c {
+		case '(', '[', '{':
 			depth++
-		} else if c == ')' || c == ']' || c == '}' {
+
+		case ')', ']', '}':
 			depth--
 		}
 
@@ -3856,69 +3802,6 @@ func splitTopLevelSimple(s string) []string {
 	}
 
 	return result
-}
-
-// findSignatureBreakPoint finds the best position to break in a field list.
-// Returns the offset and whether it's after a comma.
-func findSignatureBreakPoint(fields []*ast.Field, listStart, listEnd int,
-	indent string, ctx *Context) (int, bool) {
-
-	if len(fields) == 0 {
-		return -1, false
-	}
-
-	// For parameters/results with multiple fields, find the rightmost comma
-	// that keeps the prefix under the column limit
-	type breakInfo struct {
-		pos       int  // position right after comma
-		prefixLen int  // visual width of prefix
-		isComma   bool // whether this is after a comma
-	}
-
-	var breaks []breakInfo
-	pos := ctx.Fset.Position(fields[0].Pos())
-	lineStart := pos.Offset - pos.Column + 1
-
-	for i := 0; i < len(fields)-1; i++ {
-		field := fields[i]
-		fieldEnd := ctx.Fset.Position(field.End()).Offset
-
-		// Find comma after this field
-		commaPos := fieldEnd
-		for commaPos < listEnd && ctx.Source[commaPos] != ',' {
-			commaPos++
-		}
-		if commaPos >= listEnd {
-			continue
-		}
-
-		// Calculate prefix width
-		prefix := string(ctx.Source[lineStart : commaPos+1])
-		prefixWidth := visualLen(prefix, ctx.TabStop)
-
-		breaks = append(
-			breaks, breakInfo{
-				pos:       commaPos + 1,
-				prefixLen: prefixWidth,
-				isComma:   true,
-			},
-		)
-	}
-
-	if len(breaks) == 0 {
-		return -1, false
-	}
-
-	// Find the rightmost break point that keeps prefix under limit
-	for i := len(breaks) - 1; i >= 0; i-- {
-		b := breaks[i]
-		if b.prefixLen <= ctx.ColumnLimit {
-			return b.pos, b.isComma
-		}
-	}
-
-	// Fallback to first break point
-	return breaks[0].pos, breaks[0].isComma
 }
 
 // BreakInterfaceMethodAction formats a long interface method declaration.

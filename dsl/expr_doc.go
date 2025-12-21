@@ -485,7 +485,7 @@ func methodChainSegmentDoc(seg segment, ctx *Context,
 	// own line with a trailing comma, then place `)` on its own line
 	// aligned to the segment indentation. This shape is semicolon-safe
 	// because the line before `)` ends with a comma.
-	var argsDoc layout.Doc = layout.IB(broken, flat)
+	argsDoc := layout.IB(broken, flat)
 	if forceBreakArgs {
 		argsDoc = layout.C(layout.FB(), argsDoc)
 	}
@@ -529,24 +529,21 @@ func genericCallDoc(call *ast.CallExpr, ctx *Context) (layout.Doc, bool) {
 
 		// Prefer a structured doc for supported expression forms so
 		// nested expressions can lay out cleanly within nested calls.
-		if expr, okCast := arg.(ast.Expr); okCast {
-			if info, okDoc := exprDocWithKind(
-				expr, ctx, exprDocKindCallArg,
-			); okDoc {
+		if info, okDoc := exprDocWithKind(
+			arg, ctx, exprDocKindCallArg,
+		); okDoc {
 
-				d := info.Doc
-				if info.NeedsContinuationIndent {
-					d = layout.N("\t", d)
-				}
-				if i > 0 {
-					argDocs = append(
-						argDocs, layout.T(","),
-						layout.L(),
-					)
-				}
-				argDocs = append(argDocs, d)
-				continue
+			d := info.Doc
+			if info.NeedsContinuationIndent {
+				d = layout.N("\t", d)
 			}
+			if i > 0 {
+				argDocs = append(
+					argDocs, layout.T(","), layout.L(),
+				)
+			}
+			argDocs = append(argDocs, d)
+			continue
 		}
 
 		if strings.Contains(argText, "\n") {
@@ -665,21 +662,18 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context,
 
 		// Prefer structured docs when possible (e.g. nested calls /
 		// logical chains).
-		if expr, okCast := elt.(ast.Expr); okCast {
-			if info, okDoc := exprDocWithKind(expr, ctx, kind); okDoc {
-				d := info.Doc
-				if info.NeedsContinuationIndent {
-					d = layout.N("\t", d)
-				}
-				if i > 0 {
-					eltDocs = append(
-						eltDocs, layout.T(","),
-						layout.L(),
-					)
-				}
-				eltDocs = append(eltDocs, d)
-				continue
+		if info, okDoc := exprDocWithKind(elt, ctx, kind); okDoc {
+			d := info.Doc
+			if info.NeedsContinuationIndent {
+				d = layout.N("\t", d)
 			}
+			if i > 0 {
+				eltDocs = append(
+					eltDocs, layout.T(","), layout.L(),
+				)
+			}
+			eltDocs = append(eltDocs, d)
+			continue
 		}
 
 		if i > 0 {
@@ -688,15 +682,9 @@ func compositeLitDoc(lit *ast.CompositeLit, ctx *Context,
 		eltDocs = append(eltDocs, layout.T(eltText))
 	}
 
-	forceBreak := false
-	if kind == exprDocKindCallArg && isStructLikeCompositeLit(lit) &&
-		len(lit.Elts) >= 2 {
-
-		// Prefer multiline struct literals in call-arg position even
-		// when they technically fit, to avoid awkward "barely fits"
-		// cases in method chains.
-		forceBreak = true
-	}
+	forceBreak := kind == exprDocKindCallArg &&
+		isStructLikeCompositeLit(lit) &&
+		len(lit.Elts) >= 2
 
 	var bodyDocs []layout.Doc
 	// When the overall composite literal is forced multiline (e.g.
@@ -825,12 +813,6 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context,
 			right,
 		),
 	), true
-}
-
-func sameOpBinaryChainDoc(bin *ast.BinaryExpr,
-	ctx *Context) (layout.Doc, bool) {
-
-	return sameOpBinaryChainDocWithKind(bin, ctx, exprDocKindTopLevel)
 }
 
 func isComparisonOp(op token.Token) bool {

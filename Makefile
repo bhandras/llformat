@@ -3,7 +3,7 @@ BIN_DIR  ?= bin
 BIN      := $(BIN_DIR)/llformat
 
 .PHONY: all build install unit test clean
-.PHONY: fmt fmt-check self-check
+.PHONY: fmt fmt-check lint self-check
 
 all: build
 
@@ -21,6 +21,10 @@ install: build
 # Run unit tests
 unit test:
 	$(GO) test -v ./...
+
+.PHONY: lint
+lint:
+	golangci-lint run ./...
 
 .PHONY: fmt
 fmt: build

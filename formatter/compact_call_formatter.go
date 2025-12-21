@@ -944,8 +944,9 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 					} else {
 						b.WriteByte(',')
 						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = contIndentLen
+						b.WriteString(
+							contIndent,
+						)
 						split := buildSplitQuoted(
 							text, contIndentLen,
 							contIndent,
@@ -1029,7 +1030,6 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 				b.WriteByte(',')
 				b.WriteByte('\n')
 				b.WriteString(contIndent)
-				curLen = contIndentLen
 				b.WriteString(nested)
 				curLen = curLenAfterWrite(nested)
 				first = false
@@ -1091,7 +1091,6 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 			b.WriteByte(',')
 			b.WriteByte('\n')
 			b.WriteString(contIndent)
-			curLen = contIndentLen
 			b.WriteString(a)
 			curLen = curLenAfterWrite(a)
 		} else {
@@ -1304,8 +1303,9 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 					} else {
 						b.WriteByte(',')
 						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = contIndentLen
+						b.WriteString(
+							contIndent,
+						)
 						split := buildSplitQuotedForCallArg(
 							text, contIndentLen,
 							contIndent,
@@ -1382,7 +1382,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 					b.WriteByte(',')
 					b.WriteByte('\n')
 					b.WriteString(contIndent)
-					curLen = contIndentLen
 					b.WriteString(nested)
 					curLen = curLenAfterWrite(nested)
 					first = false
@@ -1426,7 +1425,6 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 			b.WriteByte(',')
 			b.WriteByte('\n')
 			b.WriteString(contIndent)
-			curLen = contIndentLen
 			b.WriteString(a)
 			curLen = curLenAfterWrite(a)
 		} else {
@@ -1590,10 +1588,7 @@ func buildSplitQuotedWithOptions(text string, startCol int, contIndent string,
 		out.WriteString(stringContIndent)
 	}
 
-	for {
-		if rest == "" {
-			break
-		}
+	for rest != "" {
 		// If there's not even enough room for a minimal quoted segment
 		// (quotes + at least one rune) within the width budget,
 		// splitting can't produce a "better" layout. Emit a single
@@ -1758,8 +1753,8 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				// string.
 				if opts.PreserveStringConcatExpr &&
 					!isBasicStringLitExpr(e) &&
-					!(len(rawArgs) > 1 &&
-						containsFormatVerb(str)) {
+					(len(rawArgs) <= 1 ||
+						!containsFormatVerb(str)) {
 
 					normArgs = append(
 						normArgs, arg{
@@ -2208,8 +2203,8 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				// Prefer splitting the string on the current
 				// line instead.
 				hasTrailingArgs &&
-				!(opts.AvoidHangingParenForPrintf &&
-					isPrintfString) {
+				(!opts.AvoidHangingParenForPrintf ||
+					!isPrintfString) {
 
 				fitsPreferredCont := advanceCols(contStart, q)+
 					preferredReserve <= width
@@ -2348,14 +2343,6 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 							curLen = visualLen(
 								contIndent,
 							)
-							// Recompute capacity on
-							// the fresh
-							// continuation line
-							capCols = (width) -
-								curLen - 2 - 2
-							if capCols <= 0 {
-								capCols = 1
-							}
 							continue
 						}
 					}
@@ -2588,42 +2575,6 @@ func isTinyTail(s string, minTailLen int) bool {
 	return len(trimmed) > 0 && len(trimmed) < minTailLen
 }
 
-func canFitPreferredTailBySplitting(rest string, contStart int, width int,
-	preferredReserve int, opts greedyCallOptions) bool {
-
-	// Look for any split point (space) such that the remainder could fit on
-	// a continuation line while leaving room for the preferred reserve
-	// (typically some number of trailing expr args).
-	//
-	// If no such split exists, continuing to split the string to "make
-	// room" for args is counterproductive: we'll end up breaking args
-	// anyway, so we should keep the string whole.
-	if preferredReserve <= 0 {
-		return false
-	}
-	for i := 0; i < len(rest); i++ {
-		if rest[i] != ' ' {
-			continue
-		}
-		tail := rest[i+1:]
-		if opts.MinTailLen > 0 && isTinyTail(tail, opts.MinTailLen) {
-			continue
-		}
-		if opts.AvoidTinyFormatVerbTail &&
-			looksLikeTinyFormatVerbTail(tail) {
-
-			continue
-		}
-		if advanceCols(contStart, quoteGoString(tail))+
-			preferredReserve <= width {
-
-			return true
-		}
-	}
-
-	return false
-}
-
 func lastQuotedSpaceBeforeAvoidingTails(startCol int, s string, boundary int,
 	minTailLen int, avoidTinyVerbTail bool) int {
 
@@ -2819,27 +2770,6 @@ func lastQuotedSpaceBeforeWithJoin(startCol int, s string, boundary int,
 		}
 		used := advanceCols(startCol, quoteGoString(piece)) + joinCols
 		if used <= boundary {
-			last = i
-		} else {
-			break
-		}
-	}
-
-	return last
-}
-
-// lastQuotedSpaceBeforeStrict is like lastQuotedSpaceBefore but uses a strict
-// inequality to avoid placing the split exactly at the boundary. This helps
-// keep editor renderings consistent when counting columns.
-func lastQuotedSpaceBeforeStrict(startCol int, s string, boundary int) int {
-	last := -1
-	for i := 0; i < len(s); i++ {
-		if s[i] != ' ' {
-			continue
-		}
-		piece := s[:i+1]
-		used := advanceCols(startCol, quoteGoString(piece)) + 2
-		if used < boundary {
 			last = i
 		} else {
 			break

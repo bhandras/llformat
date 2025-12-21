@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"fmt"
 	"go/parser"
 	"go/token"
 	"testing"
@@ -90,20 +91,20 @@ func f(xs []int, i, j int) int {
 				t.Parallel()
 
 				p := NewPipeline(cfg.cfg)
-				for _, in := range snippets {
-					in := in
+				for i, snippet := range snippets {
+					snippet := snippet
 					t.Run(
-						"snippet",
+						fmt.Sprintf("snippet_%d", i),
 						func(t *testing.T) {
 							out1 := p.Format(
-								[]byte(in),
+								[]byte(snippet),
 							)
 							out2 := p.Format(out1)
 
 							requireParseableGo(
 								t, out1,
 							)
-							require.Equal(
+							require.Equalf(
 								t, string(out1),
 								string(out2),
 								"not "+
@@ -116,7 +117,8 @@ func f(xs []int, i, j int) int {
 								cfg.name,
 							)
 							requireASTEquivalent(
-								t, []byte(in),
+								t,
+								[]byte(snippet),
 								out1,
 							)
 						},
