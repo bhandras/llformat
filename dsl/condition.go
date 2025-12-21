@@ -172,13 +172,10 @@ func (c *IsInCallArgsCond) Eval(caps Captures, ctx *Context) bool {
 	cur := node
 	for cur != nil {
 		parent := ctx.Parent(cur)
-		call, ok := parent.(*ast.CallExpr)
-		if ok {
-			for _, arg := range call.Args {
-				if arg == cur {
-					return true
-				}
-			}
+		if call, ok := parent.(*ast.CallExpr); ok &&
+			isCallArg(call, cur) {
+
+			return true
 		}
 		cur = parent
 	}
@@ -280,18 +277,28 @@ func enclosingCallForArg(node ast.Node, ctx *Context) *ast.CallExpr {
 	cur := node
 	for cur != nil {
 		parent := ctx.Parent(cur)
-		call, ok := parent.(*ast.CallExpr)
-		if ok {
-			for _, arg := range call.Args {
-				if arg == cur {
-					return call
-				}
-			}
+		if call, ok := parent.(*ast.CallExpr); ok &&
+			isCallArg(call, cur) {
+
+			return call
 		}
 		cur = parent
 	}
 
 	return nil
+}
+
+func isCallArg(call *ast.CallExpr, node ast.Node) bool {
+	if call == nil || node == nil {
+		return false
+	}
+	for _, arg := range call.Args {
+		if arg == node {
+			return true
+		}
+	}
+
+	return false
 }
 
 func callExprFuncName(call *ast.CallExpr) string {
