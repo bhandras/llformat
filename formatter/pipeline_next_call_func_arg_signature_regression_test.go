@@ -80,7 +80,6 @@ func f(graph Graph, ctx interface{}, includeUnannounced bool, req Req) (*Resp, e
 
 	p := NewPipeline(PipelineConfig{
 		Mode:                 "next",
-		RuleProfile:          "next",
 		ColumnLimit:          80,
 		TabStop:              8,
 		UseOwnershipRegistry: true,

@@ -26,8 +26,7 @@ func foo(bool) {}
 	})
 
 	out := p.Format(src)
-	require.Contains(t, string(out), "_ = foo(\n")
-	require.Contains(t, string(out), "alpha &&\n")
+	require.Contains(t, string(out), "_ = foo(alpha &&\n")
 }
 
 func TestPipelineDSLAutoCallArgsOnlyForExcludedCallees(t *testing.T) {

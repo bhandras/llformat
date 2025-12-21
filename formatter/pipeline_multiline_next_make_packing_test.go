@@ -21,7 +21,6 @@ func f(xs []int) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          52,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLLogCalls:    false,

@@ -23,16 +23,15 @@ func (r *rpcServer) getChainSyncInfo() (
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLFuncSigs:       true,
 		UseDSLFuncSigsNative: true,
 		DSLSigsStyle:         "legacy",
 		// Keep other DSL stages off so this test stays focused.
-		UseDSLLogCalls:        false,
-		UseDSLMultiLineCalls:  false,
-		UseDSLExpr:            false,
-		UseDSLComments:        false,
-		UseDSLBlankLines:      false,
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		UseDSLExpr:             false,
+		UseDSLComments:         false,
+		UseDSLBlankLines:       false,
 		UseDSLBlankLinesNative: false,
 	})
 
@@ -60,16 +59,15 @@ func alreadyFormatted(
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLFuncSigs:       true,
 		UseDSLFuncSigsNative: true,
 		DSLSigsStyle:         "legacy",
 		// Keep other DSL stages off so this test stays focused.
-		UseDSLLogCalls:        false,
-		UseDSLMultiLineCalls:  false,
-		UseDSLExpr:            false,
-		UseDSLComments:        false,
-		UseDSLBlankLines:      false,
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		UseDSLExpr:             false,
+		UseDSLComments:         false,
+		UseDSLBlankLines:       false,
 		UseDSLBlankLinesNative: false,
 	})
 
@@ -81,4 +79,3 @@ func alreadyFormatted(
 	require.Contains(t, out, ") {\n\n\treturn",
 		"expected a blank line after the opening brace for an already-multiline signature")
 }
-

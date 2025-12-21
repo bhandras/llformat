@@ -4,7 +4,11 @@ import "github.com/lightninglabs/llformat/dsl"
 
 func normalizedRuleProfile(profile string) string {
 	if profile == "" {
-		return "parity"
+		return "next"
+	}
+	if profile == "parity" {
+		// Legacy profile name retained for compatibility; llformat is now next-only.
+		return "next"
 	}
 	return profile
 }
@@ -19,34 +23,6 @@ func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
 // This uses the legacy call formatter implementation to ensure parity.
 func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
 	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
-	if profile == "parity" {
-		// For parity, preserve the legacy compact-calls stage behavior exactly,
-		// including scan/AST selection quirks.
-		return dsl.LegacyCompactCallRules(func(src []byte, colLimit, tabStop int) ([]byte, bool) {
-			// Enable fallback packing unless the pipeline has explicitly opted
-			// into a DSL multiline-call style; in that case the multiline stage
-			// should own call formatting behavior (including comment handling).
-			enableFallback := opts.Style.DSLMultiLineStyle == ""
-
-			useAST := opts.Legacy.CompactCallUseASTSelect
-			// When fallback is enabled, prefer AST-based selection to avoid scan
-			// mis-detecting non-call constructs as "calls".
-			if enableFallback {
-				useAST = true
-			}
-
-			return FormatCompactCallsInSource(src, Config{
-				ColumnLimit: colLimit,
-				TabStop:     tabStop,
-				ParseSafe:   opts.Legacy.CompactCallParseSafe,
-				Excludes:    opts.Style.Excludes,
-
-				FallbackNonTargets:                 enableFallback,
-				FallbackNonTargetsExcludeSelectors: enableFallback,
-				UseASTSelection:                    useAST,
-			})
-		})
-	}
 	// Both "modern" and "next" opt into suffix-only matching for selectors so
 	// custom loggers (e.g. `rpcSLog.Errorf`) are formatted the same way as
 	// `log.Errorf`/`fmt.Errorf`.
@@ -204,7 +180,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				// formatting the call itself as packed multiline rather than
 				// detaching it from `:=`.
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)
@@ -213,7 +189,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{
 				Excludes: opts.Style.Excludes,
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)
@@ -223,7 +199,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{
 				Excludes: opts.Style.Excludes, CallArgsStyle: "layout",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)
@@ -236,7 +212,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)
@@ -245,7 +221,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			dsl.MultiLineCallOptions{
 				Excludes: opts.Style.Excludes, MethodChainStyle: "layout",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)
@@ -257,7 +233,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				MethodChainStyle: "layout",
 				CallArgsStyle:    "layout",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)
@@ -269,7 +245,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 				CallArgsStyle:    "layout",
 				CallArgsGrouping: "pairs",
 				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
-				CheckMaxSpanLineWidth:                    profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
 			},
 			packedFallback,
 		)

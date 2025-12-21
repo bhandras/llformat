@@ -19,9 +19,15 @@ func someFunc(args ...any) any { return nil }
 `
 
 	p := NewPipeline(PipelineConfig{
-		ColumnLimit:   40,
-		TabStop:       8,
-		DSLCallPolicy: "layout-args-groups-pairs",
+		ColumnLimit:          40,
+		TabStop:              8,
+		UseDSLMultiLineCalls: true,
+		DSLMultiLineStyle:    "layout-args-groups-pairs",
+		UseDSLLogCalls:       false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
 	})
 
 	out1 := p.Format([]byte(in))
@@ -49,9 +55,15 @@ func someFunc(args ...any) any { return nil }
 `
 
 	p := NewPipeline(PipelineConfig{
-		ColumnLimit:   40,
-		TabStop:       8,
-		DSLCallPolicy: "layout-args-groups-pairs",
+		ColumnLimit:          40,
+		TabStop:              8,
+		UseDSLMultiLineCalls: true,
+		DSLMultiLineStyle:    "layout-args-groups-pairs",
+		UseDSLLogCalls:       false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
 	})
 
 	out := string(p.Format([]byte(in)))

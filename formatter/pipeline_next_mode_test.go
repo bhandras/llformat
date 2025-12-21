@@ -26,7 +26,6 @@ func TestPipelineNextModeAppliesExpectedDefaults(t *testing.T) {
 	require.True(t, p.cfg.UseDSLBlankLines)
 	require.True(t, p.cfg.UseDSLBlankLinesNative)
 
-	require.Empty(t, p.cfg.DSLCallPolicy)
 	require.Equal(t, "packed-chain-layout", p.cfg.DSLMultiLineStyle)
 
 	// In next-mode, multiline layout owns call-arg formatting; the DSL

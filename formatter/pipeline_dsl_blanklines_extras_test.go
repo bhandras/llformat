@@ -26,7 +26,6 @@ func doSomething() {}
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:                   80,
 		TabStop:                       8,
-		RuleProfile:                   "next",
 		UseDSLBlankLines:              true,
 		UseDSLBlankLinesNative:        true,
 		DSLBlankLinesExtraIfErrReturn: true,
@@ -62,7 +61,6 @@ func doSomething() {}
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:            80,
 		TabStop:                8,
-		RuleProfile:            "next",
 		UseDSLBlankLines:       true,
 		UseDSLBlankLinesNative: true,
 	})
@@ -79,36 +77,4 @@ func doSomething() {}
 	require.NoError(t, err)
 }
 
-func TestDSLBlankLinesNative_ParityProfile_DoesNotBlankBeforeIfErrReturn(t *testing.T) {
-	const in = `package p
-
-func f(err error) error {
-	doSomething()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func doSomething() {}
-`
-
-	p := NewPipeline(PipelineConfig{
-		ColumnLimit:            80,
-		TabStop:                8,
-		RuleProfile:            "parity",
-		UseDSLBlankLines:       true,
-		UseDSLBlankLinesNative: true,
-	})
-
-	first := p.Format([]byte(in))
-	second := p.Format(first)
-	require.Equal(t, string(first), string(second))
-
-	out := string(first)
-	require.NotContains(t, out, "doSomething()\n\n\tif err != nil")
-
-	fset := token.NewFileSet()
-	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
-	require.NoError(t, err)
-}
+// Note: legacy/parity profiles were removed; llformat is next-only.

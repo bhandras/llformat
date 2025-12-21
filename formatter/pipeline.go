@@ -16,7 +16,6 @@ type PipelineConfig struct {
 	UseDSLLogCalls         bool     // Use DSL-based log/printf call formatting
 	UseDSLMultiLineCalls   bool     // Use DSL-based multiline call formatting
 	DSLMultiLineStyle      string   // DSL multiline formatting style (empty => legacy)
-	DSLCallPolicy          string   // DSL call policy bundle (empty => no override)
 	UseDSLExpr             bool     // Use DSL-based expression formatter
 	UseDSLFuncSigs         bool     // Use DSL-based signature formatter (delegates to legacy)
 	UseDSLFuncSigsNative   bool     // Use native DSL signature rules (fallback to legacy)
@@ -42,21 +41,8 @@ type PipelineConfig struct {
 	// via the individual toggles below.
 	//
 	// Supported values:
-	// - "legacy": legacy multi-stage pipeline (no DSL stages)
-	// - "dsl-parity": DSL stages enabled, parity-oriented defaults
-	// - "dsl-modern": DSL stages enabled, modern policy defaults
+	// - "next": next-generation DSL pipeline
 	Mode string
-
-	// LegacyHardening enables a recommended bundle of internal hardening/migration
-	// knobs for the legacy pipeline stages. This remains opt-in to preserve
-	// golden fixtures, but provides a single toggle for users who want a more
-	// robust, non-oscillating formatter pipeline.
-	//
-	// When enabled, this will force-enable the following knobs:
-	// - AST-based selection for compact/multiline call stages
-	// - AST-guided selection for legacy long-expr stage
-	// - Parse-safe validation for compact/multiline/long-expr stages
-	LegacyHardening bool
 
 	// UseOwnershipRegistry enables pipeline-level stage ownership boundaries.
 	// When enabled, the pipeline will compute owned span sets for later stages
@@ -64,39 +50,6 @@ type PipelineConfig struct {
 	//
 	// This remains opt-in to preserve golden fixtures.
 	UseOwnershipRegistry bool
-
-	// MultiLineUseASTSelect enables AST-based call selection for the legacy
-	// multiline call formatter. This is an internal migration knob and is
-	// intentionally opt-in to preserve golden fixtures.
-	MultiLineUseASTSelect bool
-
-	// CompactCallUseASTSelect enables AST-based call selection for the legacy
-	// compact call formatter stage. This is an internal migration knob and is
-	// intentionally opt-in to preserve golden fixtures.
-	CompactCallUseASTSelect bool
-
-	// CompactCallParseSafe enables parse-safe behavior for the legacy compact
-	// call formatter stage: it will return the original input unchanged if the
-	// candidate output does not gofmt. This is an internal hardening knob and
-	// is intentionally opt-in to preserve golden fixtures.
-	CompactCallParseSafe bool
-
-	// LongExprParseSafe enables parse-safe behavior in the legacy long
-	// expression formatter: it will only accept a rewrite if gofmt succeeds on
-	// the candidate output. This is an internal hardening knob and is
-	// intentionally opt-in to preserve golden fixtures.
-	LongExprParseSafe bool
-
-	// LongExprUseASTSelect enables AST-guided selection for the legacy long
-	// expression formatter stage. This is an internal migration knob and is
-	// intentionally opt-in to preserve golden fixtures.
-	LongExprUseASTSelect bool
-
-	// MultiLineParseSafe enables parse-safe behavior for the legacy multiline
-	// call formatter stage: it will return the original input unchanged if the
-	// candidate output does not gofmt. This is an internal hardening knob and
-	// is intentionally opt-in to preserve golden fixtures.
-	MultiLineParseSafe bool
 
 	// AllowDSLCallArgs enables limited expression formatting within call
 	// arguments when using the DSL expression stage.
@@ -123,20 +76,8 @@ type PipelineConfig struct {
 	// the DSL expression stage. Empty means legacy behavior.
 	DSLExprSelectorChainStyle string
 
-	// RuleProfile is an internal taxonomy label that describes which behavioral
-	// profile is in effect. This is intended as a bridge toward cohesive
-	// rule-set based configuration (parity/modern/next) without changing golden
-	// fixtures.
-	//
-	// Supported values:
-	// - "" (unspecified): inferred from Mode / DSLCallPolicy
-	// - "parity": golden-parity behavior (default)
-	// - "modern": opt-in improvements (stable-ish)
-	// - "next": aggressive opt-in experiments
-	RuleProfile string
-
 	// StagePlanOverride forces an explicit stage selection for the pipeline.
-	// When set, it overrides Mode/DSLCallPolicy-derived StagePlan selection.
+	// When set, it overrides Mode-derived stage selection.
 	// This is intended for controlled experiments and debugging.
 	StagePlanOverride *StagePlan
 
@@ -165,169 +106,42 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.TabStop = DefaultTabStop
 	}
 
-	// Apply user-facing mode bundle first (if requested). This is intentionally
-	// conservative and preserves the existing behavior when Mode is empty.
-	switch cfg.Mode {
-	case "":
-		// no-op
-	case "legacy":
-		cfg.UseDSLComments = false
-		cfg.UseDSLLogCalls = false
-		cfg.UseDSLMultiLineCalls = false
-		cfg.UseDSLExpr = false
-		cfg.UseDSLFuncSigs = false
-		cfg.UseDSLFuncSigsNative = false
-		cfg.UseDSLBlankLines = false
-		cfg.UseDSLBlankLinesNative = false
-		cfg.DSLCallPolicy = ""
-	case "dsl-parity":
-		if cfg.RuleProfile == "" {
-			cfg.RuleProfile = "parity"
-		}
-		cfg.UseDSLComments = true
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		cfg.UseDSLExpr = true
-		cfg.UseDSLFuncSigs = true
-		cfg.UseDSLBlankLines = true
-		if cfg.DSLCallPolicy == "" {
-			cfg.DSLCallPolicy = "legacy"
-		}
-	case "dsl-modern":
-		if cfg.RuleProfile == "" {
-			cfg.RuleProfile = "modern"
-		}
-		cfg.UseDSLComments = true
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		cfg.UseDSLExpr = true
-		cfg.UseDSLFuncSigs = true
-		cfg.UseDSLFuncSigsNative = true
-		cfg.UseDSLBlankLines = true
-		cfg.UseDSLBlankLinesNative = true
-		cfg.DSLCallPolicy = "modern"
-	case "next":
-		if cfg.RuleProfile == "" {
-			cfg.RuleProfile = "next"
-		}
-		// "next" is a convenience alias for the most aggressive DSL-first
-		// pipeline configuration. It is intentionally opt-in so it can evolve
-		// without breaking golden fixtures.
-		cfg.UseDSLComments = true
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		cfg.UseDSLExpr = true
-		cfg.UseDSLFuncSigs = true
-		cfg.UseDSLFuncSigsNative = true
-		cfg.UseDSLBlankLines = true
-		cfg.UseDSLBlankLinesNative = true
-
-		// Keep policy bundle unset so the "next" rule profile can choose more
-		// opinionated defaults (e.g. packed expression breaking) without being
-		// forced into the modern layout styles.
-		cfg.DSLCallPolicy = ""
-		cfg.AutoDSLCallArgs = true
-	default:
-		// Unknown mode: ignore (callers can still set individual toggles).
+	// llformat is next-only: treat empty Mode as "next". Callers that want
+	// strictness can validate cfg via ValidatePipelineConfig.
+	if cfg.Mode == "" {
+		cfg.Mode = "next"
 	}
 
-	// Apply legacy hardening preset (if requested) before policy bundles.
-	if cfg.LegacyHardening {
-		cfg.MultiLineUseASTSelect = true
-		cfg.CompactCallUseASTSelect = true
-		cfg.LongExprUseASTSelect = true
-
-		cfg.CompactCallParseSafe = true
-		cfg.MultiLineParseSafe = true
-		cfg.LongExprParseSafe = true
-
-		cfg.UseOwnershipRegistry = true
-	}
-
-	// Apply a policy bundle (if requested). This gives callers a single knob for
-	// a coherent set of call-related DSL behaviors, while keeping legacy-parity
-	// as the default and preserving golden fixtures.
-	switch cfg.DSLCallPolicy {
-	case "", "legacy":
-		// No override.
-	case "packed", "calls-packed":
-		// Call-focused policy: enable DSL call stages with packed multiline call
-		// formatting, leaving non-call stages under explicit control.
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "packed"
-		}
-	case "packed-chain", "calls-packed-chain":
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "packed-chain"
-		}
-	case "layout-args", "calls-layout-args":
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "layout-args"
-		}
-	case "layout-all", "calls-layout-all":
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "layout-all"
-		}
-	case "layout-args-groups-pairs", "calls-layout-args-groups-pairs":
-		cfg.UseDSLLogCalls = true
-		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" {
-			cfg.DSLMultiLineStyle = "layout-args-groups-pairs"
-		}
-	case "modern":
-		if cfg.RuleProfile == "" {
-			cfg.RuleProfile = "modern"
-		}
+	// Enable the full DSL pipeline by default when callers did not explicitly
+	// configure any stage toggles.
+	if !cfg.UseDSLComments &&
+		!cfg.UseDSLLogCalls &&
+		!cfg.UseDSLMultiLineCalls &&
+		!cfg.UseDSLExpr &&
+		!cfg.UseDSLFuncSigs &&
+		!cfg.UseDSLBlankLines {
 		cfg.UseDSLComments = true
 		cfg.UseDSLLogCalls = true
 		cfg.UseDSLMultiLineCalls = true
-		if cfg.DSLMultiLineStyle == "" || cfg.DSLMultiLineStyle == "legacy" || cfg.DSLMultiLineStyle == "packed-chain" {
-			cfg.DSLMultiLineStyle = "packed-chain-layout"
-		}
 		cfg.UseDSLExpr = true
-		if cfg.DSLExprLogicalStyle == "" {
-			cfg.DSLExprLogicalStyle = "layout"
-		}
-		if cfg.DSLExprArithmeticStyle == "" {
-			cfg.DSLExprArithmeticStyle = "layout"
-		}
-		if cfg.DSLExprCaseClauseStyle == "" {
-			cfg.DSLExprCaseClauseStyle = "layout"
-		}
-		if cfg.DSLExprSelectorChainStyle == "" {
-			cfg.DSLExprSelectorChainStyle = "layout"
-		}
-		cfg.AutoDSLCallArgs = true
 		cfg.UseDSLFuncSigs = true
+		cfg.UseDSLBlankLines = true
+	}
+
+	// Next defaults.
+	if cfg.UseDSLFuncSigs {
 		cfg.UseDSLFuncSigsNative = true
 		if cfg.DSLSigsStyle == "" {
 			cfg.DSLSigsStyle = "legacy"
 		}
-		cfg.UseDSLBlankLines = true
-	default:
-		// Unknown policy: ignore (callers can still set individual toggles).
 	}
-
-	if cfg.RuleProfile == "" {
-		cfg.RuleProfile = "parity"
+	if cfg.UseDSLBlankLines {
+		cfg.UseDSLBlankLinesNative = true
 	}
-
-	// Rule-profile defaults that should apply even when callers set individual
-	// toggles directly (without selecting a Mode or DSLCallPolicy bundle).
-	//
-	// "next" is expected to use the layout-driven multiline call engine (with
-	// packed call args) by default when the multiline DSL stage is enabled.
-	if normalizedRuleProfile(cfg.RuleProfile) == "next" &&
-		cfg.UseDSLMultiLineCalls &&
-		cfg.DSLMultiLineStyle == "" {
+	if cfg.UseDSLExpr && !cfg.AllowDSLCallArgs && !cfg.AutoDSLCallArgs {
+		cfg.AutoDSLCallArgs = true
+	}
+	if cfg.UseDSLMultiLineCalls && cfg.DSLMultiLineStyle == "" {
 		cfg.DSLMultiLineStyle = "packed-chain-layout"
 	}
 
@@ -360,7 +174,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	baseCfg := NewBaseConfig(cfg.ColumnLimit, cfg.TabStop)
 	stages := DefaultStagesWithOptions(baseCfg, StageOptions{
 		Selection: StageSelectionOptions{
-			RuleProfile: cfg.RuleProfile,
+			RuleProfile: "next",
 			StagePlan:   &stagePlan,
 		},
 		Style: StageStyleOptions{
@@ -383,14 +197,6 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			AllowCallArgs:       cfg.AllowDSLCallArgs,
 			AutoCallArgs:        cfg.AutoDSLCallArgs,
 		},
-		Legacy: LegacyStageOptions{
-			MultiLineUseASTSelect:   cfg.MultiLineUseASTSelect,
-			CompactCallUseASTSelect: cfg.CompactCallUseASTSelect,
-			CompactCallParseSafe:    cfg.CompactCallParseSafe,
-			LongExprParseSafe:       cfg.LongExprParseSafe,
-			LongExprUseASTSelect:    cfg.LongExprUseASTSelect,
-			MultiLineParseSafe:      cfg.MultiLineParseSafe,
-		},
 	})
 
 	return &Pipeline{
@@ -404,50 +210,16 @@ func stagePlanFromPipelineConfig(cfg PipelineConfig) StagePlan {
 		return *cfg.StagePlanOverride
 	}
 
-	// Prefer the user-facing mode/policy selection as the source of truth for
-	// stage enablement. If neither are specified, fall back to explicit per-stage
-	// toggles for backward compatibility.
-	switch cfg.Mode {
-	case "legacy":
-		return StagePlan{
-			Comments:       StageModeLegacy,
-			LogCalls:       StageModeLegacy,
-			Expressions:    StageModeLegacy,
-			MultiLineCalls: StageModeLegacy,
-			Signatures:     StageModeLegacy,
-			BlankLines:     StageModeLegacy,
-		}
-	case "dsl-parity", "dsl-modern", "next":
-		if plan, ok := stagePlanForRuleProfile(cfg.RuleProfile); ok {
-			return plan
-		}
-		return allDSLStagePlan()
-	}
-
-	switch cfg.DSLCallPolicy {
-	case "modern":
-		if plan, ok := stagePlanForRuleProfile(cfg.RuleProfile); ok {
-			return plan
-		}
-		return allDSLStagePlan()
-	}
-
-	// If a non-parity RuleProfile is set but no other stage-selection knobs are
-	// present, treat the profile as the stage selector. This keeps the
-	// out-of-the-box behavior legacy-parity while allowing internal callers to
-	// opt into cohesive DSL bundles without also setting Mode/DSLCallPolicy.
-	if cfg.Mode == "" &&
-		cfg.DSLCallPolicy == "" &&
-		normalizedRuleProfile(cfg.RuleProfile) != "parity" &&
-		!cfg.UseDSLComments &&
+	// Next-only default: if no explicit stage toggles are provided, run all DSL
+	// stages. This keeps PipelineConfig{} useful without relying on legacy
+	// formatter stages.
+	if !cfg.UseDSLComments &&
 		!cfg.UseDSLLogCalls &&
 		!cfg.UseDSLMultiLineCalls &&
 		!cfg.UseDSLExpr &&
 		!cfg.UseDSLFuncSigs &&
 		!cfg.UseDSLBlankLines {
-		if plan, ok := stagePlanForRuleProfile(cfg.RuleProfile); ok {
-			return plan
-		}
+		return allDSLStagePlan()
 	}
 
 	return StagePlan{

@@ -37,7 +37,6 @@ func f(graph graphT, chanID uint64) error {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          50,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other stages off to make this test focused.
 		UseDSLLogCalls:   false,
@@ -80,7 +79,6 @@ func f(graph graphT, chanID uint64) error {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          50,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other stages off to make this test focused.
 		UseDSLLogCalls:   false,
@@ -97,4 +95,3 @@ func f(graph graphT, chanID uint64) error {
 	require.NotContains(t, out, "err :=\n\t\t\tgraph.FetchChannelEdgesByID(",
 		"must not detach the call from the assignment")
 }
-

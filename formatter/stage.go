@@ -100,7 +100,6 @@ type StageOptions struct {
 	Selection StageSelectionOptions
 	Style     StageStyleOptions
 	DSL       DSLStageOptions
-	Legacy    LegacyStageOptions
 }
 
 type StageSelectionOptions struct {
@@ -139,21 +138,11 @@ type DSLStageOptions struct {
 	AutoCallArgs  bool
 }
 
-type LegacyStageOptions struct {
-	MultiLineUseASTSelect    bool
-	CompactCallUseASTSelect  bool
-	CompactCallParseSafe     bool
-	LongExprParseSafe        bool
-	LongExprUseASTSelect     bool
-	LongExprExcludeCallExprs bool
-	MultiLineParseSafe       bool
-}
-
 // DefaultStages returns the standard llformat stage configuration.
 // This creates stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool, excludes []string) []Stage {
 	return DefaultStagesWithOptions(cfg, StageOptions{
-		Selection: StageSelectionOptions{RuleProfile: "parity"},
+		Selection: StageSelectionOptions{RuleProfile: "next"},
 		Style: StageStyleOptions{
 			CommentMoveInline: commentMoveInline,
 			Excludes:          excludes,

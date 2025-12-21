@@ -22,16 +22,15 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          30,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Leave DSLMultiLineStyle empty to test the default.
 		DSLMultiLineStyle: "",
 		// Keep other stages off so the test is focused.
-		UseDSLLogCalls:     false,
-		UseDSLExpr:         false,
-		UseDSLComments:     false,
-		UseDSLFuncSigs:     false,
-		UseDSLBlankLines:   false,
+		UseDSLLogCalls:   false,
+		UseDSLExpr:       false,
+		UseDSLComments:   false,
+		UseDSLFuncSigs:   false,
+		UseDSLBlankLines: false,
 	})
 
 	out := string(p.Format([]byte(in)))
@@ -58,15 +57,14 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		DSLMultiLineStyle:    "",
 		// Keep other stages off so the test is focused.
-		UseDSLLogCalls:     false,
-		UseDSLExpr:         false,
-		UseDSLComments:     false,
-		UseDSLFuncSigs:     false,
-		UseDSLBlankLines:   false,
+		UseDSLLogCalls:   false,
+		UseDSLExpr:       false,
+		UseDSLComments:   false,
+		UseDSLFuncSigs:   false,
+		UseDSLBlankLines: false,
 	})
 
 	out := string(p.Format([]byte(in)))
@@ -94,16 +92,15 @@ func f(l *logger) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          30,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		DSLMultiLineStyle:    "",
 		// Keep log call stage disabled so this test proves multiline-calls does
 		// not rewrite printf-style calls on its own.
-		UseDSLLogCalls:     false,
-		UseDSLExpr:         false,
-		UseDSLComments:     false,
-		UseDSLFuncSigs:     false,
-		UseDSLBlankLines:   false,
+		UseDSLLogCalls:   false,
+		UseDSLExpr:       false,
+		UseDSLComments:   false,
+		UseDSLFuncSigs:   false,
+		UseDSLBlankLines: false,
 	})
 
 	out := string(p.Format([]byte(in)))
@@ -112,4 +109,3 @@ func f(l *logger) {
 		"expected printf-style calls to be excluded from generic call reflow")
 	require.NotContains(t, out, "l.Infof(\n", "must not rewrite printf-style calls in multiline-call stage")
 }
-

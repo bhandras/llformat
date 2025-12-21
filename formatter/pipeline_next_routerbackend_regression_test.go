@@ -70,7 +70,6 @@ func f(graph graphT) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLFuncSigs:       true,
 		UseDSLFuncSigsNative: true,
 		DSLSigsStyle:         "legacy",
@@ -129,7 +128,6 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLFuncSigs:       true,
 		UseDSLFuncSigsNative: true,
 		DSLSigsStyle:         "legacy",

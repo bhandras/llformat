@@ -108,7 +108,6 @@ func outerFunctionNameThatIsVeryLong(args ...any) any {
 	t.Run("next_with_ownership", func(t *testing.T) {
 		run(t, PipelineConfig{
 			Mode:                 "next",
-			RuleProfile:          "next",
 			ColumnLimit:          60,
 			TabStop:              8,
 			UseOwnershipRegistry: true,

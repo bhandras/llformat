@@ -89,10 +89,6 @@ func main() {
 	if printPlan {
 		plan := formatter.ResolvePipelinePlan(cfg)
 		fmt.Fprintf(os.Stdout, "mode=%s\n", plan.Mode)
-		fmt.Fprintf(os.Stdout, "rule_profile=%s\n", plan.RuleProfile)
-		if plan.DSLCallPolicy != "" {
-			fmt.Fprintf(os.Stdout, "dsl_call_policy=%s\n", plan.DSLCallPolicy)
-		}
 		if plan.DSLMultiLineStyle != "" {
 			fmt.Fprintf(os.Stdout, "dsl_multiline_style=%s\n", plan.DSLMultiLineStyle)
 		}

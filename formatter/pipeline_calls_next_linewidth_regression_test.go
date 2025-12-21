@@ -23,17 +23,16 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          40,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Use the layout-based call-args formatter to exercise its internal "long
 		// call" gating logic.
 		DSLMultiLineStyle: "layout-args",
 		// Keep other stages off so the test is focused.
-		UseDSLLogCalls:     false,
-		UseDSLExpr:         false,
-		UseDSLComments:     false,
-		UseDSLFuncSigs:     false,
-		UseDSLBlankLines:   false,
+		UseDSLLogCalls:       false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
 		UseOwnershipRegistry: false,
 	})
 

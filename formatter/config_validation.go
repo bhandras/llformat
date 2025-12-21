@@ -18,8 +18,6 @@ func ValidatePipelineConfig(cfg PipelineConfig) error {
 	var issues []configIssue
 
 	validateOptionalEnum(&issues, "Mode", cfg.Mode, allowedModes())
-	validateOptionalEnum(&issues, "RuleProfile", cfg.RuleProfile, allowedRuleProfiles())
-	validateOptionalEnum(&issues, "DSLCallPolicy", cfg.DSLCallPolicy, allowedDSLCallPolicies())
 
 	validateOptionalEnum(&issues, "DSLMultiLineStyle", cfg.DSLMultiLineStyle, allowedDSLMultiLineStyles())
 	validateOptionalEnum(&issues, "DSLSigsStyle", cfg.DSLSigsStyle, allowedDSLSigsStyles())
@@ -99,41 +97,19 @@ func validateOptionalEnum(issues *[]configIssue, field string, value string, all
 
 func validateStageMode(issues *[]configIssue, field string, mode StageMode) {
 	switch mode {
-	case StageModeLegacy, StageModeDSL:
+	case StageModeOff, StageModeDSL:
 		return
 	default:
 		*issues = append(*issues, configIssue{
 			field:   field,
 			value:   string(mode),
-			message: fmt.Sprintf("unknown stage mode (allowed: %s|%s)", StageModeLegacy, StageModeDSL),
+			message: fmt.Sprintf("unknown stage mode (allowed: %s|%s)", StageModeOff, StageModeDSL),
 		})
 	}
 }
 
 func allowedModes() []string {
-	return []string{"legacy", "dsl-parity", "dsl-modern", "next"}
-}
-
-func allowedRuleProfiles() []string {
-	return []string{"parity", "modern", "next"}
-}
-
-func allowedDSLCallPolicies() []string {
-	// Values supported by PipelineConfig -> NewPipeline normalization.
-	return []string{
-		"legacy",
-		"modern",
-
-		// Call-only convenience bundles.
-		"packed-chain",
-		"calls-packed-chain",
-		"layout-args",
-		"calls-layout-args",
-		"layout-all",
-		"calls-layout-all",
-		"layout-args-groups-pairs",
-		"calls-layout-args-groups-pairs",
-	}
+	return []string{"next"}
 }
 
 func allowedDSLMultiLineStyles() []string {

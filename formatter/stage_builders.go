@@ -1,6 +1,11 @@
 package formatter
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"strings"
+
 	llast "github.com/lightninglabs/llformat/ast"
 	"github.com/lightninglabs/llformat/dsl"
 )
@@ -20,13 +25,119 @@ func dslBudgetForRuleProfile(profile string) dsl.RewriteBudget {
 	}
 }
 
+func ownedSpansForCalls(src []byte, match func(*ast.CallExpr) bool) llast.OffsetSpanSet {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "in.go", src, parser.AllErrors)
+	if err != nil || file == nil {
+		return llast.OffsetSpanSet{}
+	}
+
+	var spans []llast.OffsetSpan
+	addSpan := func(startPos, endPos token.Pos) {
+		if startPos == token.NoPos || endPos == token.NoPos {
+			return
+		}
+		start := fset.Position(startPos).Offset
+		end := fset.Position(endPos).Offset
+		if start < 0 || end < 0 || start >= end {
+			return
+		}
+		if start >= len(src) {
+			return
+		}
+		if end > len(src) {
+			end = len(src)
+		}
+		spans = append(spans, llast.OffsetSpan{Start: start, End: end})
+	}
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || call == nil {
+			return true
+		}
+		if !match(call) {
+			return true
+		}
+
+		// Own the call expression and its argument list so earlier stages do not
+		// rewrite within regions that this stage will later format.
+		addSpan(call.Pos(), call.End())
+		if call.Lparen != token.NoPos && call.Rparen != token.NoPos {
+			addSpan(call.Lparen, call.Rparen+1)
+		}
+		return true
+	})
+
+	return llast.NewOffsetSpanSet(spans)
+}
+
+func callNameForExcludes(call *ast.CallExpr) string {
+	if call == nil {
+		return ""
+	}
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		if fun == nil {
+			return ""
+		}
+		return fun.Name
+	case *ast.SelectorExpr:
+		return selectorExprName(fun)
+	default:
+		return ""
+	}
+}
+
+func selectorExprName(sel *ast.SelectorExpr) string {
+	if sel == nil || sel.Sel == nil {
+		return ""
+	}
+	if sel.X == nil {
+		return sel.Sel.Name
+	}
+	switch x := sel.X.(type) {
+	case *ast.Ident:
+		if x == nil {
+			return sel.Sel.Name
+		}
+		return x.Name + "." + sel.Sel.Name
+	case *ast.SelectorExpr:
+		prefix := selectorExprName(x)
+		if prefix == "" {
+			return sel.Sel.Name
+		}
+		return prefix + "." + sel.Sel.Name
+	default:
+		// For cases like `foo().Bar()`, a full "pkg.Func" style name isn't
+		// meaningful; fall back to the terminal selector name so exclude lists
+		// can still match on suffixes.
+		return sel.Sel.Name
+	}
+}
+
+func excludedByName(call *ast.CallExpr, excludes []string) bool {
+	if len(excludes) == 0 {
+		return false
+	}
+	name := callNameForExcludes(call)
+	if name == "" {
+		return false
+	}
+	for _, ex := range excludes {
+		if ex == "" {
+			continue
+		}
+		if strings.Contains(name, ex) {
+			return true
+		}
+	}
+	return false
+}
+
 func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Comments != StageModeDSL {
-		return NewCommentFormatter(CommentConfig{
-			ColumnLimit:     cfg.ColumnLimit,
-			TabStop:         cfg.TabStop,
-			MoveInlineAbove: opts.Style.CommentMoveInline,
-		})
+		return NoopFormatter{}
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
@@ -45,29 +156,7 @@ func buildCommentStageFormatter(stageName string, cfg BaseConfig, opts StageOpti
 
 func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.LogCalls != StageModeDSL {
-		// The legacy compact-calls stage historically includes a fallback that
-		// can rewrite long non-target calls into a packed multiline style.
-		//
-		// When the pipeline explicitly opts into a DSL multiline-call style, let
-		// the multiline stage own generic call formatting to avoid stage fighting
-		// and to preserve inline comment handling guarantees.
-		enableFallback := !(plan.MultiLineCalls == StageModeDSL && opts.Style.DSLMultiLineStyle != "")
-
-		useAST := opts.Legacy.CompactCallUseASTSelect
-		if enableFallback {
-			useAST = true
-		}
-
-		return NewCompactCallFormatter(Config{
-			ColumnLimit: cfg.ColumnLimit,
-			TabStop:     cfg.TabStop,
-			Excludes:    opts.Style.Excludes,
-			FallbackNonTargets:                 enableFallback,
-			FallbackNonTargetsExcludeSelectors: enableFallback,
-			UseASTSelection:                    useAST,
-			SkipGofmt:                          true,
-			ParseSafe:                          opts.Legacy.CompactCallParseSafe,
-		})
+		return NoopFormatter{}
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
@@ -82,25 +171,22 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig, opts Stage
 		StageName:     stageName,
 		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
-			// Align ownership boundaries with legacy call selection for now.
-			return NewCompactCallFormatter(Config{
-				ColumnLimit: cfg.ColumnLimit,
-				TabStop:     cfg.TabStop,
-				Targets:     defaultTargets(),
-			}).OwnedSpans(src)
+			// Align ownership boundaries with the log/printf DSL stage selection.
+			cond := &dsl.IsLogOrPrintfCallCond{
+				Target:                 "node",
+				MatchAnySelectorPrefix: true,
+				IncludeNonFStringCalls: true,
+			}
+			return ownedSpansForCalls(src, func(call *ast.CallExpr) bool {
+				return cond.Eval(dsl.Captures{"node": call}, nil)
+			})
 		},
 	})
 }
 
 func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Expressions != StageModeDSL {
-		return NewLongExprFormatter(LongExprConfig{
-			ColumnLimit:      cfg.ColumnLimit,
-			TabStop:          cfg.TabStop,
-			ParseSafe:        opts.Legacy.LongExprParseSafe,
-			UseASTSelection:  opts.Legacy.LongExprUseASTSelect,
-			ExcludeCallExprs: opts.Legacy.LongExprExcludeCallExprs,
-		})
+		return NoopFormatter{}
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
@@ -119,14 +205,7 @@ func buildExpressionStageFormatter(stageName string, cfg BaseConfig, opts StageO
 
 func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.MultiLineCalls != StageModeDSL {
-		return NewMultiLineCallFormatter(MultiLineConfig{
-			ColumnLimit:     cfg.ColumnLimit,
-			TabStop:         cfg.TabStop,
-			Excludes:        opts.Style.Excludes,
-			UseASTSelection: opts.Legacy.MultiLineUseASTSelect,
-			SkipGofmt:       true,
-			ParseSafe:       opts.Legacy.MultiLineParseSafe,
-		})
+		return NoopFormatter{}
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
@@ -143,31 +222,41 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig, opts Sta
 		StageName:         stageName,
 		Budget:            dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
-			// Use the legacy multiline stage's ownership selection (AST-based)
-			// to avoid rewriting within calls that this stage will later format.
-			return NewMultiLineCallFormatter(MultiLineConfig{
-				ColumnLimit:     cfg.ColumnLimit,
-				TabStop:         cfg.TabStop,
-				Excludes:        opts.Style.Excludes,
-				UseASTSelection: true,
-			}).OwnedSpans(src)
+			logCond := &dsl.IsLogOrPrintfCallCond{
+				Target:                 "node",
+				MatchAnySelectorPrefix: true,
+				IncludeNonFStringCalls: true,
+			}
+			nonFLogCond := &dsl.IsNonFLogCallCond{Target: "node"}
+
+			return ownedSpansForCalls(src, func(call *ast.CallExpr) bool {
+				caps := dsl.Captures{"node": call}
+
+				// Exclude printf-style calls handled by the log/printf stage.
+				if logCond.Eval(caps, nil) {
+					return false
+				}
+
+				// Also exclude non-printf log calls (e.g. log.Info(...)) to avoid
+				// rewriting logger calls with the generic multiline-call stage.
+				if nonFLogCond.Eval(caps, nil) {
+					return false
+				}
+
+				// Respect the explicit multiline-exclude list.
+				if excludedByName(call, opts.Style.Excludes) {
+					return false
+				}
+
+				return true
+			})
 		},
 	})
 }
 
 func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.Signatures != StageModeDSL {
-		profile := normalizedRuleProfile(opts.Selection.RuleProfile)
-		isNext := profile == "next"
-		return NewFuncSigFormatter(FuncSigConfig{
-			ColumnLimit: cfg.ColumnLimit,
-			TabStop:     cfg.TabStop,
-			// Keep legacy fixtures stable: next-specific behavior is enabled only
-			// when the rule profile is explicitly "next".
-			CanonicalMultilineSigLists:  isNext,
-			ReserveTrailingComma:        isNext,
-			PreferInlineSmallReturnList: isNext,
-		})
+		return NoopFormatter{}
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
@@ -188,11 +277,7 @@ func buildSignatureStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 
 func buildBlankLineStageFormatter(stageName string, cfg BaseConfig, opts StageOptions, plan StagePlan, bundle DSLBundle) Formatter {
 	if plan.BlankLines != StageModeDSL {
-		return NewBlankLineFormatter(BlankLineConfig{
-			BeforeReturn:            true,
-			BetweenCases:            true,
-			BetweenInterfaceMethods: true,
-		})
+		return NoopFormatter{}
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{

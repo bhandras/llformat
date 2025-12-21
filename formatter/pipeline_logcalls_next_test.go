@@ -25,7 +25,6 @@ func f(err error) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    36,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -55,7 +54,6 @@ func f(err error) error {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    34,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -91,7 +89,6 @@ func f() (any, error) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    55,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -129,7 +126,6 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    44,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -160,7 +156,6 @@ func f(maxFee, feeRate int) error {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    80,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -200,7 +195,6 @@ func f(numDeletedPayments int, failedHTLCsOnly bool) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    80,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -234,7 +228,6 @@ func f(err error) error {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    50,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -278,7 +271,6 @@ func f(req reqT, minTimeLockDelta int) error {
 		// the next arg. At 61 columns, it should fit exactly.
 		ColumnLimit:    61,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -313,7 +305,6 @@ func f() error {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    70,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -349,7 +340,6 @@ func f(err error) (any, error) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    55,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -410,7 +400,6 @@ func (r *rpcServer) DeleteAllPayments(ctx context.Context, req *DeleteAllPayment
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    80,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,
@@ -450,7 +439,6 @@ func f(req reqT, minTimeLockDelta int) (any, error) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:    60,
 		TabStop:        8,
-		RuleProfile:    "next",
 		UseDSLLogCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLMultiLineCalls: false,

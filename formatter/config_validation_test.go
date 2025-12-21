@@ -21,14 +21,6 @@ func TestValidatePipelineConfig_RejectsUnknownMode(t *testing.T) {
 	require.Contains(t, err.Error(), "allowed")
 }
 
-func TestValidatePipelineConfig_RejectsUnknownRuleProfile(t *testing.T) {
-	t.Parallel()
-
-	err := ValidatePipelineConfig(PipelineConfig{RuleProfile: "experimental"})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "RuleProfile")
-}
-
 func TestValidatePipelineConfig_RejectsUnknownMultiLineStyle(t *testing.T) {
 	t.Parallel()
 

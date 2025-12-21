@@ -36,11 +36,10 @@ func f(wallet interface{ WithCoinSelectLock(func() error, ...interface{}) error 
 `)
 
 	p := NewPipeline(PipelineConfig{
-		Mode:                 "next",
-		RuleProfile:          "next",
-		ColumnLimit:          60,
-		TabStop:              8,
-		UseOwnershipRegistry: true,
+		Mode:                  "next",
+		ColumnLimit:           60,
+		TabStop:               8,
+		UseOwnershipRegistry:  true,
 		MaxPipelineIterations: 3,
 	})
 

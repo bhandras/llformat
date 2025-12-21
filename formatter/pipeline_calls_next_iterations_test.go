@@ -23,7 +23,6 @@ func TestPipelineNext_MultiLineCalls_DoesNotStopAfterTwentyRewrites(t *testing.T
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          30,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Leave style empty to use next defaults.
 		DSLMultiLineStyle: "",

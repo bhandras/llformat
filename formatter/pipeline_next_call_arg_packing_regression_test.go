@@ -44,7 +44,6 @@ func f(wallet walletT, outputs []int, feePerKw, minConfs int, coinSelectionStrat
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          64,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLLogCalls:   false,
@@ -107,7 +106,6 @@ func f(wallet walletT, outputs []int, feePerKw, minConfs int, coinSelectionStrat
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          64,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLLogCalls:   false,
@@ -145,7 +143,6 @@ func f(w wT, outputs []int, feePerKw, minConfs int, strategy int, coinSelectionS
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          80,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLLogCalls:   false,

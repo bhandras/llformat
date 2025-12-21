@@ -22,7 +22,6 @@ func f(cond bool) (any, error) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          40,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		DSLMultiLineStyle:    "",
 		UseDSLLogCalls:       false,
@@ -56,7 +55,6 @@ func f(ok bool) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          40,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		DSLMultiLineStyle:    "",
 		UseDSLLogCalls:       false,
@@ -85,7 +83,6 @@ func f() {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          40,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		DSLMultiLineStyle:    "",
 		UseDSLLogCalls:       false,
@@ -99,4 +96,3 @@ func f() {
 	out2 := string(p.Format([]byte(out1)))
 	require.Equal(t, out1, out2, "expected packed multiline call formatting to be idempotent")
 }
-

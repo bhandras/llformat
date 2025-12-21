@@ -18,7 +18,6 @@ func f(chanBackupsProtos struct{ ChanBackups []int }) {
 	p := NewPipeline(PipelineConfig{
 		ColumnLimit:          60,
 		TabStop:              8,
-		RuleProfile:          "next",
 		UseDSLMultiLineCalls: true,
 		// Keep other DSL stages off to make this test focused.
 		UseDSLLogCalls:    false,
