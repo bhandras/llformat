@@ -2019,49 +2019,76 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 		return indent + sig + commentSuffix
 	}
 
+	methodName, params, returns, ok := f.parseInterfaceMethod(sig)
+	if !ok {
+		return indent + sig + commentSuffix
+	}
+
 	var result strings.Builder
 	result.WriteString(indent)
-
-	// Parse: MethodName(params) [(returns)]
-	parenIdx := strings.Index(sig, "(")
-	if parenIdx == -1 {
-		return indent + sig + commentSuffix
-	}
-
-	methodName := sig[:parenIdx]
-	rest := sig[parenIdx:]
-
-	// Find matching close paren for params
-	paramEnd := f.findMatchingParen(rest, 0)
-	if paramEnd == -1 {
-		return indent + sig + commentSuffix
-	}
-
-	params := rest[1:paramEnd]
-	afterParams := strings.TrimSpace(rest[paramEnd+1:])
-
-	// Check for return values
-	var returns string
-	if strings.HasPrefix(afterParams, "(") {
-		retEnd := f.findMatchingParen(afterParams, 0)
-		if retEnd != -1 {
-			returns = afterParams[:retEnd+1]
-		}
-	} else if afterParams != "" {
-		returns = afterParams
-	}
-
-	// Build the formatted method
 	result.WriteString(methodName)
 	result.WriteByte('(')
 
-	// Break params
-	contIndent := indent + "\t"
-	currentLine := result.String()
+	currentLine, contIndent := f.formatInterfaceParams(
+		&result, indent, params, returns,
+	)
+	result.WriteByte(')')
+
+	f.formatInterfaceReturns(
+		&result, currentLine, contIndent, returns,
+	)
+
+	return result.String() + commentSuffix
+}
+
+func (f *FuncSigFormatter) parseInterfaceMethod(sig string) (methodName, params,
+	returns string, ok bool) {
+
+	parenIdx := strings.Index(sig, "(")
+	if parenIdx == -1 {
+		return "", "", "", false
+	}
+
+	methodName = sig[:parenIdx]
+	rest := sig[parenIdx:]
+
+	paramEnd := f.findMatchingParen(rest, 0)
+	if paramEnd == -1 {
+		return "", "", "", false
+	}
+
+	params = rest[1:paramEnd]
+	afterParams := strings.TrimSpace(rest[paramEnd+1:])
+	returns = f.parseInterfaceReturns(afterParams)
+
+	return methodName, params, returns, true
+}
+
+func (f *FuncSigFormatter) parseInterfaceReturns(afterParams string) string {
+	if strings.HasPrefix(afterParams, "(") {
+		retEnd := f.findMatchingParen(afterParams, 0)
+		if retEnd != -1 {
+			return afterParams[:retEnd+1]
+		}
+
+		return ""
+	}
+	if afterParams != "" {
+		return afterParams
+	}
+
+	return ""
+}
+
+func (f *FuncSigFormatter) formatInterfaceParams(result *strings.Builder,
+	indent, params, returns string) (currentLine, contIndent string) {
+
+	contIndent = indent + "\t"
+	currentLine = result.String()
 	paramList := f.splitParams(params)
 
 	// Calculate trailing for last param - use minimal ") (" if there are
-	// returns
+	// returns.
 	hasParenReturns := returns != "" && strings.HasPrefix(returns, "(")
 	trailingMinimal := ")"
 	if hasParenReturns {
@@ -2084,20 +2111,17 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 		testAdd := separator + param
 		testLine := currentLine + testAdd
 
-		// For the last param, use minimal trailing
 		isLast := i == len(paramList)-1
-		var lineWithTrailing string
+		lineWithTrailing := testLine
 		if isLast {
 			lineWithTrailing = testLine + trailingMinimal
-		} else {
-			lineWithTrailing = testLine
 		}
 
 		if width.VisualLenWithTab(lineWithTrailing, f.cfg.TabStop) > f.
 			cfg.
 			ColumnLimit {
 
-			// Need to break
+			// Need to break.
 			if i > 0 {
 				result.WriteByte(',')
 			}
@@ -2114,83 +2138,79 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 		}
 	}
 
-	result.WriteByte(')')
+	return currentLine, contIndent
+}
 
-	// Handle returns
-	if returns != "" {
-		if strings.HasPrefix(returns, "(") {
-			// Check if returns fit on current line (after the
-			// closing paren we just wrote)
-			testLine := currentLine + ") " + returns
-			if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.
+func (f *FuncSigFormatter) formatInterfaceReturns(result *strings.Builder,
+	currentLine, contIndent, returns string) {
+
+	if returns == "" {
+		return
+	}
+
+	if strings.HasPrefix(returns, "(") {
+		testLine := currentLine + ") " + returns
+		if width.VisualLenWithTab(testLine, f.cfg.TabStop) <= f.cfg.
+			ColumnLimit {
+
+			result.WriteByte(' ')
+			result.WriteString(returns)
+
+			return
+		}
+
+		result.WriteString(" (")
+		currentLine = currentLine + ") ("
+
+		retContent := returns[1 : len(returns)-1]
+		retList := f.splitParams(retContent)
+
+		for i, ret := range retList {
+			ret = strings.TrimSpace(ret)
+			if ret == "" {
+				continue
+			}
+
+			separator := ""
+			if i > 0 {
+				separator = ", "
+			}
+
+			testAdd := separator + ret
+			isLastRet := i == len(retList)-1
+			testCheck := currentLine + testAdd
+			if isLastRet {
+				testCheck += ")"
+			}
+
+			if width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.
 				cfg.
 				ColumnLimit {
 
-				// Returns don't all fit inline - use left-flow
-				// to pack
-				result.WriteString(" (")
-				currentLine = currentLine + ") ("
-
-				retContent := returns[1 : len(returns)-1]
-				retList := f.splitParams(retContent)
-
-				for i, ret := range retList {
-					ret = strings.TrimSpace(ret)
-					if ret == "" {
-						continue
-					}
-
-					separator := ""
-					if i > 0 {
-						separator = ", "
-					}
-
-					testAdd := separator + ret
-					// For last return, account for closing
-					// paren
-					isLastRet := i == len(retList)-1
-					testCheck := currentLine + testAdd
-					if isLastRet {
-						testCheck += ")"
-					}
-
-					if width.VisualLenWithTab(
-						testCheck, f.cfg.TabStop,
-					) > f.
-						cfg.
-						ColumnLimit {
-
-						// Need to break
-						if i > 0 {
-							result.WriteByte(',')
-						}
-						result.WriteByte('\n')
-						result.WriteString(contIndent)
-						currentLine = contIndent + ret
-						result.WriteString(ret)
-					} else {
-						if i > 0 {
-							result.WriteString(", ")
-							currentLine += ", "
-						}
-						result.WriteString(ret)
-						currentLine += ret
-					}
+				// Need to break.
+				if i > 0 {
+					result.WriteByte(',')
 				}
-				result.WriteByte(')')
+				result.WriteByte('\n')
+				result.WriteString(contIndent)
+				currentLine = contIndent + ret
+				result.WriteString(ret)
 			} else {
-				// Returns fit on the same line
-				result.WriteByte(' ')
-				result.WriteString(returns)
+				if i > 0 {
+					result.WriteString(", ")
+					currentLine += ", "
+				}
+				result.WriteString(ret)
+				currentLine += ret
 			}
-		} else {
-			// Simple return type
-			result.WriteByte(' ')
-			result.WriteString(returns)
 		}
+		result.WriteByte(')')
+
+		return
 	}
 
-	return result.String() + commentSuffix
+	result.WriteByte(' ')
+	result.WriteString(returns)
 }
 
 // FormatFuncSignature formats a function signature (the line starting with
