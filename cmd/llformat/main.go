@@ -48,10 +48,10 @@ func main() {
 	)
 
 	printUsage := func() {
-		fmt.Fprintln(os.Stderr, "usage: llformat [--next] [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--fixpoint-iters N] [--print-plan] <path>")
+		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--fixpoint-iters N] [--print-plan] <path>")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "flags:")
-		fmt.Fprintln(os.Stderr, "  --next                    enable the \"next\" formatter pipeline (recommended)")
+		fmt.Fprintln(os.Stderr, "  --next                    enable the \"next\" formatter pipeline (default)")
 		fmt.Fprintln(os.Stderr, "  -w, --write               write result to (source) file instead of stdout")
 		fmt.Fprintln(os.Stderr, "  --col N                   column limit for formatting (default 80)")
 		fmt.Fprintln(os.Stderr, "  --tab N                   tab stop width for column calculations (default 8)")
@@ -110,6 +110,20 @@ func main() {
 		mode = "next"
 	}
 
+	// CLI default: prefer next pipeline for user-facing runs.
+	//
+	// Keep formatter.NewPipeline's behavior unchanged (Mode == "" remains the
+	// conservative/default configuration) so tests and internal callers remain
+	// stable. The CLI is intentionally more opinionated since llformat is not yet
+	// used as a stable external tool.
+	if mode == "" {
+		if useLegacy {
+			mode = "legacy"
+		} else {
+			mode = "next"
+		}
+	}
+
 	// Policy bundle is applied in the pipeline, but for CLI ergonomics we also
 	// ensure "modern" implies the relevant DSL stages are enabled.
 	if dslCallPolicy == "modern" {
@@ -157,6 +171,15 @@ func main() {
 	if mode != "" && mode == "legacy" {
 		useLegacy = true
 		policy = ""
+	}
+
+	// Deprecation warnings: legacy modes remain available for internal testing,
+	// but the user-facing CLI is moving toward "next" only.
+	switch mode {
+	case "next":
+		// no warning
+	case "legacy", "dsl-parity", "dsl-modern":
+		fmt.Fprintf(os.Stderr, "warning: --mode=%s is deprecated; use the default (next) pipeline or --next\n", mode)
 	}
 
 	// CLI fixpoint defaults:

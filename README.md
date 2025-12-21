@@ -57,14 +57,17 @@ Usage:
 llformat [-w] <path-to-go-source>
 ```
 
-Recommended usage (next pipeline):
+Default usage (next pipeline):
 
 ```
 llformat --next [-w] <path-to-go-source>
 ```
 
-The CLI historically supported a `--mode` flag for selecting different
-pipelines during development/testing, but it is now considered internal and is
+Note: the CLI now defaults to the `next` pipeline. Passing `--next` is still
+supported as an explicit alias.
+
+The CLI also supports a `--mode` flag for selecting different pipelines during
+development/testing, but legacy modes are now considered internal and are
 intentionally undocumented in the CLI help output.
 
 Legacy/internal pipeline modes:
