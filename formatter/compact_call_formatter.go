@@ -712,20 +712,7 @@ func stripComments(s string) string {
 		c := s[i]
 		if inStr != 0 {
 			b.WriteByte(c)
-			if inStr == '"' && c == '\\' && !esc {
-				esc = true
-				i++
-				continue
-			}
-			if esc {
-				esc = false
-				i++
-				continue
-			}
-			if c == inStr {
-				inStr = 0
-			}
-			i++
+			i, inStr, esc = advanceStringState(s, i, inStr, esc)
 			continue
 		}
 		if c == '"' || c == '`' {
@@ -736,20 +723,11 @@ func stripComments(s string) string {
 		}
 		if c == '/' && i+1 < len(s) {
 			if s[i+1] == '/' {
-				for i < len(s) && s[i] != '\n' {
-					i++
-				}
+				i = skipLineComment(s, i)
 				continue
 			}
 			if s[i+1] == '*' {
-				i += 2
-				for i+1 < len(s) {
-					if s[i] == '*' && s[i+1] == '/' {
-						i += 2
-						break
-					}
-					i++
-				}
+				i = skipBlockComment(s, i)
 				continue
 			}
 		}
@@ -758,6 +736,43 @@ func stripComments(s string) string {
 	}
 
 	return b.String()
+}
+
+func advanceStringState(s string, i int, inStr byte, esc bool) (int, byte,
+	bool) {
+
+	c := s[i]
+	if inStr == '"' && c == '\\' && !esc {
+		return i + 1, inStr, true
+	}
+	if esc {
+		return i + 1, inStr, false
+	}
+	if c == inStr {
+		return i + 1, 0, false
+	}
+
+	return i + 1, inStr, false
+}
+
+func skipLineComment(s string, i int) int {
+	for i < len(s) && s[i] != '\n' {
+		i++
+	}
+
+	return i
+}
+
+func skipBlockComment(s string, i int) int {
+	i += 2
+	for i+1 < len(s) {
+		if s[i] == '*' && s[i+1] == '/' {
+			return i + 2
+		}
+		i++
+	}
+
+	return i
 }
 
 // formatCallPackedMultiLine formats a generic function call into a packed
