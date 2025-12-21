@@ -3383,19 +3383,7 @@ func findTopLevelFuncBodyBrace(sig string, start int) int {
 
 	for i := start; i < len(sig); i++ {
 		c := sig[i]
-
-		if inStr != 0 {
-			if inStr == '"' && c == '\\' && !escaped {
-				escaped = true
-				continue
-			}
-			if escaped {
-				escaped = false
-				continue
-			}
-			if c == inStr {
-				inStr = 0
-			}
+		if consumeStringChar(c, &inStr, &escaped) {
 			continue
 		}
 
@@ -3421,33 +3409,11 @@ func findTopLevelFuncBodyBrace(sig string, start int) int {
 			}
 
 		case '{':
-			// When not nested inside a type literal
-			// (struct{...}/interface{...}), the first top-level "{"
-			// after the parameter list is the function body.
-			if parenDepth == 0 && bracketDepth == 0 &&
-				braceDepth == 0 {
+			if isFuncBodyBrace(
+				sig, i, parenDepth, bracketDepth, braceDepth,
+			) {
 
-				// Avoid mis-identifying `struct{...}` /
-				// `interface{...}` type literals in result
-				// types as the function body brace.
-				j := i - 1
-				for j >= 0 &&
-					(sig[j] == ' ' || sig[j] == '\t') {
-
-					j--
-				}
-				k := j
-				for k >= 0 &&
-					(sig[k] >= 'a' &&
-						sig[k] <= 'z' || sig[k] >=
-						'A' && sig[k] <= 'Z') {
-
-					k--
-				}
-				word := sig[k+1 : j+1]
-				if word != "struct" && word != "interface" {
-					return i
-				}
+				return i
 			}
 			braceDepth++
 
@@ -3459,6 +3425,58 @@ func findTopLevelFuncBodyBrace(sig string, start int) int {
 	}
 
 	return -1
+}
+
+func consumeStringChar(c byte, inStr *byte, escaped *bool) bool {
+	if *inStr == 0 {
+		return false
+	}
+	if *inStr == '"' && c == '\\' && !*escaped {
+		*escaped = true
+
+		return true
+	}
+	if *escaped {
+		*escaped = false
+
+		return true
+	}
+	if c == *inStr {
+		*inStr = 0
+	}
+
+	return true
+}
+
+func isFuncBodyBrace(sig string, idx, parenDepth, bracketDepth,
+	braceDepth int) bool {
+
+	if parenDepth != 0 || bracketDepth != 0 || braceDepth != 0 {
+		return false
+	}
+
+	// Avoid mis-identifying `struct{...}` / `interface{...}` type literals
+	// in result types as the function body brace.
+	word := prevIdent(sig, idx-1)
+
+	return word != "struct" && word != "interface"
+}
+
+func prevIdent(sig string, idx int) string {
+	i := idx
+	for i >= 0 && (sig[i] == ' ' || sig[i] == '\t') {
+		i--
+	}
+	j := i
+	for j >= 0 && isIdentChar(sig[j]) {
+		j--
+	}
+
+	return sig[j+1 : i+1]
+}
+
+func isIdentChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 func isParenthesizedTypeList(s string) bool {
@@ -3727,28 +3745,18 @@ func splitTopLevelSimple(s string) []string {
 	var result []string
 	var current strings.Builder
 	depth := 0
-	inString := false
+	inString := byte(0)
 	escaped := false
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 
-		if escaped {
-			escaped = false
-			current.WriteByte(c)
-			continue
-		}
-		if c == '\\' && inString {
-			escaped = true
+		if consumeStringChar(c, &inString, &escaped) {
 			current.WriteByte(c)
 			continue
 		}
 		if c == '"' || c == '`' {
-			inString = !inString
-			current.WriteByte(c)
-			continue
-		}
-		if inString {
+			inString = c
 			current.WriteByte(c)
 			continue
 		}
@@ -3756,41 +3764,9 @@ func splitTopLevelSimple(s string) []string {
 		// Skip over comments while splitting. This is important for
 		// signatures that include parameter comments like `/* ... , ...
 		// */` where commas should not be treated as separators.
-		if c == '/' && i+1 < len(s) {
-			next := s[i+1]
-			if next == '/' {
-				// Line comment: consume to end of line.
-				current.WriteByte(c)
-				current.WriteByte(next)
-				i += 2
-				for i < len(s) && s[i] != '\n' {
-					current.WriteByte(s[i])
-					i++
-				}
-				if i < len(s) && s[i] == '\n' {
-					current.WriteByte('\n')
-				}
-				continue
-			}
-			if next == '*' {
-				// Block comment: consume to closing */ (or end
-				// of string).
-				current.WriteByte(c)
-				current.WriteByte(next)
-				i += 2
-				for i < len(s) {
-					current.WriteByte(s[i])
-					if s[i] == '*' && i+1 < len(s) &&
-						s[i+1] == '/' {
-
-						current.WriteByte('/')
-						i++
-						break
-					}
-					i++
-				}
-				continue
-			}
+		if nextIdx, ok := consumeComment(s, i, &current); ok {
+			i = nextIdx
+			continue
 		}
 
 		switch c {
@@ -3815,6 +3791,49 @@ func splitTopLevelSimple(s string) []string {
 	}
 
 	return result
+}
+
+func consumeComment(s string, i int, current *strings.Builder) (int, bool) {
+	if s[i] != '/' || i+1 >= len(s) {
+		return i, false
+	}
+
+	next := s[i+1]
+	if next == '/' {
+		// Line comment: consume to end of line.
+		current.WriteByte(s[i])
+		current.WriteByte(next)
+		j := i + 2
+		for j < len(s) && s[j] != '\n' {
+			current.WriteByte(s[j])
+			j++
+		}
+		if j < len(s) && s[j] == '\n' {
+			current.WriteByte('\n')
+		}
+
+		return j, true
+	}
+
+	if next == '*' {
+		// Block comment: consume to closing */ (or end of string).
+		current.WriteByte(s[i])
+		current.WriteByte(next)
+		j := i + 2
+		for j < len(s) {
+			current.WriteByte(s[j])
+			if s[j] == '*' && j+1 < len(s) && s[j+1] == '/' {
+				current.WriteByte('/')
+				j++
+				break
+			}
+			j++
+		}
+
+		return j, true
+	}
+
+	return i, false
 }
 
 // BreakInterfaceMethodAction formats a long interface method declaration.
@@ -4579,27 +4598,11 @@ func formatMethodChain(calls []*ast.CallExpr, indent string,
 
 	for i := len(calls) - 1; i >= 0; i-- {
 		call := calls[i]
+		isFirst := i == len(calls)-1
 
 		// Build the method part: ".MethodName" or "receiver.MethodName"
 		// for first
-		var methodPart string
-		if i == len(calls)-1 {
-			// First call - include the receiver
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if ok {
-				receiverSrc := renderNode(sel.X, ctx.Fset)
-				methodPart = receiverSrc + "." + sel.Sel.Name
-			} else {
-				methodPart = renderNode(call.Fun, ctx.Fset)
-			}
-		} else {
-			// Subsequent calls - just .Method name (the dot is
-			// added when we write)
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if ok {
-				methodPart = sel.Sel.Name
-			}
-		}
+		methodPart := methodPartForCall(call, isFirst, ctx)
 
 		// Build the arguments part
 		var argParts []string
@@ -4609,79 +4612,94 @@ func formatMethodChain(calls []*ast.CallExpr, indent string,
 		argsInline := strings.Join(argParts, ", ")
 
 		// Calculate the inline version of this call
-		var callInline string
-		if i == len(calls)-1 {
-			callInline = methodPart + "(" + argsInline + ")"
-		} else {
-			callInline = "." + methodPart + "(" + argsInline + ")"
-		}
+		callInline := buildCallInline(methodPart, argsInline, isFirst)
 		callWidth := visualLen(callInline, ctx.TabStop)
 
 		// Check if the call fits on the current line
 		if currentLineWidth+callWidth <= ctx.ColumnLimit {
 			// It fits - write inline
-			if i == len(calls)-1 {
-				b.WriteString(methodPart)
-			} else {
-				b.WriteString(".")
-				b.WriteString(methodPart)
-			}
-			b.WriteString("(")
-			b.WriteString(argsInline)
-			b.WriteString(")")
+			writeMethodCall(&b, methodPart, argsInline, isFirst)
 			currentLineWidth += callWidth
-		} else {
-			// Doesn't fit - need to wrap Check if the method call
-			// with just opening paren fits
-			methodWidth := visualLen(
-				"."+methodPart+"(", ctx.TabStop,
-			)
-			if i == len(calls)-1 {
-				methodWidth = visualLen(
-					methodPart+"(", ctx.TabStop,
-				)
-			}
-
-			if currentLineWidth+methodWidth+
-				visualLen(argsInline+")", ctx.TabStop) > ctx.ColumnLimit &&
-				len(call.Args) > 0 {
-
-				// Arguments need to be on a new line
-				if i == len(calls)-1 {
-					b.WriteString(methodPart)
-				} else {
-					b.WriteString(".")
-					b.WriteString(methodPart)
-				}
-				b.WriteString("(\n")
-				b.WriteString(contIndent)
-				b.WriteString(argsInline)
-				b.WriteString(",\n")
-				b.WriteString(indent)
-				b.WriteString(")")
-				currentLineWidth = visualLen(
-					indent, ctx.TabStop,
-				) +
-					1 // After the closing paren
-			} else {
-				// The call itself is too long but args are
-				// short Just write it inline from current
-				// position
-				if i == len(calls)-1 {
-					b.WriteString(methodPart)
-				} else {
-					b.WriteString(".")
-					b.WriteString(methodPart)
-				}
-				b.WriteString("(")
-				b.WriteString(argsInline)
-				b.WriteString(")")
-				currentLineWidth += callWidth
-			}
+			continue
 		}
+
+		// Doesn't fit - check if the method call with just opening paren fits.
+		methodWidth := methodOpenWidth(methodPart, isFirst, ctx.TabStop)
+		argsWidth := visualLen(argsInline+")", ctx.TabStop)
+		if len(call.Args) > 0 &&
+			currentLineWidth+methodWidth+
+				argsWidth > ctx.ColumnLimit {
+
+			// Arguments need to be on a new line.
+			if !isFirst {
+				b.WriteString(".")
+			}
+			b.WriteString(methodPart)
+			b.WriteString("(\n")
+			b.WriteString(contIndent)
+			b.WriteString(argsInline)
+			b.WriteString(",\n")
+			b.WriteString(indent)
+			b.WriteString(")")
+			currentLineWidth = visualLen(indent, ctx.TabStop) +
+				1 // After the closing paren
+			continue
+		}
+
+		// The call itself is too long but args are short. Write inline.
+		writeMethodCall(&b, methodPart, argsInline, isFirst)
+		currentLineWidth += callWidth
 	}
 
 	return b.String()
+}
+
+func methodPartForCall(call *ast.CallExpr, isFirst bool, ctx *Context) string {
+	if isFirst {
+		// First call - include the receiver.
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+			receiverSrc := renderNode(sel.X, ctx.Fset)
+
+			return receiverSrc + "." + sel.Sel.Name
+		}
+
+		return renderNode(call.Fun, ctx.Fset)
+	}
+
+	// Subsequent calls - just the method name (the dot is added later).
+	if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+		return sel.Sel.Name
+	}
+
+	return renderNode(call.Fun, ctx.Fset)
+}
+
+func buildCallInline(methodPart, argsInline string, isFirst bool) string {
+	if isFirst {
+		return methodPart + "(" + argsInline + ")"
+	}
+
+	return "." + methodPart + "(" + argsInline + ")"
+}
+
+func methodOpenWidth(methodPart string, isFirst bool, tabStop int) int {
+	if isFirst {
+		return visualLen(methodPart+"(", tabStop)
+	}
+
+	return visualLen("."+methodPart+"(", tabStop)
+}
+
+func writeMethodCall(b *strings.Builder, methodPart, argsInline string,
+	isFirst bool) {
+
+	if !isFirst {
+		b.WriteString(".")
+	}
+	b.WriteString(methodPart)
+	b.WriteString("(")
+	b.WriteString(argsInline)
+	b.WriteString(")")
 }
 
 // BreakReturnValuesAction breaks long return values to a new line.

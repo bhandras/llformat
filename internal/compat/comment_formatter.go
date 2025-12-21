@@ -656,18 +656,7 @@ func findInlineCommentOnLine(line string) (kind string, start, end int) {
 	seenCode := false
 	for i := 0; i < len(line); i++ {
 		c := line[i]
-		if inStr != 0 {
-			if inStr == '"' && c == '\\' && !esc {
-				esc = true
-				continue
-			}
-			if esc {
-				esc = false
-				continue
-			}
-			if c == inStr {
-				inStr = 0
-			}
+		if consumeStringCharCompat(c, &inStr, &esc) {
 			continue
 		}
 		switch c {
@@ -678,6 +667,7 @@ func findInlineCommentOnLine(line string) (kind string, start, end int) {
 		case '"', '\'', '`':
 			inStr = c
 			seenCode = true
+			continue
 
 		case '/':
 			if i+1 < len(line) && line[i+1] == '/' {
@@ -710,4 +700,25 @@ func findInlineCommentOnLine(line string) (kind string, start, end int) {
 	}
 
 	return "", 0, 0
+}
+
+func consumeStringCharCompat(c byte, inStr *byte, esc *bool) bool {
+	if *inStr == 0 {
+		return false
+	}
+	if *inStr == '"' && c == '\\' && !*esc {
+		*esc = true
+
+		return true
+	}
+	if *esc {
+		*esc = false
+
+		return true
+	}
+	if c == *inStr {
+		*inStr = 0
+	}
+
+	return true
 }
