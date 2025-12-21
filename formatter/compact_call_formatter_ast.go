@@ -44,26 +44,23 @@ func formatWithTargetsAST(src []byte, targets []string) []byte {
 
 	candidates := compactCallCandidatesFromAST(file, fset, src, targets)
 	if len(candidates) == 0 {
-		if skipGofmt {
-			return src
-		}
-		if formatted, err := formatstd.Source(src); err == nil {
-			return formatted
-		}
-
-		return src
+		return maybeGofmt(src)
 	}
 
 	res := formatCompactCallCandidates(src, candidates)
 
+	return maybeGofmt(res)
+}
+
+func maybeGofmt(src []byte) []byte {
 	if skipGofmt {
-		return res
+		return src
 	}
-	if formatted, err := formatstd.Source(res); err == nil {
+	if formatted, err := formatstd.Source(src); err == nil {
 		return formatted
 	}
 
-	return res
+	return src
 }
 
 func formatCompactCallCandidates(src []byte,
