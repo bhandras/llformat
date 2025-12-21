@@ -51,234 +51,305 @@ func exprDocWithKind(expr ast.Expr, ctx *Context,
 
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
-		doc, ok := selectorChainDoc(e, ctx)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: true,
-		}, true
+		return selectorExprDoc(e, ctx)
 
 	case *ast.IndexListExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		doc, ok := indexListExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		// IndexListExpr controls its own bracket indentation decisions.
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return indexListExprDocWithKind(e, ctx, kind)
 
 	case *ast.CallExpr:
-		if kind == exprDocKindCallArg {
-			if doc, ok := methodChainDocWithKind(e, ctx, kind); ok {
-				return exprDocInfo{
-					Doc:                     doc,
-					NeedsContinuationIndent: true,
-				}, true
-			}
-			// Fall back to generic call formatting so nested calls
-			// can break their arguments (including generic callees
-			// like `f[T, U](...)`).
-			if doc, ok := genericCallDoc(e, ctx); ok {
-				return exprDocInfo{
-					Doc:                     doc,
-					NeedsContinuationIndent: false,
-				}, true
-			}
-
-			return exprDocInfo{}, false
-		}
-
-		// Top-level expression rules: call formatting is owned by the
-		// call/multiline stages, but we still support method-call
-		// chains (which do not alter call argument structure).
-		if doc, ok := methodChainDoc(e, ctx); ok {
-			return exprDocInfo{
-				Doc:                     doc,
-				NeedsContinuationIndent: true,
-			}, true
-		}
-
-		return exprDocInfo{}, false
+		return callExprDocWithKind(e, ctx, kind)
 
 	case *ast.BinaryExpr:
-		if kind == exprDocKindCallArg &&
-			(e.Op == token.LAND || e.Op == token.LOR) {
-
-			doc, ok := logicalBinaryExprDoc(e, ctx, kind)
-			if !ok {
-				return exprDocInfo{}, false
-			}
-
-			return exprDocInfo{
-				Doc:                     doc,
-				NeedsContinuationIndent: true,
-			}, true
-		}
-		if kind == exprDocKindCallArg && isComparisonOp(e.Op) {
-			doc, ok := comparisonBinaryExprDoc(e, ctx, kind)
-			if !ok {
-				return exprDocInfo{}, false
-			}
-
-			return exprDocInfo{
-				Doc:                     doc,
-				NeedsContinuationIndent: true,
-			}, true
-		}
-		doc, ok := sameOpBinaryChainDocWithKind(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: true,
-		}, true
+		return binaryExprDocWithKind(e, ctx, kind)
 
 	case *ast.ParenExpr:
-		// Be conservative with parenthesized calls in call-arg context.
-		// These are particularly prone to producing parse hazards when
-		// combined with argument-list commas and nested call rewrites
-		// (Go semicolon insertion is unforgiving around closing
-		// parens).
-		if kind == exprDocKindCallArg {
-			if _, ok := e.X.(*ast.CallExpr); ok {
-				return exprDocInfo{}, false
-			}
-		}
-		doc, ok := parenExprDoc(e, ctx)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		// ParenExpr controls its own indentation; callers should treat
-		// it like a self-contained block.
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return parenExprDocWithKind(e, ctx, kind)
 
 	case *ast.KeyValueExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		doc, ok := keyValueExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return keyValueExprDocWithKind(e, ctx, kind)
 
 	case *ast.CompositeLit:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		doc, ok := compositeLitDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		// CompositeLit includes its own braces and indentation
-		// decisions.
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return compositeLitExprDocWithKind(e, ctx, kind)
 
 	case *ast.UnaryExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		info, ok := unaryExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		return info, true
+		return unaryExprDocWithKind(e, ctx, kind)
 
 	case *ast.StarExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		info, ok := starExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		return info, true
+		return starExprDocWithKind(e, ctx, kind)
 
 	case *ast.TypeAssertExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		doc, ok := typeAssertExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		// TypeAssertExpr includes `.(` and `)` and controls its own
-		// indentation.
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return typeAssertExprDocWithKind(e, ctx, kind)
 
 	case *ast.IndexExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		doc, ok := indexExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		// IndexExpr controls its own bracket indentation decisions.
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return indexExprDocWithKind(e, ctx, kind)
 
 	case *ast.SliceExpr:
-		if kind != exprDocKindCallArg {
-			return exprDocInfo{}, false
-		}
-		doc, ok := sliceExprDoc(e, ctx, kind)
-		if !ok {
-			return exprDocInfo{}, false
-		}
-
-		// SliceExpr controls its own bracket indentation decisions.
-		return exprDocInfo{
-			Doc:                     doc,
-			NeedsContinuationIndent: false,
-		}, true
+		return sliceExprDocWithKind(e, ctx, kind)
 
 	case *ast.Ident, *ast.BasicLit:
-
-		// Render atomic expressions as-is. These are safe to embed as
-		// docs but do not participate in internal breaking yet.
-		return exprDocInfo{
-			Doc: layout.T(
-				renderNode(expr, ctx.Fset),
-			),
-			NeedsContinuationIndent: false,
-		}, true
+		return atomExprDoc(expr, ctx)
 
 	default:
 		return exprDocInfo{}, false
 	}
+}
+
+func selectorExprDoc(sel *ast.SelectorExpr, ctx *Context) (exprDocInfo, bool) {
+	doc, ok := selectorChainDoc(sel, ctx)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: true,
+	}, true
+}
+
+func indexListExprDocWithKind(list *ast.IndexListExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	doc, ok := indexListExprDoc(list, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// IndexListExpr controls its own bracket indentation decisions.
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func callExprDocWithKind(call *ast.CallExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind == exprDocKindCallArg {
+		if doc, ok := methodChainDocWithKind(call, ctx, kind); ok {
+			return exprDocInfo{
+				Doc:                     doc,
+				NeedsContinuationIndent: true,
+			}, true
+		}
+		// Fall back to generic call formatting so nested calls can
+		// break their arguments (including generic callees like `f[T,
+		// U](...)`).
+		if doc, ok := genericCallDoc(call, ctx); ok {
+			return exprDocInfo{
+				Doc:                     doc,
+				NeedsContinuationIndent: false,
+			}, true
+		}
+
+		return exprDocInfo{}, false
+	}
+
+	// Top-level expression rules: call formatting is owned by the
+	// call/multiline stages, but we still support method-call chains (which
+	// do not alter call argument structure).
+	doc, ok := methodChainDoc(call, ctx)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: true,
+	}, true
+}
+
+func binaryExprDocWithKind(expr *ast.BinaryExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind == exprDocKindCallArg &&
+		(expr.Op == token.LAND || expr.Op == token.LOR) {
+
+		doc, ok := logicalBinaryExprDoc(expr, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: true,
+		}, true
+	}
+	if kind == exprDocKindCallArg && isComparisonOp(expr.Op) {
+		doc, ok := comparisonBinaryExprDoc(expr, ctx, kind)
+		if !ok {
+			return exprDocInfo{}, false
+		}
+
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: true,
+		}, true
+	}
+	doc, ok := sameOpBinaryChainDocWithKind(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: true,
+	}, true
+}
+
+func parenExprDocWithKind(expr *ast.ParenExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	// Be conservative with parenthesized calls in call-arg context. These
+	// are particularly prone to producing parse hazards when combined with
+	// argument-list commas and nested call rewrites (Go semicolon insertion
+	// is unforgiving around closing parens).
+	if kind == exprDocKindCallArg {
+		if _, ok := expr.X.(*ast.CallExpr); ok {
+			return exprDocInfo{}, false
+		}
+	}
+	doc, ok := parenExprDoc(expr, ctx)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// ParenExpr controls its own indentation; callers should treat it like
+	// a self-contained block.
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func keyValueExprDocWithKind(expr *ast.KeyValueExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	doc, ok := keyValueExprDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func compositeLitExprDocWithKind(expr *ast.CompositeLit, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	doc, ok := compositeLitDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// CompositeLit includes its own braces and indentation decisions.
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func unaryExprDocWithKind(expr *ast.UnaryExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	info, ok := unaryExprDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	return info, true
+}
+
+func starExprDocWithKind(expr *ast.StarExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	info, ok := starExprDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	return info, true
+}
+
+func typeAssertExprDocWithKind(expr *ast.TypeAssertExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	doc, ok := typeAssertExprDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// TypeAssertExpr includes `.(` and `)` and controls its own
+	// indentation.
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func indexExprDocWithKind(expr *ast.IndexExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	doc, ok := indexExprDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// IndexExpr controls its own bracket indentation decisions.
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func sliceExprDocWithKind(expr *ast.SliceExpr, ctx *Context,
+	kind exprDocKind) (exprDocInfo, bool) {
+
+	if kind != exprDocKindCallArg {
+		return exprDocInfo{}, false
+	}
+	doc, ok := sliceExprDoc(expr, ctx, kind)
+	if !ok {
+		return exprDocInfo{}, false
+	}
+
+	// SliceExpr controls its own bracket indentation decisions.
+	return exprDocInfo{
+		Doc:                     doc,
+		NeedsContinuationIndent: false,
+	}, true
+}
+
+func atomExprDoc(expr ast.Expr, ctx *Context) (exprDocInfo, bool) {
+
+	// Render atomic expressions as-is. These are safe to embed as docs but
+	// do not participate in internal breaking yet.
+	return exprDocInfo{
+		Doc:                     layout.T(renderNode(expr, ctx.Fset)),
+		NeedsContinuationIndent: false,
+	}, true
 }
 
 func indentExprDocIfNeeded(info exprDocInfo) layout.Doc {

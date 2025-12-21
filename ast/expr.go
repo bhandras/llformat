@@ -18,26 +18,29 @@ func ParseExpr(s string) ast.Expr {
 	return expr
 }
 
+func callExprFromParsed(expr ast.Expr) (*ast.CallExpr, bool) {
+	if expr == nil {
+		return nil, false
+	}
+	if call, ok := expr.(*ast.CallExpr); ok {
+		return call, true
+	}
+	if pe, ok := expr.(*ast.ParenExpr); ok {
+		call, ok := pe.X.(*ast.CallExpr)
+
+		return call, ok
+	}
+
+	return nil, false
+}
+
 // IsCallExpr returns true if s parses as a function call expression. Also
 // matches parenthesized call expressions like (fn()).
 func IsCallExpr(s string) bool {
 	expr := ParseExpr(s)
-	if expr == nil {
-		return false
-	}
-	switch expr.(type) {
-	case *ast.CallExpr:
-		return true
+	_, ok := callExprFromParsed(expr)
 
-	case *ast.ParenExpr:
-		if pe, ok := expr.(*ast.ParenExpr); ok {
-			_, ok2 := pe.X.(*ast.CallExpr)
-
-			return ok2
-		}
-	}
-
-	return false
+	return ok
 }
 
 // IsCompositeLit returns true if s parses as a composite literal. Also matches
@@ -63,20 +66,9 @@ func IsCompositeLit(s string) bool {
 // call expression or contains a call expression in parentheses.
 func HasNestedCall(s string) bool {
 	expr := ParseExpr(s)
-	if expr == nil {
-		return false
-	}
-	ce, ok := expr.(*ast.CallExpr)
+	ce, ok := callExprFromParsed(expr)
 	if !ok {
-		if pe, ok := expr.(*ast.ParenExpr); ok {
-			if inner, ok2 := pe.X.(*ast.CallExpr); ok2 {
-				ce = inner
-			} else {
-				return false
-			}
-		} else {
-			return false
-		}
+		return false
 	}
 	for _, a := range ce.Args {
 		switch aa := a.(type) {

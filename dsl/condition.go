@@ -1329,52 +1329,16 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	// Even when MatchAnySelectorPrefix is enabled (suffix-only matching),
-	// explicitly recognize a small set of well-known non-`*f` string calls
-	// that should use the same formatting behavior (e.g.
-	// errors.New("...")).
-	if getFuncName(call) == "errors.New" {
+	if isErrorsNewCall(call) {
 		return true
 	}
 
-	// In "next", optionally treat some non-`*f` log calls as targeted
-	// string calls when their first argument is a string literal/concat.
-	// This captures patterns like: rpcLog.Error("long message ...") without
-	// changing legacy/parity behavior.
-	if c.IncludeNonFStringCalls {
-		if len(call.Args) > 0 && isStringLit(call.Args[0]) {
-			switch fun := call.Fun.(type) {
-			case *ast.SelectorExpr:
-				if fun.Sel != nil &&
-					isNonFStringLogName(fun.Sel.Name) {
-
-					return true
-				}
-
-			case *ast.Ident:
-				// Support dot-imported variants (e.g.
-				// `Error(...)`) when enabled.
-				if isNonFStringLogName(fun.Name) {
-					return true
-				}
-			}
-		}
+	if c.IncludeNonFStringCalls && isNonFStringLogCall(call) {
+		return true
 	}
 
 	if c.MatchAnySelectorPrefix {
-		switch fun := call.Fun.(type) {
-		case *ast.Ident:
-
-			// Support dot-imported variants (e.g. `Infof(...)`)
-			// when enabled.
-			return isLogPrintfName(fun.Name)
-
-		case *ast.SelectorExpr:
-			return fun.Sel != nil && isLogPrintfName(fun.Sel.Name)
-
-		default:
-			return false
-		}
+		return isLogPrintfCallWithAnyPrefix(call)
 	}
 
 	// Get the function name
@@ -1390,6 +1354,55 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	return false
+}
+
+func isErrorsNewCall(call *ast.CallExpr) bool {
+
+	// Even when MatchAnySelectorPrefix is enabled (suffix-only matching),
+	// explicitly recognize a small set of well-known non-`*f` string calls
+	// that should use the same formatting behavior (e.g.
+	// errors.New("...")).
+	return getFuncName(call) == "errors.New"
+}
+
+func isNonFStringLogCall(call *ast.CallExpr) bool {
+	// In "next", optionally treat some non-`*f` log calls as targeted
+	// string calls when their first argument is a string literal/concat.
+	// This captures patterns like: rpcLog.Error("long message ...") without
+	// changing legacy/parity behavior.
+	if len(call.Args) == 0 || !isStringLit(call.Args[0]) {
+		return false
+	}
+
+	switch fun := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		return fun.Sel != nil && isNonFStringLogName(fun.Sel.Name)
+
+	case *ast.Ident:
+
+		// Support dot-imported variants (e.g. `Error(...)`) when
+		// enabled.
+		return isNonFStringLogName(fun.Name)
+
+	default:
+		return false
+	}
+}
+
+func isLogPrintfCallWithAnyPrefix(call *ast.CallExpr) bool {
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+
+		// Support dot-imported variants (e.g. `Infof(...)`) when
+		// enabled.
+		return isLogPrintfName(fun.Name)
+
+	case *ast.SelectorExpr:
+		return fun.Sel != nil && isLogPrintfName(fun.Sel.Name)
+
+	default:
+		return false
+	}
 }
 
 func isLogPrintfName(name string) bool {

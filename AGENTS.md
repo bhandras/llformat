@@ -19,4 +19,6 @@ When in doubt about expected behavior vs. golden outputs, halt work and escalate
 
 - Before committing changes, run `make self-check` and `make lint`.
 - Prefer `make fmt` / `make fmt-check` for formatting; the repo formatter tooling intentionally excludes `testdata/**` so golden fixtures stay untouched.
+- Linting must also skip `testdata/**` (see `.golangci.yml` exclusions).
+- Commit messages must follow the repository's established format; confirm it with a maintainer if uncertain.
 - CI runs the same checks via `.github/workflows/ci.yml`.

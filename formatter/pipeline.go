@@ -265,22 +265,7 @@ func (p *Pipeline) Format(src []byte) []byte {
 	// is useful for debugging or for callers that want a strictly bounded
 	// pass count.
 	if maxIters == 1 {
-		out := src
-
-		for _, stage := range p.stages {
-			if stage.Formatter == nil {
-				continue
-			}
-			if p.cfg.UseOwnershipRegistry {
-				reg := BuildOwnershipRegistry(out, p.stages)
-				if aware, ok := stage.Formatter.(OwnershipAware); ok {
-					aware.SetOwnershipRegistry(reg)
-				}
-			} else if aware, ok := stage.Formatter.(OwnershipAware); ok {
-				aware.SetOwnershipRegistry(nil)
-			}
-			out = stage.Formatter.FormatFile(out)
-		}
+		out := p.applyStages(src)
 
 		if formatted, err := formatstd.Source(out); err == nil {
 			return formatted
@@ -295,29 +280,7 @@ func (p *Pipeline) Format(src []byte) []byte {
 	for iter := 0; iter < maxIters; iter++ {
 		before := out
 
-		// Execute stages in order.
-		for _, stage := range p.stages {
-			if stage.Formatter == nil {
-				continue
-			}
-			if p.cfg.UseOwnershipRegistry {
-				// Ownership is computed over the current
-				// snapshot and includes all stages that declare
-				// ownership. This prevents non-call stages from
-				// rewriting inside regions that call formatting
-				// stages may later reformat on subsequent runs
-				// (idempotence).
-				reg := BuildOwnershipRegistry(out, p.stages)
-				if aware, ok := stage.Formatter.(OwnershipAware); ok {
-					aware.SetOwnershipRegistry(reg)
-				}
-			} else if aware, ok := stage.Formatter.(OwnershipAware); ok {
-				// Avoid leaking a previous registry across
-				// pipeline uses.
-				aware.SetOwnershipRegistry(nil)
-			}
-			out = stage.Formatter.FormatFile(out)
-		}
+		out = p.applyStages(out)
 
 		// gofmt after each full pass so that multi-pass convergence
 		// matches user behavior (running llformat multiple times uses a
@@ -339,6 +302,34 @@ func (p *Pipeline) Format(src []byte) []byte {
 			break
 		}
 		seen[sum] = struct{}{}
+	}
+
+	return out
+}
+
+func (p *Pipeline) applyStages(src []byte) []byte {
+	out := src
+
+	for _, stage := range p.stages {
+		if stage.Formatter == nil {
+			continue
+		}
+		if p.cfg.UseOwnershipRegistry {
+			// Ownership is computed over the current snapshot and
+			// includes all stages that declare ownership. This
+			// prevents non-call stages from rewriting inside
+			// regions that call formatting stages may later
+			// reformat on subsequent runs (idempotence).
+			reg := BuildOwnershipRegistry(out, p.stages)
+			if aware, ok := stage.Formatter.(OwnershipAware); ok {
+				aware.SetOwnershipRegistry(reg)
+			}
+		} else if aware, ok := stage.Formatter.(OwnershipAware); ok {
+			// Avoid leaking a previous registry across pipeline
+			// uses.
+			aware.SetOwnershipRegistry(nil)
+		}
+		out = stage.Formatter.FormatFile(out)
 	}
 
 	return out

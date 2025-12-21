@@ -36,24 +36,14 @@ func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte,
 
 	var spans []OffsetSpan
 	addSpan := func(startPos, endPos token.Pos) {
-		if startPos == token.NoPos || endPos == token.NoPos {
-			return
+		if start, end, ok := spanOffsets(fset, src, startPos, endPos); ok {
+			spans = append(
+				spans, OffsetSpan{
+					Start: start,
+					End:   end,
+				},
+			)
 		}
-		start := fset.Position(startPos).Offset
-		end := fset.Position(endPos).Offset
-		if start < 0 || end < 0 {
-			return
-		}
-		if start >= end {
-			return
-		}
-		if start >= len(src) {
-			return
-		}
-		if end > len(src) {
-			end = len(src)
-		}
-		spans = append(spans, OffsetSpan{Start: start, End: end})
 	}
 
 	ast.Inspect(
@@ -61,37 +51,13 @@ func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte,
 		func(n ast.Node) bool {
 			switch v := n.(type) {
 			case *ast.CallExpr:
-				if opts.IncludeCallExprs {
-					if v == nil || v.Pos() == token.NoPos || v.End() == token.NoPos {
-						return true
-					}
-					addSpan(v.Pos(), v.End())
-				}
-				if !opts.IncludeCallArgLists {
-					return true
-				}
-				if v == nil || v.Lparen == token.NoPos || v.Rparen == token.NoPos {
-					return true
-				}
-				addSpan(v.Lparen, v.Rparen+1)
+				addCallSpans(opts, v, addSpan)
 
 			case *ast.CompositeLit:
-				if !opts.IncludeCompositeBodies {
-					return true
-				}
-				if v == nil || v.Lbrace == token.NoPos || v.Rbrace == token.NoPos {
-					return true
-				}
-				addSpan(v.Lbrace, v.Rbrace+1)
+				addCompositeLitSpan(opts, v, addSpan)
 
 			case *ast.FuncLit:
-				if !opts.IncludeFuncBodies {
-					return true
-				}
-				if v == nil || v.Body == nil {
-					return true
-				}
-				addSpan(v.Body.Lbrace, v.Body.Rbrace+1)
+				addFuncLitSpan(opts, v, addSpan)
 			}
 
 			return true
@@ -99,4 +65,61 @@ func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte,
 	)
 
 	return NewOffsetSpanSet(spans)
+}
+
+func spanOffsets(fset *token.FileSet, src []byte, startPos, endPos token.Pos) (
+	start, end int, ok bool) {
+
+	if fset == nil || startPos == token.NoPos || endPos == token.NoPos {
+		return 0, 0, false
+	}
+	start = fset.Position(startPos).Offset
+	end = fset.Position(endPos).Offset
+	if start < 0 || end < 0 || start >= end || start >= len(src) {
+		return 0, 0, false
+	}
+	if end > len(src) {
+		end = len(src)
+	}
+
+	return start, end, true
+}
+
+func addCallSpans(opts OwnedSpanOptions, call *ast.CallExpr,
+	addSpan func(startPos, endPos token.Pos)) {
+
+	if call == nil {
+		return
+	}
+	if opts.IncludeCallExprs {
+		addSpan(call.Pos(), call.End())
+	}
+	if !opts.IncludeCallArgLists {
+		return
+	}
+	if call.Lparen == token.NoPos || call.Rparen == token.NoPos {
+		return
+	}
+	addSpan(call.Lparen, call.Rparen+1)
+}
+
+func addCompositeLitSpan(opts OwnedSpanOptions, lit *ast.CompositeLit,
+	addSpan func(startPos, endPos token.Pos)) {
+
+	if !opts.IncludeCompositeBodies || lit == nil {
+		return
+	}
+	if lit.Lbrace == token.NoPos || lit.Rbrace == token.NoPos {
+		return
+	}
+	addSpan(lit.Lbrace, lit.Rbrace+1)
+}
+
+func addFuncLitSpan(opts OwnedSpanOptions, lit *ast.FuncLit,
+	addSpan func(startPos, endPos token.Pos)) {
+
+	if !opts.IncludeFuncBodies || lit == nil || lit.Body == nil {
+		return
+	}
+	addSpan(lit.Body.Lbrace, lit.Body.Rbrace+1)
 }

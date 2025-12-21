@@ -304,23 +304,8 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 	for i < len(src) {
 		// Try to match any target at this position (skipping when
 		// inside string/comment handled by a lightweight scanner).
-		if scanner.IsStringStart(src, i) {
-			// Copy string literal as-is.
-			start := i
-			i = scanner.ScanString(src, i)
-			out.Write(src[start:i])
-			continue
-		}
-		if scanner.IsLineCommentStart(src, i) {
-			start := i
-			i = scanner.ScanLineComment(src, i)
-			out.Write(src[start:i])
-			continue
-		}
-		if scanner.IsBlockCommentStart(src, i) {
-			start := i
-			i = scanner.ScanBlockComment(src, i)
-			out.Write(src[start:i])
+		if next, handled := copyNonCodeSpan(&out, src, i); handled {
+			i = next
 			continue
 		}
 
@@ -334,204 +319,12 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 		if matched == "" {
 			// If enabled, try fallback formatting for non-target
 			// calls.
-			if fallbackNonTargets {
-				if start, end := findGenericCallAt(src, i); end > start {
-					span := src[start:end]
-					// Avoid rewriting calls that contain
-					// inline comments; these are better
-					// left unchanged to preserve comment
-					// attachment.
-					if spanHasCommentOutsideStrings(span) {
-						out.Write(span)
-						i = end
-						continue
-					}
-					if openRel := bytes.IndexByte(
-						src[start:end], '(',
-					); openRel > 0 {
+			if next, handled := maybeFormatNonTarget(
+				&out, src, i,
+			); handled {
 
-						callee := strings.TrimSpace(
-							string(
-								src[start : start+openRel],
-							),
-						)
-						if callNameContainsAny(
-							callee,
-							fallbackNonTargetsExcludes,
-						) {
-
-							out.Write(span)
-							i = end
-							continue
-						}
-					}
-					if fallbackNonTargetsExcludeSelectors {
-						// Exclude both explicit
-						// selector callees (`pkg.Func`)
-						// and method-chain selector
-						// calls (`x.Foo().Bar(...)`),
-						// which the legacy scan-based
-						// matcher starts at `Bar` and
-						// therefore does not include
-						// the '.' in the callee text.
-						if isSelectorChainCallStart(
-							src, start,
-						) {
-
-							out.Write(span)
-							i = end
-							continue
-						}
-						if openRel := bytes.IndexByte(
-							src[start:end], '(',
-						); openRel > 0 {
-
-							callee := strings.TrimSpace(
-								string(
-									src[start : start+openRel],
-								),
-							)
-							if strings.Contains(
-								callee, ".",
-							) {
-
-								out.Write(span)
-								i = end
-								continue
-							}
-						}
-					}
-					// Evaluate whether the call should be
-					// wrapped. Consider both an estimated
-					// single-line width (collapsing
-					// whitespace) and whether it already
-					// spans multiple lines.
-					lineStart := text.LastLineStart(
-						src, start,
-					)
-					indentPrefix := string(
-						src[lineStart:start],
-					)
-					// Avoid formatting nested calls within
-					// larger expressions. For example, in:
-					// a && b && verifySignature(sig) || c
-					// we want the expression stage to
-					// handle breaking rather than rewriting
-					// the call itself.
-					//
-					// This fallback is intended for
-					// statement-level calls such as:
-					// - assignment RHS: `x := foo(...)`, `x
-					//   = foo(...)`
-					// - return/go/defer: `return foo(...)`,
-					//   `go foo(...)`, `defer foo(...)`
-					// - standalone call: `foo(...)`
-					trimmedPrefix := strings.TrimSpace(
-						indentPrefix,
-					)
-					allowedByPrefix := trimmedPrefix ==
-						"" ||
-						strings.HasSuffix(
-							trimmedPrefix, ":=",
-						) ||
-						strings.HasSuffix(
-							trimmedPrefix, "=",
-						) ||
-						strings.HasSuffix(
-							trimmedPrefix, "return",
-						) ||
-						strings.HasSuffix(
-							trimmedPrefix, "go",
-						) ||
-						strings.HasSuffix(
-							trimmedPrefix, "defer",
-						)
-					// Allow selector calls inside method
-					// chains like:
-					// db.Query(...).Where(...).OrderBy(...).Limit(...)
-					// where the call's prefix is an
-					// expression rather than a statement
-					// introducer.
-					if !allowedByPrefix &&
-						isSelectorChainCallStart(
-							src, start,
-						) {
-
-						allowedByPrefix = true
-					}
-					if !allowedByPrefix {
-						out.Write(span)
-						i = end
-						continue
-					}
-					// Heuristic: when the call is part of a
-					// short method chain right after a
-					// closing paren, ignore the preceding
-					// ')' and optional '.' for width
-					// calculation so short calls like
-					// ".Limit(100)" stay on one line.
-					tp := strings.TrimSpace(indentPrefix)
-					if tp == ")" || tp == ")." {
-						indentPrefix = string(
-							text.LeadingWhitespace(
-								src, lineStart,
-							),
-						)
-					}
-					callText := string(src[start:end])
-					// Collapse all whitespace to single
-					// spaces to approximate a single-line
-					// rendering width.
-					flat := strings.Join(
-						strings.Fields(
-							stripComments(callText),
-						), " ",
-					)
-					singleLineLen := visualLen(flat)
-					currentLineLen := visualLen(
-						indentPrefix,
-					) +
-						singleLineLen
-					needsWrap := currentLineLen >
-						columnLimit
-					if needsWrap &&
-						!isChainedShortCall(
-							src, start, end,
-						) {
-
-						// Format as packed multi-line
-						// and align closing paren with
-						// function name.
-						wsIndent := string(
-							text.LeadingWhitespace(
-								src, lineStart,
-							),
-						)
-						formatted := formatCallPackedMultiLine(
-							src[start:end],
-							wsIndent, wsIndent,
-							true,
-						)
-						out.WriteString(formatted)
-						i = end
-						continue
-					}
-					// Keep as-is when within limit.
-					out.Write(span)
-					i = end
-					continue
-				}
-				if text.IsIdentifierStart(src[i]) {
-					j := i + 1
-					for j < len(src) &&
-						text.IsIdentifierChar(src[j]) {
-
-						j++
-					}
-					out.Write(src[i:j])
-					i = j
-					continue
-				}
+				i = next
+				continue
 			}
 			out.WriteByte(src[i])
 			i++
@@ -580,6 +373,176 @@ func formatWithTargetsScan(src []byte, targets []string) []byte {
 	}
 
 	return res
+}
+
+func copyNonCodeSpan(out *bytes.Buffer, src []byte,
+	i int) (next int, handled bool) {
+
+	if scanner.IsStringStart(src, i) {
+		start := i
+		next = scanner.ScanString(src, i)
+		out.Write(src[start:next])
+
+		return next, true
+	}
+	if scanner.IsLineCommentStart(src, i) {
+		start := i
+		next = scanner.ScanLineComment(src, i)
+		out.Write(src[start:next])
+
+		return next, true
+	}
+	if scanner.IsBlockCommentStart(src, i) {
+		start := i
+		next = scanner.ScanBlockComment(src, i)
+		out.Write(src[start:next])
+
+		return next, true
+	}
+
+	return 0, false
+}
+
+func maybeFormatNonTarget(out *bytes.Buffer, src []byte,
+	i int) (next int, handled bool) {
+
+	if !fallbackNonTargets {
+		return 0, false
+	}
+
+	if start, end := findGenericCallAt(src, i); end > start {
+		return formatFallbackCall(out, src, start, end)
+	}
+
+	if text.IsIdentifierStart(src[i]) {
+		j := i + 1
+		for j < len(src) && text.IsIdentifierChar(src[j]) {
+			j++
+		}
+		out.Write(src[i:j])
+
+		return j, true
+	}
+
+	return 0, false
+}
+
+func formatFallbackCall(out *bytes.Buffer, src []byte, start,
+	end int) (next int, handled bool) {
+
+	span := src[start:end]
+	if spanHasCommentOutsideStrings(span) {
+		out.Write(span)
+
+		return end, true
+	}
+
+	if isCallNameExcluded(src, start, end) {
+		out.Write(span)
+
+		return end, true
+	}
+
+	if fallbackNonTargetsExcludeSelectors &&
+		isSelectorFallbackExcluded(src, start, end) {
+
+		out.Write(span)
+
+		return end, true
+	}
+
+	lineStart := text.LastLineStart(src, start)
+	indentPrefix := string(src[lineStart:start])
+	allowedByPrefix := isCallAllowedByPrefix(indentPrefix) ||
+		isSelectorChainCallStart(src, start)
+	if !allowedByPrefix {
+		out.Write(span)
+
+		return end, true
+	}
+
+	indentPrefix = normalizeShortChainPrefix(src, lineStart, indentPrefix)
+	callText := string(src[start:end])
+	flat := strings.Join(strings.Fields(stripComments(callText)), " ")
+	currentLineLen := visualLen(indentPrefix) + visualLen(flat)
+	if currentLineLen <= columnLimit ||
+		isChainedShortCall(src, start, end) {
+
+		out.Write(span)
+
+		return end, true
+	}
+
+	wsIndent := string(text.LeadingWhitespace(src, lineStart))
+	formatted := formatCallPackedMultiLine(
+		src[start:end], wsIndent, wsIndent, true,
+	)
+	out.WriteString(formatted)
+
+	return end, true
+}
+
+func isCallNameExcluded(src []byte, start, end int) bool {
+	openRel := bytes.IndexByte(src[start:end], '(')
+	if openRel <= 0 {
+		return false
+	}
+
+	callee := strings.TrimSpace(string(src[start : start+openRel]))
+
+	return callNameContainsAny(callee, fallbackNonTargetsExcludes)
+}
+
+func isSelectorFallbackExcluded(src []byte, start, end int) bool {
+	// Exclude both explicit selector callees (`pkg.Func`) and method-chain
+	// selector calls (`x.Foo().Bar(...)`), which the legacy scan-based
+	// matcher starts at `Bar` and therefore does not include the '.' in the
+	// callee text.
+	if isSelectorChainCallStart(src, start) {
+		return true
+	}
+
+	openRel := bytes.IndexByte(src[start:end], '(')
+	if openRel <= 0 {
+		return false
+	}
+
+	callee := strings.TrimSpace(string(src[start : start+openRel]))
+
+	return strings.Contains(callee, ".")
+}
+
+func isCallAllowedByPrefix(prefix string) bool {
+	// Avoid formatting nested calls within larger expressions. For example,
+	// in: a && b && verifySignature(sig) || c we want the expression stage
+	// to handle breaking rather than rewriting the call itself.
+	//
+	// This fallback is intended for statement-level calls such as:
+	// - assignment RHS: `x := foo(...)`, `x = foo(...)`
+	// - return/go/defer: `return foo(...)`, `go foo(...)`, `defer foo(...)`
+	// - standalone call: `foo(...)`
+	trimmedPrefix := strings.TrimSpace(prefix)
+
+	return trimmedPrefix == "" ||
+		strings.HasSuffix(trimmedPrefix, ":=") ||
+		strings.HasSuffix(trimmedPrefix, "=") ||
+		strings.HasSuffix(trimmedPrefix, "return") ||
+		strings.HasSuffix(trimmedPrefix, "go") ||
+		strings.HasSuffix(trimmedPrefix, "defer")
+}
+
+func normalizeShortChainPrefix(src []byte, lineStart int,
+	indentPrefix string) string {
+
+	// When the call is part of a short method chain right after a closing
+	// paren, ignore the preceding ')' and optional '.' for width
+	// calculation so short calls like ".Limit(100)" stay on one line.
+	tp := strings.TrimSpace(indentPrefix)
+	if tp == ")" || tp == ")." {
+		return string(text.LeadingWhitespace(src, lineStart))
+	}
+
+	return indentPrefix
 }
 
 // isChainedShortCall returns true if the call at [start,end) appears as a short

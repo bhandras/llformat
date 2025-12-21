@@ -599,39 +599,52 @@ func (e *Engine) applyOneRule(iter int, file *ast.File, ctx *Context) ([]byte,
 			continue
 		}
 
-		for _, rule := range e.Rules {
-			if _, ok := rule.Action.(*KeepTogetherAction); ok {
-				continue
-			}
+		modified, changed := e.applyRulesForNode(
+			iter, ctx, n, &reasonsPrinted, maxReasonsPerIter,
+		)
+		if changed {
+			return modified, true
+		}
+	}
 
-			caps, ok := rule.Pattern.Match(n, ctx.Fset)
-			if !ok {
-				continue
-			}
+	return nil, false
+}
 
-			caps["node"] = n
+func (e *Engine) applyRulesForNode(iter int, ctx *Context, n ast.Node,
+	reasonsPrinted *int, maxReasons int) ([]byte, bool) {
 
-			if !rule.When.Eval(caps, ctx) {
-				e.traceSkipRule(
-					iter, ctx, rule, n, "when=false",
-					&reasonsPrinted, maxReasonsPerIter,
-				)
-				continue
-			}
+	for _, rule := range e.Rules {
+		if _, ok := rule.Action.(*KeepTogetherAction); ok {
+			continue
+		}
 
-			modified, actionChanged, ok, reason := e.executeAction(
-				rule, caps, ctx,
+		caps, ok := rule.Pattern.Match(n, ctx.Fset)
+		if !ok {
+			continue
+		}
+
+		caps["node"] = n
+
+		if !rule.When.Eval(caps, ctx) {
+			e.traceSkipRule(
+				iter, ctx, rule, n, "when=false",
+				reasonsPrinted, maxReasons,
 			)
-			if !ok {
-				e.traceSkipRule(
-					iter, ctx, rule, n, reason,
-					&reasonsPrinted, maxReasonsPerIter,
-				)
-				continue
-			}
-			if actionChanged {
-				return modified, true
-			}
+			continue
+		}
+
+		modified, actionChanged, ok, reason := e.executeAction(
+			rule, caps, ctx,
+		)
+		if !ok {
+			e.traceSkipRule(
+				iter, ctx, rule, n, reason, reasonsPrinted,
+				maxReasons,
+			)
+			continue
+		}
+		if actionChanged {
+			return modified, true
 		}
 	}
 
