@@ -53,6 +53,8 @@ that:
 Where the AST printer would drop comments inside rewritten regions, rules are
 conservative and often skip edits if inline comments are present.
 
+For a detailed walkthrough of the pipeline and formatters, see `ARCHITECTURE.md`.
+
 ## CLI Usage
 
 Build:
