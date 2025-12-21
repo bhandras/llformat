@@ -46,7 +46,7 @@ is not fully valid Go.
 
 ## CLI
 
-Builds an `llformat` binary with two modes:
+Builds an `llformat` binary with two behaviors:
 
 - Default: Print formatted result to stdout.
 - `-w` / `--write`: Overwrite the provided file in place.
@@ -57,38 +57,15 @@ Usage:
 llformat [-w] <path-to-go-source>
 ```
 
-Default usage (next pipeline):
+The CLI runs the `next` pipeline by default (and the legacy CLI modes have been
+removed):
 
 ```
 llformat --next [-w] <path-to-go-source>
 ```
 
-Note: the CLI now defaults to the `next` pipeline. Passing `--next` is still
-supported as an explicit alias.
-
-The CLI also supports a `--mode` flag for selecting different pipelines during
-development/testing, but legacy modes are now considered internal and are
-intentionally undocumented in the CLI help output.
-
-Legacy/internal pipeline modes:
-
-- `--mode legacy`: legacy multi-stage pipeline
-- `--mode dsl-parity`: DSL pipeline with parity-oriented defaults
-- `--mode dsl-modern`: DSL pipeline with modern defaults
-- `--mode next`: DSL pipeline with aggressive defaults (experimental)
-
-For debugging, you can enable DSL tracing:
-
-- `--trace-dsl`: prints a line for each applied DSL rule to stderr
-- `--trace-dsl-reasons`: includes additional “why fired / didn’t fire” lines
-
-For debugging and migration work, the CLI also supports an experimental legacy
-hardening mode (only when `--legacy` is enabled) that turns on parse-safe +
-AST-guided selection for the legacy stages:
-
-```
-llformat --legacy --legacy-hardening [-w] <path-to-go-source>
-```
+Note: `--next` is accepted but is effectively a no-op, since `next` is the only
+supported CLI pipeline.
 
 ## Tests
 

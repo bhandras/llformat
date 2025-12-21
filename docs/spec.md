@@ -84,7 +84,6 @@ The DSL engine applies a list of rules over a parsed Go file:
   passes from splitting them.
 - **Validated edits**: Prefer expressing changes as a list of non-overlapping
   byte-range edits applied to the original source.
-- **Optional trace**: `--trace-dsl` prints which rule applied, to aid debugging.
 
 ## Configuration
 
@@ -94,4 +93,9 @@ Formatting is parameterized by:
 - `--tab` (`TabStop`): visual width for `\t` when computing line lengths.
 - `--wrap-inline-comments`: affects comment stage behavior (moving inline
   comments above).
-
+- `--multiline-exclude`: comma-separated list of function names to exclude from
+  multiline call formatting.
+- `--logcalls-min-tail-len`: minimum tail length when splitting printf/logcall
+  strings (0 => profile default).
+- `--fixpoint-iters`: maximum pipeline iterations (0 => default).
+- `--print-plan`: prints resolved pipeline plan and exits.

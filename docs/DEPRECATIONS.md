@@ -2,18 +2,16 @@
 
 This document tracks user-facing deprecations for `llformat`.
 
-## Legacy CLI modes
+## Legacy CLI modes (removed)
 
-The CLI now defaults to the `next` pipeline (DSL-based, fixpoint iterations on
-by default).
+The CLI now runs the `next` pipeline only (DSL-based, fixpoint iterations on by
+default).
 
-The following modes remain available for internal testing and comparison, but
-are considered deprecated for interactive use:
+The following flags were removed from the user-facing CLI:
 
-- `--mode legacy`
-- `--mode dsl-parity`
-- `--mode dsl-modern`
-
-These modes may be removed or moved behind a build tag once `next` fully
-subsumes their coverage.
-
+- `--mode` (including `legacy`, `dsl-parity`, `dsl-modern`, and `next`)
+- `--legacy`
+- `--legacy-hardening`
+- `--trace-dsl`
+- `--trace-dsl-reasons`
+- `--dsl-*` stage/style knobs
