@@ -6,6 +6,13 @@ the responsibilities of each formatter/stage.
 The project is intentionally **next-only**: there is a single pipeline and a
 single golden spec (`testdata/*/output_next.go`).
 
+Historically, the name “llformat” comes from Lightning Labs: the formatter is
+aimed at making it easy to apply the strict readability rules documented for
+Lightning Labs / LND codebases, plus other conventions that emerged across the
+ecosystem:
+
+- https://github.com/lightningnetwork/lnd/blob/master/docs/development_guidelines.md#code-spacing-and-formatting
+
 ## High-level overview
 
 At a high level, llformat is:
@@ -264,4 +271,3 @@ also includes property/regression tests that check:
 - parseability of the output
 - idempotence (or convergence within a small number of passes)
 - AST equivalence for valid Go inputs (ignoring positions and comments)
-

@@ -12,6 +12,12 @@ targeted, column-limit-aware formatting to:
 It is intentionally **not** a general-purpose “pretty printer” that rewrites
 the whole file.
 
+Historically, it’s named `llformat` because it aims to implement the strict
+readability rules described in Lightning Labs / LND development documentation
+and other formatting conventions used across Lightning Labs projects:
+
+- https://github.com/lightningnetwork/lnd/blob/master/docs/development_guidelines.md#code-spacing-and-formatting
+
 ## Goals and Non-Goals
 
 Goals:
