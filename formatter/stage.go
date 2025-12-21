@@ -38,45 +38,17 @@ func (s Stage) WithRequires(requires ...string) Stage {
 // error if there are cycles or missing dependencies.
 func StageOrder(stages []Stage) ([]Stage, error) {
 	// Kahn's algorithm with stable ordering.
-	stageMap := make(map[string]Stage, len(stages))
-	order := make([]string, 0, len(stages))
-	for _, s := range stages {
-		if s.Name == "" {
-			return nil, fmt.Errorf("stage with empty name")
-		}
-		if _, exists := stageMap[s.Name]; exists {
-			return nil, fmt.Errorf("duplicate stage name: %q",
-				s.Name)
-		}
-		stageMap[s.Name] = s
-		order = append(order, s.Name)
+	stageMap, order, err := buildStageMap(stages)
+	if err != nil {
+		return nil, err
 	}
 
-	inDegree := make(map[string]int, len(stages))
-	dependents := make(map[string][]string, len(stages))
-
-	for _, s := range stages {
-		inDegree[s.Name] = 0
+	inDegree, dependents, err := buildDependencies(stages, stageMap)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, s := range stages {
-		for _, req := range s.Requires {
-			if _, ok := stageMap[req]; !ok {
-				return nil, fmt.Errorf("stage %q requires "+
-					"missing stage %q", s.Name, req)
-			}
-			inDegree[s.Name]++
-			dependents[req] = append(dependents[req], s.Name)
-		}
-	}
-
-	ready := make([]string, 0, len(stages))
-	for _, name := range order {
-		if inDegree[name] == 0 {
-			ready = append(ready, name)
-		}
-	}
-
+	ready := initialReady(order, inDegree)
 	out := make([]Stage, 0, len(stages))
 	for len(ready) > 0 {
 		// Pop front for stability.
@@ -97,6 +69,60 @@ func StageOrder(stages []Stage) ([]Stage, error) {
 	}
 
 	return out, nil
+}
+
+func buildStageMap(stages []Stage) (map[string]Stage, []string, error) {
+	stageMap := make(map[string]Stage, len(stages))
+	order := make([]string, 0, len(stages))
+	for _, s := range stages {
+		if s.Name == "" {
+			return nil, nil, fmt.Errorf("stage with empty name")
+		}
+		if _, exists := stageMap[s.Name]; exists {
+			return nil, nil, fmt.Errorf("duplicate stage name: %q",
+				s.Name)
+		}
+		stageMap[s.Name] = s
+		order = append(order, s.Name)
+	}
+
+	return stageMap, order, nil
+}
+
+func buildDependencies(stages []Stage, stageMap map[string]Stage) (
+	map[string]int, map[string][]string, error) {
+
+	inDegree := make(map[string]int, len(stages))
+	dependents := make(map[string][]string, len(stages))
+
+	for _, s := range stages {
+		inDegree[s.Name] = 0
+	}
+
+	for _, s := range stages {
+		for _, req := range s.Requires {
+			if _, ok := stageMap[req]; !ok {
+				return nil, nil, fmt.Errorf("stage %q "+
+					"requires missing stage %q", s.Name,
+					req)
+			}
+			inDegree[s.Name]++
+			dependents[req] = append(dependents[req], s.Name)
+		}
+	}
+
+	return inDegree, dependents, nil
+}
+
+func initialReady(order []string, inDegree map[string]int) []string {
+	ready := make([]string, 0, len(order))
+	for _, name := range order {
+		if inDegree[name] == 0 {
+			ready = append(ready, name)
+		}
+	}
+
+	return ready
 }
 
 // StageOptions contains options for configuring the stage pipeline.

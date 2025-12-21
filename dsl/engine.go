@@ -120,47 +120,14 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 				return result, nil
 			}
 
-			if e.Trace {
-				start, endBefore, endAfter := changedSpan(
-					ctx.Source, modified,
-				)
-				line, col := offsetToLineCol(ctx.Source, start)
-				fmt.Fprintf(
-					os.Stderr, "dsl: stage=%s iter=%d "+
-						"rule=%s prio=%d node=%s "+
-						"nodeSpan=[%d:%d] "+
-						"editSpan=[%d:%d]->[%d:%d] "+
-						"@%d:%d snippet=%q\n",
-					e.StageName, iter+1,
-					ctx.LastAppliedRule,
-					ctx.LastAppliedRulePriority,
-					ctx.LastAppliedNodeType,
-					ctx.LastAppliedNodeStart,
-					ctx.LastAppliedNodeEnd, start,
-					endBefore, start, endAfter, line, col, snippetForRange(
-						ctx.Source, start, endBefore,
-					),
-				)
-			}
+			e.traceEdit(ctx, modified, iter+1)
 
 			result = modified
 
-			if e.DetectCycles {
-				h := e.hashBytes(seed, result)
-				if _, ok := seen[h]; ok {
-					if e.TraceReasons && !e.Trace {
-						fmt.Fprintf(
-							os.Stderr, "dsl: "+
-								"stage=%s "+
-								"iter=%d "+
-								"reason=%s\n",
-							e.StageName, iter+1,
-							"cycle_detected",
-						)
-					}
-					break
-				}
-				seen[h] = struct{}{}
+			if e.DetectCycles &&
+				e.detectCycle(seen, seed, iter+1, result) {
+
+				break
 			}
 			continue
 		}
@@ -184,63 +151,12 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 			// iteration might have produced a smaller/safer result,
 			// but we intentionally apply at most one transforming
 			// rule per iteration for determinism.
-			if e.TraceReasons && !e.Trace {
-				fmt.Fprintf(
-					os.Stderr, "dsl: stage=%s iter=%d "+
-						"applied rule=%s prio=%d "+
-						"node=%s nodeSpan=[%d:%d] "+
-						"reason=%s\n", e.StageName,
-					iter+1, ctx.LastAppliedRule,
-					ctx.LastAppliedRulePriority,
-					ctx.LastAppliedNodeType,
-					ctx.LastAppliedNodeStart,
-					ctx.LastAppliedNodeEnd,
-					"budget_exceeded",
-				)
-			}
+			e.traceBudgetExceeded(ctx, iter+1)
 			break
 		}
 
-		if e.TraceReasons && !e.Trace {
-			start, endBefore, endAfter := changedSpan(
-				ctx.Source, modified,
-			)
-			line, col := offsetToLineCol(ctx.Source, start)
-			fmt.Fprintf(
-				os.Stderr, "dsl: stage=%s iter=%d applied "+
-					"rule=%s prio=%d node=%s "+
-					"nodeSpan=[%d:%d] "+
-					"editSpan=[%d:%d]->[%d:%d] @%d:%d "+
-					"snippet=%q\n", e.StageName, iter+1,
-				ctx.LastAppliedRule,
-				ctx.LastAppliedRulePriority,
-				ctx.LastAppliedNodeType,
-				ctx.LastAppliedNodeStart,
-				ctx.LastAppliedNodeEnd, start, endBefore, start,
-				endAfter, line, col,
-				snippetForRange(ctx.Source, start, endBefore),
-			)
-		}
-
-		if e.Trace {
-			start, endBefore, endAfter := changedSpan(
-				ctx.Source, modified,
-			)
-			line, col := offsetToLineCol(ctx.Source, start)
-			fmt.Fprintf(
-				os.Stderr, "dsl: stage=%s iter=%d rule=%s "+
-					"prio=%d node=%s nodeSpan=[%d:%d] "+
-					"editSpan=[%d:%d]->[%d:%d] @%d:%d "+
-					"snippet=%q\n", e.StageName, iter+1,
-				ctx.LastAppliedRule,
-				ctx.LastAppliedRulePriority,
-				ctx.LastAppliedNodeType,
-				ctx.LastAppliedNodeStart,
-				ctx.LastAppliedNodeEnd, start, endBefore, start,
-				endAfter, line, col,
-				snippetForRange(ctx.Source, start, endBefore),
-			)
-		}
+		e.traceAppliedRule(ctx, modified, iter+1)
+		e.traceEdit(ctx, modified, iter+1)
 
 		// Keep the edited source as-is and rely on the outer pipeline
 		// to run gofmt once at the end. Running gofmt here would
@@ -248,24 +164,87 @@ func (e *Engine) Format(src []byte) ([]byte, error) {
 		// targeted regions" goal.
 		result = modified
 
-		if e.DetectCycles {
-			h := e.hashBytes(seed, result)
-			if _, ok := seen[h]; ok {
-				if e.TraceReasons && !e.Trace {
-					fmt.Fprintf(
-						os.Stderr, "dsl: stage=%s "+
-							"iter=%d reason=%s\n",
-						e.StageName, iter+1,
-						"cycle_detected",
-					)
-				}
-				break
-			}
-			seen[h] = struct{}{}
+		if e.DetectCycles &&
+			e.detectCycle(seen, seed, iter+1, result) {
+
+			break
 		}
 	}
 
 	return result, nil
+}
+
+func (e *Engine) traceEdit(ctx *Context, modified []byte, iter int) {
+	if !e.Trace {
+		return
+	}
+
+	start, endBefore, endAfter := changedSpan(
+		ctx.Source, modified,
+	)
+	line, col := offsetToLineCol(ctx.Source, start)
+	fmt.Fprintf(
+		os.Stderr, "dsl: stage=%s iter=%d rule=%s prio=%d node=%s "+
+			"nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] @%d:%d "+
+			"snippet=%q\n", e.StageName, iter, ctx.LastAppliedRule,
+		ctx.LastAppliedRulePriority, ctx.LastAppliedNodeType,
+		ctx.LastAppliedNodeStart, ctx.LastAppliedNodeEnd, start,
+		endBefore, start, endAfter, line, col,
+		snippetForRange(ctx.Source, start, endBefore),
+	)
+}
+
+func (e *Engine) traceAppliedRule(ctx *Context, modified []byte, iter int) {
+	if !e.TraceReasons || e.Trace {
+		return
+	}
+
+	start, endBefore, endAfter := changedSpan(
+		ctx.Source, modified,
+	)
+	line, col := offsetToLineCol(ctx.Source, start)
+	fmt.Fprintf(
+		os.Stderr, "dsl: stage=%s iter=%d applied rule=%s prio=%d "+
+			"node=%s nodeSpan=[%d:%d] editSpan=[%d:%d]->[%d:%d] "+
+			"@%d:%d snippet=%q\n", e.StageName, iter,
+		ctx.LastAppliedRule, ctx.LastAppliedRulePriority,
+		ctx.LastAppliedNodeType, ctx.LastAppliedNodeStart,
+		ctx.LastAppliedNodeEnd, start, endBefore, start, endAfter, line,
+		col, snippetForRange(ctx.Source, start, endBefore),
+	)
+}
+
+func (e *Engine) traceBudgetExceeded(ctx *Context, iter int) {
+	if !e.TraceReasons || e.Trace {
+		return
+	}
+
+	fmt.Fprintf(
+		os.Stderr, "dsl: stage=%s iter=%d applied rule=%s prio=%d "+
+			"node=%s nodeSpan=[%d:%d] reason=%s\n", e.StageName,
+		iter, ctx.LastAppliedRule, ctx.LastAppliedRulePriority,
+		ctx.LastAppliedNodeType, ctx.LastAppliedNodeStart,
+		ctx.LastAppliedNodeEnd, "budget_exceeded",
+	)
+}
+
+func (e *Engine) detectCycle(seen map[uint64]struct{}, seed maphash.Seed,
+	iter int, result []byte) bool {
+
+	h := e.hashBytes(seed, result)
+	if _, ok := seen[h]; ok {
+		if e.TraceReasons && !e.Trace {
+			fmt.Fprintf(
+				os.Stderr, "dsl: stage=%s iter=%d reason=%s\n",
+				e.StageName, iter, "cycle_detected",
+			)
+		}
+
+		return true
+	}
+	seen[h] = struct{}{}
+
+	return false
 }
 
 func (e *Engine) hashBytes(seed maphash.Seed, b []byte) uint64 {
