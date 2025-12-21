@@ -18,7 +18,6 @@ func main() {
 		tabStop            int
 		moveInline         bool
 		multilineExclude   string
-		nextMode           bool
 		logCallsMinTailLen int
 		printPlan          bool
 		fixpointIters      int
@@ -28,7 +27,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: llformat [-w] [--wrap-inline-comments] [--col N] [--tab N] [--multiline-exclude FUNCS] [--logcalls-min-tail-len N] [--fixpoint-iters N] [--print-plan] <path>")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "flags:")
-		fmt.Fprintln(os.Stderr, "  --next                    enable the \"next\" formatter pipeline (default; no-op)")
 		fmt.Fprintln(os.Stderr, "  -w, --write               write result to (source) file instead of stdout")
 		fmt.Fprintln(os.Stderr, "  --col N                   column limit for formatting (default 80)")
 		fmt.Fprintln(os.Stderr, "  --tab N                   tab stop width for column calculations (default 8)")
@@ -46,13 +44,10 @@ func main() {
 	flag.IntVar(&tabStop, "tab", 8, "tab stop width for column calculations")
 	flag.BoolVar(&moveInline, "wrap-inline-comments", false, "when formatting comments, hoist trailing inline comments above for wrapping")
 	flag.StringVar(&multilineExclude, "multiline-exclude", "", "comma-separated list of function names to exclude from multiline formatting")
-	flag.BoolVar(&nextMode, "next", false, "use the next-generation formatter pipeline (default)")
 	flag.IntVar(&logCallsMinTailLen, "logcalls-min-tail-len", 0, "minimum tail length when splitting printf/logcall strings in next profile (0 => default)")
 	flag.BoolVar(&printPlan, "print-plan", false, "print resolved pipeline plan and exit")
 	flag.IntVar(&fixpointIters, "fixpoint-iters", 0, "repeat full pipeline until stable (0=auto; default 3)")
 	flag.Parse()
-
-	_ = nextMode // Default behavior is always next; flag exists for UX compatibility.
 
 	// Parse multiline exclude list
 	var excludes []string

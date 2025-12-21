@@ -60,13 +60,6 @@ llformat [-w] <path-to-go-source>
 The CLI runs the `next` pipeline by default (and the legacy CLI modes have been
 removed):
 
-```
-llformat --next [-w] <path-to-go-source>
-```
-
-Note: `--next` is accepted but is effectively a no-op, since `next` is the only
-supported CLI pipeline.
-
 ## Tests
 
 The test `logs` reads `testdata/logs/input.go`, formats in memory, and compares

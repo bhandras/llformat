@@ -1,16 +1,15 @@
 # Expression Layout (Opt-In)
 
 This document describes llformat’s **opt-in** expression formatting behavior in
-DSL-based modes (`Mode="dsl-modern"` / `Mode="next"`) and when `UseDSLExpr` is
-enabled. The goal is to provide **predictable, parse-safe splitting** of
-selected long expressions while preserving llformat’s core rule:
+the `next` pipeline. The goal is to provide **predictable, parse-safe
+splitting** of selected long expressions while preserving llformat’s core rule:
 
 - **Only touch targeted regions**; avoid reformatting unrelated code.
 
 Important constraints:
 
 - Golden fixtures under `testdata/**/output.go` are authoritative. Default
-  (`RuleProfile=parity`, `Mode=""`) behavior must remain stable.
+  behavior must remain stable.
 - Expression formatting is intentionally conservative around:
   - call argument lists (unless explicitly enabled)
   - composite literals / func literals
@@ -113,4 +112,3 @@ Note: raw string literals and comment-containing spans are intentionally skipped
 - Call argument rewriting is opt-in and must be coordinated with call formatting
   to avoid oscillation; the ownership registry and/or call-arg allowlists are the
   recommended mechanisms.
-

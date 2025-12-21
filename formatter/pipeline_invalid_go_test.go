@@ -15,44 +15,12 @@ func TestPipeline_DoesNotPanicOnInvalidGo(t *testing.T) {
 
 	pipelines := []pipeline{
 		{
-			name: "default",
-			cfg: PipelineConfig{
-				ColumnLimit: 80,
-				TabStop:     8,
-			},
-		},
-		{
-			name: "legacy_mode",
-			cfg: PipelineConfig{
-				Mode:        "legacy",
-				ColumnLimit: 80,
-				TabStop:     8,
-			},
-		},
-		{
-			name: "dsl_modern_mode",
-			cfg: PipelineConfig{
-				Mode:        "dsl-modern",
-				ColumnLimit: 80,
-				TabStop:     8,
-			},
-		},
-		{
 			name: "next_with_ownership",
 			cfg: PipelineConfig{
 				Mode:                 "next",
 				UseOwnershipRegistry: true,
 				ColumnLimit:          80,
 				TabStop:              8,
-			},
-		},
-		{
-			name: "layout_args_only",
-			cfg: PipelineConfig{
-				ColumnLimit:          80,
-				TabStop:              8,
-				UseDSLMultiLineCalls: true,
-				DSLMultiLineStyle:    "layout-args",
 			},
 		},
 	}

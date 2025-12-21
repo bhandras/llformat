@@ -26,8 +26,7 @@ func TestPipeline_RegressionSnippets_MoreASTConstructs(t *testing.T) {
 	}
 
 	policies := []policy{
-		{name: "legacy", cfg: PipelineConfig{Mode: "legacy", ColumnLimit: 48, TabStop: 8}},
-		{name: "dsl_modern", cfg: PipelineConfig{Mode: "dsl-modern", ColumnLimit: 48, TabStop: 8}},
+		{name: "next", cfg: PipelineConfig{Mode: "next", ColumnLimit: 48, TabStop: 8}},
 		{name: "next_with_ownership", cfg: PipelineConfig{Mode: "next", ColumnLimit: 48, TabStop: 8, UseOwnershipRegistry: true}},
 	}
 

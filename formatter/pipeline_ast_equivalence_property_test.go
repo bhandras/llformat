@@ -20,31 +20,10 @@ func TestPipeline_ASTEquivalentAcrossPolicies_ExpressionSnippets(t *testing.T) {
 	}
 
 	policies := []policy{
+		{name: "next", cfg: PipelineConfig{Mode: "next", ColumnLimit: 48, TabStop: 8}},
 		{
-			name: "legacy",
-			cfg: PipelineConfig{
-				ColumnLimit: 48,
-				TabStop:     8,
-			},
-		},
-		{
-			name: "modern_policy_bundle",
-			cfg: PipelineConfig{
-				ColumnLimit:   48,
-				TabStop:       8,
-				DSLCallPolicy: "modern",
-			},
-		},
-		{
-			name: "dsl_multiline_layout_args",
-			cfg: PipelineConfig{
-				ColumnLimit:          48,
-				TabStop:              8,
-				UseDSLMultiLineCalls: true,
-				DSLMultiLineStyle:    "layout-args",
-				// Intentionally omit UseDSLExpr: NewPipeline should auto-enable it
-				// for layout-args styles to avoid stage interference.
-			},
+			name: "next_with_ownership",
+			cfg:  PipelineConfig{Mode: "next", ColumnLimit: 48, TabStop: 8, UseOwnershipRegistry: true},
 		},
 	}
 

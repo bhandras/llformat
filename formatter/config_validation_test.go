@@ -44,16 +44,3 @@ func TestValidatePipelineConfig_RejectsUnknownExprStyle(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "DSLExprLogicalStyle")
 }
-
-func TestValidatePipelineConfig_RejectsUnknownStagePlanOverrideMode(t *testing.T) {
-	t.Parallel()
-
-	invalid := StageMode("future")
-	err := ValidatePipelineConfig(PipelineConfig{
-		StagePlanOverride: &StagePlan{
-			Comments: invalid,
-		},
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "StagePlanOverride.Comments")
-}

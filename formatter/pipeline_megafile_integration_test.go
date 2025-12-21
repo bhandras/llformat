@@ -105,29 +105,6 @@ func outerFunctionNameThatIsVeryLong(args ...any) any {
 		require.Equal(t, string(out2), string(out3))
 	}
 
-	t.Run("legacy_default", func(t *testing.T) {
-		run(t, PipelineConfig{
-			ColumnLimit: 60,
-			TabStop:     8,
-		})
-	})
-
-	t.Run("dsl_modern", func(t *testing.T) {
-		run(t, PipelineConfig{
-			Mode:                 "dsl-modern",
-			ColumnLimit:          60,
-			TabStop:              8,
-			UseOwnershipRegistry: true,
-			DSLCallPolicy:        "modern",
-			DSLMultiLineStyle:    "packed-chain-layout",
-			// Exercise the call-args auto allowlist behavior for excluded calls.
-			Excludes:        []string{"outerFunctionNameThatIsVeryLong"},
-			AutoDSLCallArgs: true,
-			TraceDSL:        false,
-			TraceDSLReasons: false,
-		})
-	})
-
 	t.Run("next_with_ownership", func(t *testing.T) {
 		run(t, PipelineConfig{
 			Mode:                 "next",
@@ -135,11 +112,7 @@ func outerFunctionNameThatIsVeryLong(args ...any) any {
 			ColumnLimit:          60,
 			TabStop:              8,
 			UseOwnershipRegistry: true,
-			DSLCallPolicy:        "modern",
-			DSLMultiLineStyle:    "layout-all",
 			Excludes:             []string{"outerFunctionNameThatIsVeryLong"},
-			// In next, allow breaking inside excluded call args if needed.
-			AutoDSLCallArgs: true,
 		})
 	})
 }

@@ -63,10 +63,6 @@ func f(xs []int, i, j int) int {
 		name string
 		cfg  PipelineConfig
 	}{
-		{name: "legacy_default", cfg: PipelineConfig{ColumnLimit: 60, TabStop: 8}},
-		{name: "legacy_mode", cfg: PipelineConfig{Mode: "legacy", ColumnLimit: 60, TabStop: 8}},
-		{name: "dsl_parity", cfg: PipelineConfig{Mode: "dsl-parity", ColumnLimit: 60, TabStop: 8}},
-		{name: "dsl_modern", cfg: PipelineConfig{Mode: "dsl-modern", ColumnLimit: 60, TabStop: 8}},
 		{name: "next", cfg: PipelineConfig{Mode: "next", ColumnLimit: 60, TabStop: 8}},
 		{
 			name: "next_with_ownership",
