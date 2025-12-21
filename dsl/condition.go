@@ -2012,34 +2012,42 @@ func (c *IsIfErrReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	// Find the start of this line.
-	lineStart := nodeStart
-	for lineStart > 0 && ctx.Source[lineStart-1] != '\n' {
-		lineStart--
+	trimmed, ok := prevNonEmptyLine(ctx.Source, nodeStart)
+	if !ok {
+		return false
+	}
+	lastChar := trimmed[len(trimmed)-1]
+	if lastChar == '{' || lastChar == ':' {
+		return false
 	}
 
-	// Look at the previous line.
+	return true
+}
+
+func prevNonEmptyLine(src []byte, offset int) (string, bool) {
+	lineStart := lineStartOffset(src, offset)
 	if lineStart == 0 {
-		return false
+		return "", false
 	}
 
 	prevLineEnd := lineStart - 1
 	prevLineStart := prevLineEnd
-	for prevLineStart > 0 && ctx.Source[prevLineStart-1] != '\n' {
+	for prevLineStart > 0 && src[prevLineStart-1] != '\n' {
 		prevLineStart--
 	}
 
-	prevLine := string(ctx.Source[prevLineStart:prevLineEnd])
-	trimmed := trimWhitespace(prevLine)
+	trimmed := trimWhitespace(string(src[prevLineStart:prevLineEnd]))
 	if trimmed == "" {
-		return false
-	}
-	if len(trimmed) > 0 {
-		lastChar := trimmed[len(trimmed)-1]
-		if lastChar == '{' || lastChar == ':' {
-			return false
-		}
+		return "", false
 	}
 
-	return true
+	return trimmed, true
+}
+
+func lineStartOffset(src []byte, offset int) int {
+	for offset > 0 && src[offset-1] != '\n' {
+		offset--
+	}
+
+	return offset
 }

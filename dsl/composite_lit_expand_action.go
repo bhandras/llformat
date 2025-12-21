@@ -71,28 +71,15 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 	// gofmt's alignment behavior in `var (...)` blocks is sensitive to
 	// multiline initializers, and the "next" goldens treat these as stable
 	// fixtures.
-	for cur := ast.Node(lit); cur != nil; cur = ctx.Parent(cur) {
-		if _, ok := cur.(*ast.ValueSpec); ok {
-			return false
-		}
-		if gen, ok := cur.(*ast.GenDecl); ok && gen != nil {
-			if gen.Tok == token.VAR || gen.Tok == token.CONST {
-				return false
-			}
-		}
+	if hasVarOrConstParent(lit, ctx) {
+		return false
 	}
 
 	// Avoid rewriting composite literals that are inside call argument
 	// lists. Call formatting owns these and has better context for
 	// indentation.
-	for cur := ast.Node(lit); cur != nil; {
-		parent := ctx.Parent(cur)
-		if call, ok := parent.(*ast.CallExpr); ok &&
-			isCallArg(call, cur) {
-
-			return false
-		}
-		cur = parent
+	if isCallArgNested(lit, ctx) {
+		return false
 	}
 
 	// If already multiline, keep as-is (nested literals will be handled
@@ -113,6 +100,36 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 		if isMultilineCompositeLit(cur, ctx) {
 			return true
 		}
+	}
+
+	return false
+}
+
+func hasVarOrConstParent(lit *ast.CompositeLit, ctx *Context) bool {
+	for cur := ast.Node(lit); cur != nil; cur = ctx.Parent(cur) {
+		if _, ok := cur.(*ast.ValueSpec); ok {
+			return true
+		}
+		gen, ok := cur.(*ast.GenDecl)
+		if !ok || gen == nil {
+			continue
+		}
+		if gen.Tok == token.VAR || gen.Tok == token.CONST {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isCallArgNested(lit *ast.CompositeLit, ctx *Context) bool {
+	for cur := ast.Node(lit); cur != nil; {
+		parent := ctx.Parent(cur)
+		call, ok := parent.(*ast.CallExpr)
+		if ok && isCallArg(call, cur) {
+			return true
+		}
+		cur = parent
 	}
 
 	return false
@@ -156,20 +173,7 @@ func formatCompositeLitMultiline(lit *ast.CompositeLit, ctx *Context) string {
 		if eltText == "" {
 			continue
 		}
-
-		lines := strings.Split(eltText, "\n")
-		for i, line := range lines {
-			line = strings.TrimRight(line, " \t")
-			line = strings.TrimLeft(line, " \t")
-			if i == 0 {
-				out.WriteString(elemIndent)
-				out.WriteString(line)
-				continue
-			}
-			out.WriteByte('\n')
-			out.WriteString(elemIndent)
-			out.WriteString(line)
-		}
+		writeCompositeElement(&out, elemIndent, eltText)
 		out.WriteString(",\n")
 	}
 
@@ -177,4 +181,21 @@ func formatCompositeLitMultiline(lit *ast.CompositeLit, ctx *Context) string {
 	out.WriteString("}")
 
 	return out.String()
+}
+
+func writeCompositeElement(out *strings.Builder, elemIndent, eltText string) {
+
+	lines := strings.Split(eltText, "\n")
+	for i, line := range lines {
+		line = strings.TrimRight(line, " \t")
+		line = strings.TrimLeft(line, " \t")
+		if i == 0 {
+			out.WriteString(elemIndent)
+			out.WriteString(line)
+			continue
+		}
+		out.WriteByte('\n')
+		out.WriteString(elemIndent)
+		out.WriteString(line)
+	}
 }

@@ -238,54 +238,56 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig,
 		return NoopFormatter{}
 	}
 
-	return NewDSLExprFormatter(DSLExprConfig{
-		ColumnLimit:       cfg.ColumnLimit,
-		TabStop:           cfg.TabStop,
-		Rules:             bundle.MultiLineCalls.Rules,
-		Trace:             opts.DSL.Trace,
-		TraceReasons:      opts.DSL.TraceReasons,
-		NodeOrder:         bundle.MultiLineCalls.NodeOrder,
-		MaxIterations:     bundle.MultiLineCalls.MaxIterations,
-		AutoMaxIterations: bundle.MultiLineCalls.AutoMaxIterations,
-		DetectCycles:      bundle.MultiLineCalls.DetectCycles,
-		SkipGofmt:         true,
-		StageName:         stageName,
-		Budget:            dslBudgetNext(),
-		OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
-			logCond := &dsl.IsLogOrPrintfCallCond{
-				Target:                 "node",
-				MatchAnySelectorPrefix: true,
-				IncludeNonFStringCalls: true,
-			}
-			nonFLogCond := &dsl.IsNonFLogCallCond{Target: "node"}
-
-			return ownedSpansForCalls(src, func(
-				call *ast.CallExpr) bool {
-
-				caps := dsl.Captures{"node": call}
-
-				// Exclude printf-style calls handled by the
-				// log/printf stage.
-				if logCond.Eval(caps, nil) {
-					return false
-				}
-
-				// Also exclude non-printf log calls (e.g.
-				// log.Info(...)) to avoid rewriting logger
-				// calls with the generic multiline-call stage.
-				if nonFLogCond.Eval(caps, nil) {
-					return false
-				}
-
-				// Respect the explicit multiline-exclude list.
-				if excludedByName(call, opts.Style.Excludes) {
-					return false
-				}
-
-				return true
-			})
+	return NewDSLExprFormatter(
+		DSLExprConfig{
+			ColumnLimit:       cfg.ColumnLimit,
+			TabStop:           cfg.TabStop,
+			Rules:             bundle.MultiLineCalls.Rules,
+			Trace:             opts.DSL.Trace,
+			TraceReasons:      opts.DSL.TraceReasons,
+			NodeOrder:         bundle.MultiLineCalls.NodeOrder,
+			MaxIterations:     bundle.MultiLineCalls.MaxIterations,
+			AutoMaxIterations: bundle.MultiLineCalls.AutoMaxIterations,
+			DetectCycles:      bundle.MultiLineCalls.DetectCycles,
+			SkipGofmt:         true,
+			StageName:         stageName,
+			Budget:            dslBudgetNext(),
+			OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
+				return multilineCallOwnedSpans(src, opts)
+			},
 		},
-	})
+	)
+}
+
+func multilineCallOwnedSpans(src []byte,
+	opts StageOptions) llast.OffsetSpanSet {
+
+	logCond := &dsl.IsLogOrPrintfCallCond{
+		Target:                 "node",
+		MatchAnySelectorPrefix: true,
+		IncludeNonFStringCalls: true,
+	}
+	nonFLogCond := &dsl.IsNonFLogCallCond{Target: "node"}
+
+	return ownedSpansForCalls(
+		src,
+		func(call *ast.CallExpr) bool {
+			return shouldOwnMultilineCall(
+				call, opts, logCond, nonFLogCond,
+			)
+		},
+	)
+}
+
+func shouldOwnMultilineCall(call *ast.CallExpr, opts StageOptions,
+	logCond dsl.Condition, nonFLogCond dsl.Condition) bool {
+
+	caps := dsl.Captures{"node": call}
+	if logCond.Eval(caps, nil) || nonFLogCond.Eval(caps, nil) {
+		return false
+	}
+
+	return !excludedByName(call, opts.Style.Excludes)
 }
 
 func buildSignatureStageFormatter(stageName string, cfg BaseConfig,
