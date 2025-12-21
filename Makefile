@@ -3,6 +3,7 @@ BIN_DIR  ?= bin
 BIN      := $(BIN_DIR)/llformat
 
 .PHONY: all build install unit test clean
+.PHONY: fmt fmt-check self-check
 
 all: build
 
@@ -20,6 +21,18 @@ install: build
 # Run unit tests
 unit test:
 	$(GO) test -v ./...
+
+.PHONY: fmt
+fmt: build
+	@$(GO) run ./tools/fmt_repo --llformat ./$(BIN) --write
+
+.PHONY: fmt-check
+fmt-check: build
+	@$(GO) run ./tools/fmt_repo --llformat ./$(BIN)
+
+.PHONY: self-check
+self-check: build fmt-check unit
+	@echo "Self-check ok: fmt-check and unit passed."
 
 .PHONY: gen-next-goldens
 gen-next-goldens: build
