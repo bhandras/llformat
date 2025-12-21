@@ -8,7 +8,7 @@ This repository contains golden outputs used by tests under `testdata/**/output_
 
 When in doubt about expected behavior vs. golden outputs, halt work and escalate to a human before proceeding.
 
-## Project Context (from CLAUDE.md)
+## Project Context
 
 - Purpose: `llformat` is a Go formatter that reflows comments and reformats targeted log/printf-style calls without touching other code.
 - Build/test commands: `make build` (or `make all`) builds `bin/llformat`; `make test` / `make unit` run `go test -v ./...`; `make clean` removes `bin/`.

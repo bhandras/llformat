@@ -1,73 +1,127 @@
 # llformat
 
-A focused Go source formatter that applies a custom wrapping rule to log and
-printf-style statements.
+`llformat` is a focused Go source formatter that reflows comments and applies
+targeted, column-limit-aware formatting to:
 
-## Scope (initial)
+- log/printf-style calls (including custom loggers like `rpcsLog.Infof(...)`)
+- multiline (non-log) calls and method chains
+- selected long expressions
+- function signatures (including function literals and interface methods)
+- blank-line hygiene rules that improve readability
 
-This tool rewrites argument layout for the following calls:
+It is intentionally **not** a general-purpose “pretty printer” that rewrites
+the whole file.
 
-- `log.Infof`, `log.Debugf`, `log.Tracef`, `log.Errorf`, `log.Warnf`
-- `fmt.Printf`, `fmt.Sprintf`, `fmt.Errorf`
+## Goals and Non-Goals
 
-The formatter keeps the rest of the file content intact and only rewrites the
-matched call expressions. It leverages Go's AST for the matched call itself
-(`go/parser.ParseExpr`) to classify arguments reliably (e.g., flattening string
-literal concatenations), while using a lightweight scanner to locate the call
-boundaries. This hybrid approach remains robust even when the surrounding file
-is not fully valid Go.
+Goals:
 
-## Wrapping Rules
+- **Targeted changes only**: only touch known formatting targets; preserve
+  everything else.
+- **Idempotent**: running `llformat` repeatedly should converge quickly.
+- **Parse-safe**: output must remain valid Go (final output is normalized by
+  `gofmt`).
+- **Directive-safe comments**: never break `//go:` directives, `//nolint`, cgo
+  pragmas, etc.
 
-- **Line width**: Wrap at 80 columns. A line may only break before 80 if the
-  next token would exceed the limit.
-- **Flow left**: Pack as many arguments as possible from left to right on each
-  line without exceeding 80 columns.
-- **Text arguments**: If an argument is purely text (a string literal or a
-  concatenation of string literals), split it across lines as needed. When
-  splitting, join segments with `+` and ensure a space is preserved between
-  words; the preceding segment ends with a space when continued. Example:
+Non-goals:
 
-  ```go
-  log.Infof("This is a long message " +
-      "that continues on the next line")
-  ```
+- Replacing `gofmt`.
+- Reflowing arbitrary code for style preferences (this repo prefers explicit
+  golden fixtures for spec).
 
-  The `+` must remain before column 80.
+## How it Works (One Document)
 
-- **Non-text arguments**: Treat as a single unit. If adding it to the current
-  line would exceed 80 columns, move it to the next line. If it still exceeds
-  80 on a fresh line, keep it intact (compiles, even if it surpasses 80).
+The formatter runs a **pipeline of stages** over the file, then runs `gofmt`:
 
-- **Nesting**: Calls may be nested inside other arguments. The formatter only
-  rewrites the outer targeted calls; content inside other expressions is kept
-  intact except when the entire argument is a text expression (string literal
-  or concatenation of literals) which is normalized as described.
+1. Comments (directive-safe reflow; optionally hoist inline comments)
+2. Compact calls (log/printf/error string packing + string splitting)
+3. Expressions (selected long-expression splits)
+4. Multiline calls (non-log calls: pack args + layout selector chains)
+5. Signatures (func decls, func literals, interface methods)
+6. Blank lines (minimal readability rules)
+7. `gofmt` normalization
 
-## CLI
+Most of the pipeline is implemented via an internal **formatting DSL engine**
+that:
 
-Builds an `llformat` binary with two behaviors:
+- Applies one targeted rewrite at a time (deterministic ordering).
+- Avoids rewriting spans that are “owned” by later stages when ownership
+  boundaries are enabled (prevents stage fighting).
+- Uses rewrite budgets and cycle detection for safety.
 
-- Default: Print formatted result to stdout.
-- `-w` / `--write`: Overwrite the provided file in place.
+Where the AST printer would drop comments inside rewritten regions, rules are
+conservative and often skip edits if inline comments are present.
 
-Usage:
+## CLI Usage
 
+Build:
+
+```bash
+make build
 ```
-llformat [-w] <path-to-go-source>
+
+Format to stdout:
+
+```bash
+./bin/llformat path/to/file.go
 ```
 
-The CLI runs the `next` pipeline by default (and the legacy CLI modes have been
-removed):
+Write in-place:
+
+```bash
+./bin/llformat -w path/to/file.go
+```
+
+Helpful flags:
+
+- `--col N`: column limit (default `80`)
+- `--tab N`: tab stop width (default `8`)
+- `--wrap-inline-comments`: hoist trailing inline comments above statements so
+  they can be wrapped safely
+- `--multiline-exclude a,b,c`: exclude function names from generic multiline
+  call formatting
+- `--logcalls-min-tail-len N`: avoid leaving tiny tails when splitting long
+  format strings (0 means default)
+- `--fixpoint-iters N`: run the full pipeline repeatedly until stable (default
+  is `3` in the CLI)
+- `--print-plan`: print resolved stage plan and exit
 
 ## Tests
 
-The test `logs` reads `testdata/logs/input.go`, formats in memory, and compares
-against `testdata/logs/output_next.go` (the `next` pipeline golden fixtures).
+Unit tests:
 
-## Notes and Future Work
+```bash
+make unit
+```
 
-- The initial implementation focuses on the specified calls and a pragmatic
-  text-oriented parser to handle partially invalid files. We may extend it with
-  deeper expression-level formatting, additional function targets, and richer
-  indentation control as new edge cases surface.
+### Golden fixtures (spec)
+
+Golden fixtures are authoritative and live at:
+
+- `testdata/*/input.go` → `testdata/*/output_next.go`
+
+These fixtures define the intended behavior and are compared by tests. If a
+formatter change appears to require golden updates, treat that as a spec change
+and do it explicitly (ideally in a dedicated commit).
+
+### Generating next goldens (for local experimentation)
+
+The repository includes a helper for generating candidate `output_next.go`
+files into a scratch directory (not committed):
+
+```bash
+go run ./tools/gen_next_goldens --out .next_goldens
+```
+
+## Code Layout
+
+- `cmd/llformat/main.go`: CLI
+- `formatter/`: pipeline + formatting stages
+- `dsl/`: DSL engine and rules
+- `testdata/`: golden fixtures
+
+## Status
+
+The repository is **next-only**: legacy modes and legacy goldens have been
+removed.
