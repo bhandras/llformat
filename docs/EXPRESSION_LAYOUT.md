@@ -8,7 +8,7 @@ splitting** of selected long expressions while preserving llformat’s core rule
 
 Important constraints:
 
-- Golden fixtures under `testdata/**/output.go` are authoritative. Default
+- Golden fixtures under `testdata/**/output_next.go` are authoritative. Default
   behavior must remain stable.
 - Expression formatting is intentionally conservative around:
   - call argument lists (unless explicitly enabled)

@@ -19,7 +19,7 @@ uphold.
 
 ## Global constraints
 
-- **Golden fixtures are authoritative**: `testdata/**/output.go` is the source of
+- **Golden fixtures are authoritative**: `testdata/**/output_next.go` is the source of
   truth for behavior; formatter changes must not “regenerate” these files.
 - **gofmt runs once at the end of the pipeline**: llformat normalizes the final
   output with `gofmt` (via `go/format`), but internal passes should avoid

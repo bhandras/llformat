@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Agent Guidelines
 
-This repository contains golden outputs used by tests under `testdata/**/output.go`. These files are **authoritative** fixtures and must not be altered by automation.
+This repository contains golden outputs used by tests under `testdata/**/output_next.go`. These files are **authoritative** fixtures and must not be altered by automation.
 
-- Never modify `testdata/**/output.go` or any other golden results when making changes.
+- Never modify `testdata/**/output_next.go` or any other golden results when making changes.
 - If a change appears to require updating these golden files, stop immediately and ask a human maintainer for direction.
 - Do not regenerate or rewrite the goldens as part of formatter changes or test fixes.
 
@@ -84,7 +84,7 @@ The formatter specifically targets these function calls:
 Tests use golden file approach:
 - `testdata/logs/`: Contains input/output pairs for call formatting
 - `testdata/comments/`: Contains input/output pairs for comment formatting
-- Test files: `input.go` → expected `output.go` comparison
+- Test files: `input.go` → expected `output_next.go` comparison
 
 ### Key Design Decisions
 

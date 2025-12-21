@@ -15,15 +15,15 @@
 - [ ] Layout and spacing
   - [ ] Head + `(` newline; args separated by `, ` or `,\n<indent>`; closing `)` aligned to call indent; trailing comma for multiline.
 - [ ] Validation
-  - [ ] Run `go test ./...` and diff `testdata/multiline/output.go` vs. formatted output to verify slice/map placement and string splits.
-  - [ ] Keep goldens untouched (`testdata/**/output.go`).
+  - [ ] Run `go test ./...` and diff `testdata/multiline/output_next.go` vs. formatted output to verify slice/map placement and string splits.
+  - [ ] Keep goldens untouched (`testdata/**/output_next.go`).
 
 ---
 
 # TODO: DSL Formatter Roadmap (Grand List)
 
 ## Principles / guardrails
-- [x] Never modify golden fixtures under `testdata/**/output.go`.
+- [x] Never modify golden fixtures under `testdata/**/output_next.go`.
 - [x] Next-only pipeline: avoid reintroducing legacy/mode/profile selectors.
 - [ ] Reduce long-term reliance on scan/string heuristics by converging on a single layout engine.
 

@@ -42,4 +42,4 @@ This document lists the modular rules and heuristics we need to assemble the des
 - `scanBalancedParen`, `splitTopLevelAny` for safe argument splitting.
 - Composite helpers: `FormatCompositeLiteralArg` (keyed maps/structs), `findTopLevelBraces`, `callHasAlwaysMultilineComposite`.
 
-Use these rules as the reference when adjusting the formatter; do not modify goldens (`testdata/**/output.go`). Each adjustment should map back to one of these blocks.***
+Use these rules as the reference when adjusting the formatter; do not modify goldens (`testdata/**/output_next.go`). Each adjustment should map back to one of these blocks.***

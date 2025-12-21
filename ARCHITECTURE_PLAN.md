@@ -4,7 +4,7 @@ This file tracks the long-term “DSL-first formatter engine” overhaul work as
 living checklist. It is intended to be updated as work lands.
 
 Constraints:
-- Do **not** modify golden fixtures under `testdata/**/output.go`.
+- Do **not** modify golden fixtures under `testdata/**/output_next.go`.
 - llformat is next-only: avoid reintroducing legacy/mode/profile selectors.
 - Keep `make unit` green on each merged chunk.
 
