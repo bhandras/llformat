@@ -110,14 +110,21 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 	// already multiline, prefer expanding it as well for readability and
 	// consistency.
 	for cur := ctx.Parent(lit); cur != nil; cur = ctx.Parent(cur) {
-		if _, ok := cur.(*ast.CompositeLit); ok {
-			if strings.Contains(string(ctx.NodeSource(cur)), "\n") {
-				return true
-			}
+		if isMultilineCompositeLit(cur, ctx) {
+			return true
 		}
 	}
 
 	return false
+}
+
+func isMultilineCompositeLit(node ast.Node, ctx *Context) bool {
+	lit, ok := node.(*ast.CompositeLit)
+	if !ok || lit == nil {
+		return false
+	}
+
+	return strings.Contains(string(ctx.NodeSource(lit)), "\n")
 }
 
 func formatCompositeLitMultiline(lit *ast.CompositeLit, ctx *Context) string {
