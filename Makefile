@@ -30,9 +30,18 @@ fmt: build
 fmt-check: build
 	@$(GO) run ./tools/fmt_repo --llformat ./$(BIN)
 
+.PHONY: self-binary-check
+self-binary-check: build
+	@tmp=$$(mktemp -t llformat_bin.XXXXXX); \
+	cp $(BIN) $$tmp; \
+	$(GO) build -o $(BIN) ./cmd/llformat; \
+	cmp -s $$tmp $(BIN); \
+	rm -f $$tmp; \
+	echo "Self-binary-check ok: reproducible build."
+
 .PHONY: self-check
-self-check: build fmt-check unit
-	@echo "Self-check ok: fmt-check and unit passed."
+self-check: build fmt-check unit self-binary-check
+	@echo "Self-check ok: fmt-check, unit, and self-binary-check passed."
 
 .PHONY: gen-next-goldens
 gen-next-goldens: build
