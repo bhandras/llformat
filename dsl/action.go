@@ -728,23 +728,63 @@ func (a *BreakAtOpAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit,
 		return nil, false, nil
 	}
 
-	// Collect all operators in this expression chain
-	type opInfo struct {
-		pos      int    // byte offset of operator
-		opLen    int    // length of operator string
-		opStr    string // operator string
-		prefix   int    // visual width of content before this operator
-		priority int    // operator priority (lower = prefer)
-	}
-
-	var ops []opInfo
 	pos := ctx.Fset.Position(binExpr.Pos())
 	indent := ctx.IndentAt(binExpr)
 
 	// Calculate line start offset (not node start)
 	lineStart := pos.Offset - pos.Column + 1
 
-	// Walk the expression to find all operators
+	ops := collectOpInfos(binExpr, ctx, lineStart)
+
+	if len(ops) == 0 {
+		return nil, false, nil
+	}
+
+	bestOp := selectBestOp(ops, ctx.ColumnLimit)
+
+	if bestOp == nil {
+		return nil, false, nil
+	}
+
+	opEnd := bestOp.pos + bestOp.opLen
+
+	// Check if there's already a newline after this operator.
+	i := skipHorizontalWhitespace(ctx.Source, opEnd)
+	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
+
+		// Already broken here, don't add another break
+		return nil, false, nil
+	}
+
+	end := skipHorizontalWhitespace(ctx.Source, opEnd)
+	replacement := continuationIndentBytes(indent)
+	if opEnd >= 0 && end >= opEnd && end <= len(ctx.Source) {
+		if bytes.Equal(ctx.Source[opEnd:end], replacement) {
+			return nil, false, nil
+		}
+	}
+
+	return []Edit{
+		{
+			Start:   opEnd,
+			End:     end,
+			Replace: replacement,
+		},
+	}, true, nil
+}
+
+type opInfo struct {
+	pos      int    // byte offset of operator
+	opLen    int    // length of operator string
+	opStr    string // operator string
+	prefix   int    // visual width of content before this operator
+	priority int    // operator priority (lower = prefer)
+}
+
+func collectOpInfos(binExpr *ast.BinaryExpr, ctx *Context,
+	lineStart int) []opInfo {
+
+	var ops []opInfo
 	var collectOps func(expr ast.Expr)
 	collectOps = func(expr ast.Expr) {
 		bin, ok := expr.(*ast.BinaryExpr)
@@ -777,65 +817,38 @@ func (a *BreakAtOpAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit,
 	}
 	collectOps(binExpr)
 
-	if len(ops) == 0 {
-		return nil, false, nil
-	}
+	return ops
+}
 
+func selectBestOp(ops []opInfo, colLimit int) *opInfo {
 	// Find the best operator: prefer lower priority (logical) operators,
-	// and among those, pick the rightmost that fits under column limit
+	// and among those, pick the rightmost that fits under column limit.
 	var bestOp *opInfo
 	for i := len(ops) - 1; i >= 0; i-- {
 		op := &ops[i]
-		if op.prefix <= ctx.ColumnLimit {
-			// Check if this is a better candidate than current best
-			if bestOp == nil || op.priority < bestOp.priority ||
-				(op.priority == bestOp.priority &&
-					op.prefix > bestOp.prefix) {
+		if op.prefix > colLimit {
+			continue
+		}
+		if bestOp == nil || op.priority < bestOp.priority ||
+			(op.priority == bestOp.priority &&
+				op.prefix > bestOp.prefix) {
 
-				bestOp = op
-			}
+			bestOp = op
+		}
+	}
+	if bestOp != nil {
+		return bestOp
+	}
+
+	// Fallback: if no good break point, pick lowest priority operator.
+	for i := range ops {
+		op := &ops[i]
+		if bestOp == nil || op.priority < bestOp.priority {
+			bestOp = op
 		}
 	}
 
-	// Fallback: if no good break point, pick lowest priority operator
-	if bestOp == nil {
-		for i := range ops {
-			op := &ops[i]
-			if bestOp == nil || op.priority < bestOp.priority {
-				bestOp = op
-			}
-		}
-	}
-
-	if bestOp == nil {
-		return nil, false, nil
-	}
-
-	opEnd := bestOp.pos + bestOp.opLen
-
-	// Check if there's already a newline after this operator.
-	i := skipHorizontalWhitespace(ctx.Source, opEnd)
-	if i < len(ctx.Source) && ctx.Source[i] == '\n' {
-
-		// Already broken here, don't add another break
-		return nil, false, nil
-	}
-
-	end := skipHorizontalWhitespace(ctx.Source, opEnd)
-	replacement := continuationIndentBytes(indent)
-	if opEnd >= 0 && end >= opEnd && end <= len(ctx.Source) {
-		if bytes.Equal(ctx.Source[opEnd:end], replacement) {
-			return nil, false, nil
-		}
-	}
-
-	return []Edit{
-		{
-			Start:   opEnd,
-			End:     end,
-			Replace: replacement,
-		},
-	}, true, nil
+	return bestOp
 }
 
 func flattenSameOpBinaryChain(expr ast.Expr, op token.Token,
