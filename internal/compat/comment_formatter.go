@@ -1,4 +1,4 @@
-package formatter
+package compat
 
 import (
 	"strings"
@@ -122,9 +122,6 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 
 // FormatCommentsInSource applies the legacy comment formatter to src and reports
 // whether it changed anything.
-//
-// This is exported so DSL stages can delegate to the legacy implementation
-// without creating an import cycle.
 func FormatCommentsInSource(src []byte, colLimit, tabStop int, moveInlineAbove bool) ([]byte, bool) {
 	f := NewCommentFormatter(CommentConfig{
 		ColumnLimit:     colLimit,
@@ -153,6 +150,7 @@ func bytesEqual(a, b []byte) bool {
 // splitLines preserves all lines without dropping trailing empty line info.
 func splitLines(s string) []string {
 	// Normalize to raw lines without retaining trailing newline sentinel;
+	// the go/format pass later (if any) can normalize final newline sentinel;
 	// the go/format pass later (if any) can normalize final newline. Here
 	// we keep behavior consistent with our other formatters which operate
 	// on bytes.
@@ -220,293 +218,252 @@ func isDirectiveLineComment(s string) bool {
 		}
 	}
 
-	// Linter directives are commonly written without a space, but some linters
-	// also accept a space. Keep this conservative but avoid matching arbitrary
-	// prose: require the directive token to be the first non-space after `//`.
-	text := strings.TrimPrefix(rest, "//")
-	text = strings.TrimLeft(text, " \t")
-	switch {
-	case strings.HasPrefix(text, "nolint"):
+	// Common lint directives are typically tool-specific and should not be
+	// wrapped.
+	if strings.HasPrefix(rest, "//nolint:") || strings.HasPrefix(rest, "// nolint:") {
 		return true
-	case strings.HasPrefix(text, "lint:"):
-		return true
-	case strings.HasPrefix(text, "revive:"):
-		return true
-	case strings.HasPrefix(text, "staticcheck:"):
-		return true
-	case strings.HasPrefix(text, "gosec:"):
-		return true
-	default:
-		return false
 	}
+	if strings.HasPrefix(rest, "//lint:") || strings.HasPrefix(rest, "// lint:") {
+		return true
+	}
+	if strings.HasPrefix(rest, "//staticcheck:") || strings.HasPrefix(rest, "// staticcheck:") {
+		return true
+	}
+	if strings.HasPrefix(rest, "//gosec:") || strings.HasPrefix(rest, "// gosec:") {
+		return true
+	}
+	if strings.HasPrefix(rest, "//revive:") || strings.HasPrefix(rest, "// revive:") {
+		return true
+	}
+
+	return false
 }
 
 func isStandaloneBlockStart(s string) bool {
 	_, rest := splitIndent(s)
-	return strings.HasPrefix(rest, "/*") && !strings.Contains(rest, "*/")
+	return rest == "/*"
 }
 
 func isStandaloneBlockEnd(s string) bool {
 	_, rest := splitIndent(s)
-	return strings.HasPrefix(strings.TrimSpace(rest), "*/")
+	return rest == "*/"
 }
 
-func blockCommentLineText(ln string) string {
-	// Normalize a block comment interior line to its "payload" text for directive
-	// checks: trim indentation and an optional leading `*` prefix.
-	_, rest := splitIndent(ln)
-	rest = strings.TrimLeft(rest, " ")
-	if strings.HasPrefix(rest, "*") {
-		rest = strings.TrimPrefix(rest, "*")
-		rest = strings.TrimLeft(rest, " ")
-	}
-	return strings.TrimSpace(rest)
-}
-
-// isDirectiveBlockComment reports whether a standalone block comment should be
-// preserved verbatim because it likely contains tool directives (e.g. cgo).
 func isDirectiveBlockComment(block []string) bool {
-	for _, ln := range block {
-		text := blockCommentLineText(ln)
-		if text == "" {
-			continue
-		}
-
-		// cgo directives must be preserved exactly. Reflowing or adding `*`-style
-		// formatting can break cgo parsing.
-		if strings.HasPrefix(text, "#cgo") || strings.HasPrefix(text, "#include") || strings.HasPrefix(text, "#pragma") {
+	// Preserve any cgo directive blocks starting with #cgo, or blocks containing
+	// #include/#define lines. We check the raw interior lines.
+	for _, line := range block {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "#cgo") || strings.HasPrefix(trim, "#include") || strings.HasPrefix(trim, "#define") {
 			return true
 		}
 	}
 	return false
 }
 
-func trimLineCommentText(s string) (indent, text string, empty bool) {
-	indent, rest := splitIndent(s)
-	if !strings.HasPrefix(rest, "//") {
-		return indent, rest, false
-	}
-	t := strings.TrimPrefix(rest, "//")
-	// Only trim the first space after // if present, preserve internal
-	// indentation
-	if strings.HasPrefix(t, " ") {
-		t = t[1:]
-	}
-	if strings.TrimSpace(t) == "" {
-		return indent, "", true
-	}
-	return indent, t, false
-}
-
 func reflowLineCommentBlock(block []string, indent string) []string {
-	// Gather paragraphs and list items.
-	var out []string
-	i := 0
-	for i < len(block) {
-		_, t, empty := trimLineCommentText(block[i])
-		if empty {
-			// Preserve empty comment line
-			out = append(out, indent+"//")
-			i++
+	type paraKind int
+	const (
+		paraBlank paraKind = iota
+		paraText
+		paraListItem
+	)
+	type para struct {
+		kind paraKind
+		lead string
+		// For text paragraphs, lines are trimmed text lines.
+		// For list items, lines are item text fragments (dash + continuation).
+		lines []string
+	}
+
+	var paras []para
+	var curText []string
+	var curList *para
+
+	flushText := func() {
+		if len(curText) == 0 {
+			return
+		}
+		paras = append(paras, para{kind: paraText, lines: curText})
+		curText = nil
+	}
+	flushList := func() {
+		if curList == nil {
+			return
+		}
+		paras = append(paras, *curList)
+		curList = nil
+	}
+	pushBlank := func() {
+		flushList()
+		flushText()
+		paras = append(paras, para{kind: paraBlank})
+	}
+
+	for _, line := range block {
+		_, rest := splitIndent(line)
+		content := strings.TrimPrefix(rest, "//")
+		if strings.TrimSpace(content) == "" {
+			pushBlank()
 			continue
 		}
 
-		// Determine if this paragraph starts with a list item
-		isList := strings.HasPrefix(strings.TrimLeft(t, " \t"), "- ")
-		// Collect lines for this paragraph (until next empty or next
-		// list item when in list mode)
-		var texts []string
-		for i < len(block) {
-			_, tt, e2 := trimLineCommentText(block[i])
-			if e2 {
-				break
-			}
-			if isList {
-				if len(texts) > 0 && strings.HasPrefix(strings.TrimLeft(tt, " \t"), "- ") {
-					break
-				}
-			} else {
-				if strings.HasPrefix(strings.TrimLeft(tt, " \t"), "- ") {
-					// Start of a new list section; end
-					// paragraph
-					break
-				}
-			}
-			texts = append(texts, tt)
-			i++
+		lead, afterLead := splitIndent(content)
+		if strings.HasPrefix(afterLead, "- ") {
+			flushText()
+			flushList()
+			itemText := strings.TrimSpace(afterLead[2:])
+			curList = &para{kind: paraListItem, lead: lead, lines: []string{itemText}}
+			continue
 		}
-		// Reflow texts
-		if isList {
-			// Each item is its own paragraph. The first collected
-			// line begins with "- ". Split the first item's marker
-			// from text.
-			items := collectDashItems(texts)
-			for _, item := range items {
-				if len(item) > 0 {
-					// Extract the original indentation from
-					// the first item
-					firstLine := item[0]
-					leadingSpaces := ""
-					for _, r := range firstLine {
-						if r == ' ' || r == '\t' {
-							leadingSpaces += string(r)
-						} else {
-							break
-						}
-					}
-					// Create prefixes with the original
-					// indentation preserved
-					firstPrefix := indent + "//" + leadingSpaces + " - "
-					contPrefix := indent + "//" + leadingSpaces + "   "
-					out = append(out, wrapWithPrefixes(firstPrefix, contPrefix, item)...)
-				}
-			}
-		} else {
-			out = append(out, wrapWithPrefixes(indent+"// ", indent+"// ", strings.Join(texts, " "))...)
+
+		if curList != nil {
+			// Treat any non-empty non-list line immediately following a list
+			// item as a continuation line, even if it isn't already indented.
+			// This lets the formatter repair "broken" list indentation.
+			_, contText := splitIndent(content)
+			curList.lines = append(curList.lines, strings.TrimSpace(contText))
+			continue
 		}
-		// If we stopped due to an empty line, it will be handled at top
-		// of loop.
+
+		curText = append(curText, strings.TrimSpace(content))
+	}
+
+	flushList()
+	flushText()
+
+	var out []string
+	for _, p := range paras {
+		switch p.kind {
+		case paraBlank:
+			out = append(out, indent+"//")
+		case paraListItem:
+			item := strings.Join(p.lines, " ")
+			lines := reflowWords(item, indent+"//"+p.lead+"- ",
+				indent+"//"+p.lead+"  ")
+			out = append(out, lines...)
+		case paraText:
+			text := strings.Join(p.lines, " ")
+			lines := reflowWords(text, indent+"// ", indent+"// ")
+			out = append(out, lines...)
+		}
 	}
 	return out
-}
-
-func collectDashItems(lines []string) [][]string {
-	var items [][]string
-	var cur []string
-	for _, ln := range lines {
-		trimmed := strings.TrimLeft(ln, " \t")
-		if strings.HasPrefix(trimmed, "- ") {
-			if len(cur) > 0 {
-				items = append(items, cur)
-			}
-			// Preserve the original indentation but remove the dash
-			leading := ln[:len(ln)-len(trimmed)]
-			itemText := strings.TrimPrefix(trimmed, "- ")
-			cur = []string{leading + itemText}
-		} else {
-			if len(cur) == 0 {
-				// If malformed (no leading - ), start a new one
-				// anyway
-				cur = []string{ln}
-			} else {
-				cur = append(cur, ln)
-			}
-		}
-	}
-	if len(cur) > 0 {
-		items = append(items, cur)
-	}
-	return items
 }
 
 func reflowBlockComment(block []string, indent string) []string {
-	// Keep opening and closing intact; reflow interior.
-	if len(block) == 0 {
+	if len(block) < 2 {
 		return block
 	}
-	var out []string
-	out = append(out, block[0])
+	open := block[0]
+	close := block[len(block)-1]
 
-	// Collect interior until last line
-	interior := block[1:]
-	if len(interior) == 0 {
-		return out
-	}
-	// Find closing index
-	last := len(interior) - 1
-	closing := interior[last]
-	interior = interior[:last]
-
-	// Process interior lines Convert each line to text: strip leading
-	// optional "*" and a single space. Detect empty lines.
-	var lines []string
-	for _, ln := range interior {
-		_, rest := splitIndent(ln)
-		rest = strings.TrimLeft(rest, " ")
-		if strings.HasPrefix(rest, "*") {
-			rest = strings.TrimPrefix(rest, "*")
-			rest = strings.TrimLeft(rest, " ")
-		}
-		if strings.TrimSpace(rest) == "" {
-			lines = append(lines, "")
-		} else {
-			lines = append(lines, rest)
-		}
+	type paraKind int
+	const (
+		paraBlank paraKind = iota
+		paraText
+		paraListItem
+	)
+	type para struct {
+		kind  paraKind
+		lead  string
+		lines []string
 	}
 
-	// Reflow paragraphs similarly to line comments
-	i := 0
-	for i < len(lines) {
-		t := lines[i]
-		if strings.TrimSpace(t) == "" {
-			out = append(out, indent+" *")
-			i++
+	var paras []para
+	var curText []string
+	var curList *para
+
+	flushText := func() {
+		if len(curText) == 0 {
+			return
+		}
+		paras = append(paras, para{kind: paraText, lines: curText})
+		curText = nil
+	}
+	flushList := func() {
+		if curList == nil {
+			return
+		}
+		paras = append(paras, *curList)
+		curList = nil
+	}
+	pushBlank := func() {
+		flushList()
+		flushText()
+		paras = append(paras, para{kind: paraBlank})
+	}
+
+	for _, line := range block[1 : len(block)-1] {
+		trim := strings.TrimSpace(line)
+		trim = strings.TrimPrefix(trim, "*")
+		content := strings.TrimPrefix(trim, " ")
+		if strings.TrimSpace(content) == "" {
+			pushBlank()
 			continue
 		}
-		isList := strings.HasPrefix(strings.TrimLeftFunc(t, unicode.IsSpace), "- ")
-		var texts []string
-		for i < len(lines) {
-			tt := lines[i]
-			if strings.TrimSpace(tt) == "" {
-				break
-			}
-			leadTrim := strings.TrimLeftFunc(tt, unicode.IsSpace)
-			if isList {
-				if len(texts) > 0 && strings.HasPrefix(leadTrim, "- ") {
-					break
-				}
-			} else {
-				if strings.HasPrefix(leadTrim, "- ") {
-					break
-				}
-			}
-			texts = append(texts, leadTrim)
-			i++
+
+		lead, afterLead := splitIndent(content)
+		if strings.HasPrefix(afterLead, "- ") {
+			flushText()
+			flushList()
+			itemText := strings.TrimSpace(afterLead[2:])
+			curList = &para{kind: paraListItem, lead: lead, lines: []string{itemText}}
+			continue
 		}
-		if isList {
-			items := collectDashItems(texts)
-			for _, item := range items {
-				out = append(out, wrapWithPrefixes(indent+" * - ", indent+" *   ", item)...)
-			}
-		} else {
-			out = append(out, wrapWithPrefixes(indent+" * ", indent+" * ", strings.Join(texts, " "))...)
+
+		if curList != nil {
+			// Treat any non-empty non-list line immediately following a list
+			// item as a continuation line, even if it isn't already indented.
+			// This lets the formatter repair "broken" list indentation.
+			_, contText := splitIndent(content)
+			curList.lines = append(curList.lines, strings.TrimSpace(contText))
+			continue
 		}
+
+		curText = append(curText, strings.TrimSpace(content))
 	}
 
-	out = append(out, closing)
+	flushList()
+	flushText()
+
+	var out []string
+	out = append(out, open)
+	for _, p := range paras {
+		switch p.kind {
+		case paraBlank:
+			out = append(out, indent+" *")
+		case paraListItem:
+			item := strings.Join(p.lines, " ")
+			lines := reflowWords(item, indent+" * "+p.lead+"- ",
+				indent+" * "+p.lead+"  ")
+			out = append(out, lines...)
+		case paraText:
+			text := strings.Join(p.lines, " ")
+			lines := reflowWords(text, indent+" * ", indent+" * ")
+			out = append(out, lines...)
+		}
+	}
+	out = append(out, close)
 	return out
 }
 
-// wrapWithPrefixes greedily wraps text into lines using firstPrefix for the
-// first line and contPrefix for subsequent lines. The text may be provided as a
-// string or a slice of lines (joined with spaces).
-func wrapWithPrefixes(firstPrefix, contPrefix string, text interface{}) []string {
-	var s string
-	switch v := text.(type) {
-	case string:
-		s = v
-	case []string:
-		s = strings.Join(v, " ")
-	default:
-		s = ""
-	}
-	words := splitWords(s)
+func reflowWords(text, prefix, contPrefix string) []string {
+	words := splitWords(text)
 	if len(words) == 0 {
-		return []string{strings.TrimRight(firstPrefix, " ")}
+		return []string{strings.TrimRight(prefix, " ")}
 	}
-	lines := make([]string, 0)
-	prefix := firstPrefix
+
+	lines := make([]string, 0, 8)
 	cur := prefix
 	curLen := visualLen(prefix)
-	avail := columnLimit
 	for i, w := range words {
-		// Determine needed width including space if not first word on
-		// line
 		need := visualLen(w)
 		if curLen > visualLen(prefix) {
-			need++ // space
+			need += 1
 		}
-		if curLen+need <= avail {
+
+		if curLen+need <= columnLimit {
 			if curLen > visualLen(prefix) {
 				cur += " "
 				curLen++
@@ -514,14 +471,15 @@ func wrapWithPrefixes(firstPrefix, contPrefix string, text interface{}) []string
 			cur += w
 			curLen += visualLen(w)
 		} else {
-			// Emit current
-			lines = append(lines, cur)
-			// Start new line with continuation prefix
+			if curLen > visualLen(prefix) {
+				lines = append(lines, cur)
+			} else {
+				lines = append(lines, prefix+w)
+			}
 			prefix = contPrefix
 			cur = prefix + w
 			curLen = visualLen(prefix) + visualLen(w)
 		}
-		// Last word emits the final line
 		if i == len(words)-1 {
 			lines = append(lines, cur)
 		}
@@ -530,7 +488,6 @@ func wrapWithPrefixes(firstPrefix, contPrefix string, text interface{}) []string
 }
 
 func splitWords(s string) []string {
-	// Collapse internal whitespace to single spaces between words.
 	f := func(r rune) bool { return unicode.IsSpace(r) }
 	parts := strings.FieldsFunc(s, f)
 	return parts
@@ -638,30 +595,27 @@ func findInlineCommentOnLine(line string) (kind string, start, end int) {
 		case ' ', '\t':
 			// whitespace before code
 			continue
-		case '"', '`', '\'':
+		case '"', '\'', '`':
 			inStr = c
 			seenCode = true
-			continue
 		case '/':
-			if i+1 < len(line) {
-				if line[i+1] == '/' {
-					if !seenCode {
-						return "", 0, 0
-					}
-					return "//", i, len(line)
-				}
-				if line[i+1] == '*' {
-					if !seenCode {
-						return "", 0, 0
-					}
-					// only if same-line close
-					if j := strings.Index(line[i+2:], "*/"); j >= 0 {
-						return "/*", i, i + 2 + j + 2
-					}
-					// multi-line trailing block not handled
-					// in this pass
+			if i+1 < len(line) && line[i+1] == '/' {
+				// If comment begins at first non-space, treat as standalone comment.
+				if !seenCode {
 					return "", 0, 0
 				}
+				return "//", i, len(line)
+			}
+			if i+1 < len(line) && line[i+1] == '*' {
+				// Must have closing */ on same line to be hoisted.
+				j := strings.Index(line[i+2:], "*/")
+				if j < 0 {
+					continue
+				}
+				if !seenCode {
+					return "", 0, 0
+				}
+				return "/*", i, i + 2 + j + 2
 			}
 			seenCode = true
 		default:

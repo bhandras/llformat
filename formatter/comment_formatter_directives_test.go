@@ -3,6 +3,7 @@ package formatter
 import (
 	"testing"
 
+	"github.com/lightninglabs/llformat/internal/compat"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +19,7 @@ func TestCommentFormatterPreservesGoDirectives(t *testing.T) {
 func f() {}
 `)
 
-	f := NewCommentFormatter(CommentConfig{ColumnLimit: 30})
+	f := compat.NewCommentFormatter(compat.CommentConfig{ColumnLimit: 30})
 	out := string(f.FormatFile(in))
 
 	require.Contains(t, out, "//go:build linux && amd64\n")
@@ -36,7 +37,7 @@ func f() {
 }
 `)
 
-	f := NewCommentFormatter(CommentConfig{
+	f := compat.NewCommentFormatter(compat.CommentConfig{
 		ColumnLimit:     20,
 		MoveInlineAbove: true,
 	})

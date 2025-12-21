@@ -281,16 +281,15 @@ func buildBlankLineStageFormatter(stageName string, cfg BaseConfig, opts StageOp
 	}
 
 	return NewDSLExprFormatter(DSLExprConfig{
-		ColumnLimit:                 cfg.ColumnLimit,
-		TabStop:                     cfg.TabStop,
-		Rules:                       bundle.BlankLines.Rules,
-		Trace:                       opts.DSL.Trace,
-		TraceReasons:                opts.DSL.TraceReasons,
-		NodeOrder:                   bundle.BlankLines.NodeOrder,
-		MaxIterations:               bundle.BlankLines.MaxIterations,
-		DisableLegacyBlankLinesShim: bundle.BlankLines.DisableLegacyBlankLinesShim,
-		SkipGofmt:                   true,
-		StageName:                   stageName,
-		Budget:                      dslBudgetForRuleProfile(opts.Selection.RuleProfile),
+		ColumnLimit:   cfg.ColumnLimit,
+		TabStop:       cfg.TabStop,
+		Rules:         bundle.BlankLines.Rules,
+		Trace:         opts.DSL.Trace,
+		TraceReasons:  opts.DSL.TraceReasons,
+		NodeOrder:     bundle.BlankLines.NodeOrder,
+		MaxIterations: bundle.BlankLines.MaxIterations,
+		SkipGofmt:     true,
+		StageName:     stageName,
+		Budget:        dslBudgetForRuleProfile(opts.Selection.RuleProfile),
 	})
 }

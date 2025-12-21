@@ -114,9 +114,6 @@ func allowedModes() []string {
 
 func allowedDSLMultiLineStyles() []string {
 	styles := []string{
-		"legacy",
-		"legacy-scan",
-		"scan",
 		"packed",
 		"packed-chain",
 		"packed-chain-layout",

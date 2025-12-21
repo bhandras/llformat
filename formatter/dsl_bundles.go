@@ -1,6 +1,9 @@
 package formatter
 
-import "github.com/lightninglabs/llformat/dsl"
+import (
+	"github.com/lightninglabs/llformat/dsl"
+	"github.com/lightninglabs/llformat/internal/compat"
+)
 
 func normalizedRuleProfile(profile string) string {
 	if profile == "" {
@@ -16,7 +19,7 @@ func normalizedRuleProfile(profile string) string {
 // dslRulesForComments returns the DSL rule list for the comment stage.
 // This intentionally delegates to the legacy comment formatter for parity.
 func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
-	return dsl.LegacyCommentRules(FormatCommentsInSource, commentMoveInline)
+	return dsl.LegacyCommentRules(compat.FormatCommentsInSource, commentMoveInline)
 }
 
 // dslRulesForLogCalls returns the DSL rule list for the log/printf call stage.
@@ -147,7 +150,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			// explicitly enabled here via `--dsl-multiline-style`).
 			style = "packed"
 		default:
-			style = "legacy"
+			style = "packed"
 		}
 	}
 
@@ -167,11 +170,6 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 	}
 
 	switch style {
-	case "legacy", "legacy-scan", "scan":
-		rules = dsl.LegacyMultiLineScanRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
-			FormatOneMultiLineCallInSource,
-		)
 	case "packed":
 		rules = dsl.PackedMultiLineOnlyRulesWithOptions(
 			dsl.MultiLineCallOptions{
@@ -250,10 +248,14 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule, nodeOrder d
 			packedFallback,
 		)
 	default:
-		// Unknown style: fall back to legacy parity mode.
-		rules = dsl.LegacyMultiLineScanRulesWithOptions(
-			dsl.MultiLineCallOptions{Excludes: opts.Style.Excludes},
-			FormatOneMultiLineCallInSource,
+		// Unknown style: fall back to packed multiline.
+		rules = dsl.PackedMultiLineOnlyRulesWithOptions(
+			dsl.MultiLineCallOptions{
+				Excludes: opts.Style.Excludes,
+				DisableBreakBeforeCallOnLongMultiAssignPrefix: profile == "next",
+				CheckMaxSpanLineWidth:                         profile == "next",
+			},
+			packedFallback,
 		)
 	}
 
@@ -372,12 +374,6 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 }
 
 func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
-	if !opts.DSL.UseBlankLinesNative {
-		return dsl.LegacyBlankLinesRules(FormatBlankLinesInSource)
-	}
-
-	// Native DSL blank line rules, with a legacy fallback for unparsable sources
-	// (and as a last resort).
 	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 	blankOpts := dsl.BlankLineOptions{
 		ExtraIfErrReturn: opts.Style.DSLBlankLinesExtraIfErrReturn,
@@ -412,6 +408,5 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 			},
 		)
 	}
-	rules = append(rules, dsl.LegacyBlankLinesFallbackRules(FormatBlankLinesInSource)...)
 	return rules
 }

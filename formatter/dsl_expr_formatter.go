@@ -9,9 +9,8 @@ import (
 
 // DSLExprFormatter uses the DSL engine to format expressions.
 type DSLExprFormatter struct {
-	engine                *dsl.Engine
-	applyLegacyBlankLines bool
-	skipGofmt             bool
+	engine    *dsl.Engine
+	skipGofmt bool
 
 	stageName    string
 	ownedSpansFn func(src []byte) llast.OffsetSpanSet
@@ -43,11 +42,6 @@ type DSLExprConfig struct {
 
 	// Budget provides optional safety guardrails for the DSL engine.
 	Budget dsl.RewriteBudget
-
-	// DisableLegacyBlankLinesShim controls whether DSL blank-line rules are
-	// delegated to the legacy blank-line formatter for parity. When true, DSL
-	// blank-line rules are executed directly by the DSL engine.
-	DisableLegacyBlankLinesShim bool
 }
 
 // NewDSLExprFormatter creates a new DSL-based expression formatter.
@@ -55,11 +49,6 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	rules := cfg.Rules
 	if rules == nil {
 		rules = dsl.DefaultRules()
-	}
-
-	applyLegacyBlankLines := hasDSLBlankLineRules(rules) && !cfg.DisableLegacyBlankLinesShim
-	if applyLegacyBlankLines {
-		rules = filterDSLBlankLineRules(rules)
 	}
 
 	engine := dsl.NewEngine(rules)
@@ -86,11 +75,10 @@ func NewDSLExprFormatter(cfg DSLExprConfig) *DSLExprFormatter {
 	}
 
 	return &DSLExprFormatter{
-		engine:                engine,
-		applyLegacyBlankLines: applyLegacyBlankLines,
-		skipGofmt:             cfg.SkipGofmt,
-		stageName:             cfg.StageName,
-		ownedSpansFn:          cfg.OwnedSpansFunc,
+		engine:       engine,
+		skipGofmt:    cfg.SkipGofmt,
+		stageName:    cfg.StageName,
+		ownedSpansFn: cfg.OwnedSpansFunc,
 	}
 }
 
@@ -110,24 +98,6 @@ func (f *DSLExprFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
 func (f *DSLExprFormatter) FormatFile(src []byte) []byte {
 	out := f.engine.FormatFile(src)
 
-	if !f.applyLegacyBlankLines {
-		if f.skipGofmt {
-			return out
-		}
-		if formatted, err := formatstd.Source(out); err == nil {
-			return formatted
-		}
-		return out
-	}
-
-	// Preserve existing llformat behavior for blank line insertion by running
-	// the legacy blank-line formatter after DSL transformations.
-	out = NewBlankLineFormatter(BlankLineConfig{
-		BeforeReturn:            true,
-		BetweenCases:            true,
-		BetweenInterfaceMethods: true,
-	}).FormatFile(out)
-
 	if f.skipGofmt {
 		return out
 	}
@@ -135,27 +105,4 @@ func (f *DSLExprFormatter) FormatFile(src []byte) []byte {
 		return formatted
 	}
 	return out
-}
-
-func hasDSLBlankLineRules(rules []dsl.Rule) bool {
-	for _, r := range rules {
-		switch r.Name {
-		case "blank_lines_batch", "blank_before_case", "blank_before_return", "blank_between_interface_methods":
-			return true
-		}
-	}
-	return false
-}
-
-func filterDSLBlankLineRules(rules []dsl.Rule) []dsl.Rule {
-	filtered := make([]dsl.Rule, 0, len(rules))
-	for _, r := range rules {
-		switch r.Name {
-		case "blank_lines_batch", "blank_before_case", "blank_before_return", "blank_between_interface_methods":
-			continue
-		default:
-			filtered = append(filtered, r)
-		}
-	}
-	return filtered
 }

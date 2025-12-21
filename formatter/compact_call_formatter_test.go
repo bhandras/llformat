@@ -8,14 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLogsExamples(t *testing.T) {
-	t.Skip("legacy golden tests removed; next goldens are validated in TestPipelineNextGoldens")
-}
-
-func TestLogsExamplesDSL(t *testing.T) {
-	t.Skip("legacy golden tests removed; next goldens are validated in TestPipelineNextGoldens")
-}
-
 func TestBuildSplitQuoted_DoesNotEmitDanglingPlusWhenIndentTooDeep(t *testing.T) {
 	// When the indentation itself exceeds the configured width, splitting a
 	// string literal cannot make it fit. We should still emit valid Go (no

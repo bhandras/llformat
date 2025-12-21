@@ -3,6 +3,7 @@ package formatter
 import (
 	"testing"
 
+	"github.com/lightninglabs/llformat/internal/compat"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,7 +29,7 @@ func TestCommentFormatterPreservesMoreDirectiveVariants(t *testing.T) {
 func f() {}
 `)
 
-	f := NewCommentFormatter(CommentConfig{ColumnLimit: 20})
+	f := compat.NewCommentFormatter(compat.CommentConfig{ColumnLimit: 20})
 	out := string(f.FormatFile(in))
 
 	// Ensure directive lines are preserved verbatim (no wrapping/normalization).
@@ -61,7 +62,7 @@ import "C"
 func f() {}
 `)
 
-	f := NewCommentFormatter(CommentConfig{ColumnLimit: 20})
+	f := compat.NewCommentFormatter(compat.CommentConfig{ColumnLimit: 20})
 	out := string(f.FormatFile(in))
 
 	// The cgo directive block must be preserved exactly; wrapping or re-indenting

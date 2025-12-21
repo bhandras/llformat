@@ -6,12 +6,11 @@ import "github.com/lightninglabs/llformat/dsl"
 // It intentionally mirrors DSLExprConfig fields that are policy-driven rather
 // than derived from the file formatting config (column limit/tab stop).
 type DSLStageSpec struct {
-	Rules                       []dsl.Rule
-	NodeOrder                   dsl.NodeOrder
-	MaxIterations               int
-	AutoMaxIterations           bool
-	DetectCycles                bool
-	DisableLegacyBlankLinesShim bool
+	Rules             []dsl.Rule
+	NodeOrder         dsl.NodeOrder
+	MaxIterations     int
+	AutoMaxIterations bool
+	DetectCycles      bool
 }
 
 // DSLBundle is the cohesive per-stage DSL rule/config selection for a given
@@ -42,7 +41,6 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 	profile := normalizedRuleProfile(opts.Selection.RuleProfile)
 
 	blankLineRules := dslRulesForBlankLines(opts)
-	disableBlankLinesShim := opts.DSL.UseBlankLinesNative
 
 	return DSLBundle{
 		Comments: DSLStageSpec{
@@ -83,10 +81,9 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 			DetectCycles:      opts.DSL.UseFuncSigsNative,
 		},
 		BlankLines: DSLStageSpec{
-			Rules:                       blankLineRules,
-			NodeOrder:                   dsl.NodeOrderPreorder,
-			MaxIterations:               dslMaxItersForBlankLines(opts),
-			DisableLegacyBlankLinesShim: disableBlankLinesShim,
+			Rules:         blankLineRules,
+			NodeOrder:     dsl.NodeOrderPreorder,
+			MaxIterations: dslMaxItersForBlankLines(opts),
 		},
 	}
 }

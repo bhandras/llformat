@@ -4,7 +4,7 @@ import "testing"
 
 func TestNewStage(t *testing.T) {
 	// Create a mock formatter
-	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	formatter := NoopFormatter{}
 
 	stage := NewStage("test-stage", formatter)
 
@@ -20,7 +20,7 @@ func TestNewStage(t *testing.T) {
 }
 
 func TestStageWithRequires(t *testing.T) {
-	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	formatter := NoopFormatter{}
 	stage := NewStage("test-stage", formatter)
 
 	// Add dependencies
@@ -41,7 +41,7 @@ func TestStageWithRequires(t *testing.T) {
 }
 
 func TestStageOrder(t *testing.T) {
-	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	formatter := NoopFormatter{}
 
 	stages := []Stage{
 		NewStage("stage1", formatter),
@@ -62,7 +62,7 @@ func TestStageOrder(t *testing.T) {
 }
 
 func TestStageOrderMissingDep(t *testing.T) {
-	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	formatter := NoopFormatter{}
 	stages := []Stage{
 		NewStage("stage1", formatter).WithRequires("missing"),
 	}
@@ -73,7 +73,7 @@ func TestStageOrderMissingDep(t *testing.T) {
 }
 
 func TestStageOrderCycle(t *testing.T) {
-	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	formatter := NoopFormatter{}
 	stages := []Stage{
 		NewStage("a", formatter).WithRequires("b"),
 		NewStage("b", formatter).WithRequires("a"),
@@ -118,7 +118,7 @@ func TestDefaultStages(t *testing.T) {
 }
 
 func TestStageChaining(t *testing.T) {
-	formatter := NewBlankLineFormatter(BlankLineConfig{})
+	formatter := NoopFormatter{}
 
 	// Test that chaining works
 	stage := NewStage("test", formatter).

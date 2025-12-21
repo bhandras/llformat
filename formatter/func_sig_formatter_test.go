@@ -8,14 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSignaturesGolden(t *testing.T) {
-	t.Skip("legacy golden tests removed; next goldens are validated in TestPipelineNextGoldens")
-}
-
-func TestSignaturesGoldenDSL(t *testing.T) {
-	t.Skip("legacy golden tests removed; next goldens are validated in TestPipelineNextGoldens")
-}
-
 func TestFormatFuncSigsInSource_PreservesInlineFuncBodies(t *testing.T) {
 	const in = `package p
 
