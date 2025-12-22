@@ -1660,6 +1660,127 @@ func (f *FuncSigFormatter) funcParamNeedsBreaking(param,
 	return false
 }
 
+// funcTypeParamContext holds state for formatting function-typed parameters.
+type funcTypeParamContext struct {
+	f           *FuncSigFormatter
+	param       string
+	baseIndent  string
+	prefix      string
+	innerList   []string
+	afterParams string
+}
+
+// needsBreaking returns true if the inner params need to be broken across
+// multiple lines.
+func (ctx *funcTypeParamContext) needsBreaking() bool {
+	for _, p := range ctx.innerList {
+		p = strings.TrimSpace(p)
+		if strings.Contains(p, "\n") {
+			return true
+		}
+	}
+
+	testLine := ctx.baseIndent + ctx.prefix + "("
+	for i, p := range ctx.innerList {
+		p = strings.TrimSpace(p)
+		if i > 0 {
+			testLine += ", "
+		}
+		testLine += p
+	}
+	testLine += ")" + ctx.afterParams
+
+	return width.VisualLenWithTab(testLine, ctx.f.cfg.TabStop) >
+		ctx.f.cfg.ColumnLimit
+}
+
+// needsCanonicalBreak returns true if a trailing-comma canonical form is
+// required.
+func (ctx *funcTypeParamContext) needsCanonicalBreak() bool {
+	for _, p := range ctx.innerList {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if hasInlineStructWithSemicolons(p) ||
+			strings.Contains(p, "\n") {
+
+			return true
+		}
+	}
+	return false
+}
+
+// formatCanonical returns the canonical multiline form with trailing commas.
+func (ctx *funcTypeParamContext) formatCanonical() string {
+	contIndent := ctx.baseIndent + "\t"
+	var result strings.Builder
+	result.WriteString(ctx.prefix)
+	result.WriteString("(\n")
+	for _, p := range ctx.innerList {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		result.WriteString(contIndent)
+		result.WriteString(p)
+		result.WriteString(",\n")
+	}
+	result.WriteString(ctx.baseIndent)
+	result.WriteString(")")
+	result.WriteString(ctx.afterParams)
+	return result.String()
+}
+
+// formatPacked returns the greedy/packed form breaking only when needed.
+func (ctx *funcTypeParamContext) formatPacked() string {
+	contIndent := ctx.baseIndent + "\t"
+	var result strings.Builder
+	result.WriteString(ctx.prefix)
+	result.WriteString("(")
+	currentLine := ctx.baseIndent + ctx.prefix + "("
+
+	for i, p := range ctx.innerList {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		sep := ""
+		if i > 0 {
+			sep = ", "
+		}
+
+		testLine := currentLine + sep + p
+		testCheck := testLine
+		if i == len(ctx.innerList)-1 {
+			testCheck += ")" + ctx.afterParams
+		}
+
+		if i > 0 &&
+			width.VisualLenWithTab(testCheck, ctx.f.cfg.TabStop) >
+				ctx.f.cfg.ColumnLimit {
+
+			result.WriteByte(',')
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(p)
+			currentLine = contIndent + p
+			continue
+		}
+
+		if i > 0 {
+			result.WriteString(", ")
+			currentLine += ", "
+		}
+		result.WriteString(p)
+		currentLine += p
+	}
+
+	result.WriteString(")")
+	result.WriteString(ctx.afterParams)
+	return result.String()
+}
+
 // formatFuncTypeParam formats a function-typed parameter, breaking its inner
 // params if they exceed the column limit. Returns the formatted parameter text.
 // param should be like "handler func(cfg struct{ ... }) error" baseIndent is
@@ -1696,79 +1817,23 @@ func (f *FuncSigFormatter) formatFuncTypeParam(param,
 		return param
 	}
 
-	// Check if inner params need breaking They need breaking if: 1. Any
-	// param is multiline (contains struct expansion), or 2. The full line
-	// exceeds the limit
-	needsBreaking := false
-	for _, p := range innerList {
-		p = strings.TrimSpace(p)
-		if strings.Contains(p, "\n") {
-			// Inner param is multiline - needs breaking for
-			// readability
-			needsBreaking = true
-			break
-		}
+	ctx := &funcTypeParamContext{
+		f:           f,
+		param:       param,
+		baseIndent:  baseIndent,
+		prefix:      prefix,
+		innerList:   innerList,
+		afterParams: afterParams,
 	}
 
-	if !needsBreaking {
-		// Check if the single line form exceeds the limit
-		testLine := baseIndent + prefix + "("
-		for i, p := range innerList {
-			p = strings.TrimSpace(p)
-			if i > 0 {
-				testLine += ", "
-			}
-			testLine += p
-		}
-		testLine += ")" + afterParams
-		if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.
-			cfg.
-			ColumnLimit {
-
-			needsBreaking = true
-		}
-	}
-
-	if !needsBreaking {
+	if !ctx.needsBreaking() {
 		return param // Fits on one line and no multiline content
 	}
 
-	// Decide whether to force a canonical multiline shape. This is required
-	// for inline struct params, because splitting across lines without a
-	// trailing comma is not parseable.
-	forceCanonical := false
-	for _, p := range innerList {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if hasInlineStructWithSemicolons(p) ||
-			strings.Contains(p, "\n") {
-
-			forceCanonical = true
-			break
-		}
-	}
-
-	var result strings.Builder
-	result.WriteString(prefix)
-	if forceCanonical {
-		contIndent := baseIndent + "\t"
-		result.WriteString("(\n")
-		for _, p := range innerList {
-			p = strings.TrimSpace(p)
-			if p == "" {
-				continue
-			}
-			result.WriteString(contIndent)
-			result.WriteString(p)
-			result.WriteString(",\n")
-		}
-		result.WriteString(baseIndent)
-		result.WriteString(")")
-		result.WriteString(afterParams)
-
-		return result.String()
+	// Canonical form is required for inline struct params, because
+	// splitting across lines without a trailing comma is not parseable.
+	if ctx.needsCanonicalBreak() {
+		return ctx.formatCanonical()
 	}
 
 	// If this function type already has explicit results, prefer keeping
@@ -1781,53 +1846,7 @@ func (f *FuncSigFormatter) formatFuncTypeParam(param,
 
 	// Greedy/packed breaking: keep as many inner params as fit on the same
 	// line, breaking only when needed (partial break style).
-	contIndent := baseIndent + "\t"
-	result.WriteString("(")
-	currentLine := baseIndent + prefix + "("
-
-	for i, p := range innerList {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		sep := ""
-		if i > 0 {
-			sep = ", "
-		}
-
-		testLine := currentLine + sep + p
-		testCheck := testLine
-		if i == len(innerList)-1 {
-			testCheck += ")" + afterParams
-		}
-
-		if i > 0 &&
-			width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.
-				cfg.
-				ColumnLimit {
-
-			// Break before this param; ensure previous param had
-			// its comma.
-			result.WriteByte(',')
-			result.WriteByte('\n')
-			result.WriteString(contIndent)
-			result.WriteString(p)
-			currentLine = contIndent + p
-			continue
-		}
-
-		if i > 0 {
-			result.WriteString(", ")
-			currentLine += ", "
-		}
-		result.WriteString(p)
-		currentLine += p
-	}
-
-	result.WriteString(")")
-	result.WriteString(afterParams)
-
-	return result.String()
+	return ctx.formatPacked()
 }
 
 // formatInterfaceMethod formats a long interface method declaration. Returns
