@@ -3560,6 +3560,102 @@ func isParenthesizedTypeList(s string) bool {
 	return depth == 0
 }
 
+// simpleReturnsContext holds context for formatting return types in simple
+// signature/method formatters.
+type simpleReturnsContext struct {
+	result      *strings.Builder
+	returns     string
+	contIndent  string
+	currentLine string
+	expandTypes bool
+	colLimit    int
+	tabStop     int
+}
+
+// formatSimpleReturns formats return types for simple signature/method
+// formatters. Never breaks the line between ")" and the first return token
+// to avoid triggering Go's semicolon insertion.
+func (ctx *simpleReturnsContext) formatSimpleReturns() {
+	returnsOut := ctx.returns
+	if ctx.expandTypes {
+		returnsOut = expandInlineTypeLiterals(returnsOut)
+	}
+
+	if !isParenthesizedTypeList(ctx.returns) {
+		ctx.result.WriteByte(' ')
+		ctx.result.WriteString(
+			indentContinuationLines(returnsOut, ctx.contIndent),
+		)
+		return
+	}
+
+	inner := strings.TrimSpace(returnsOut[1 : len(returnsOut)-1])
+	innerList := splitTopLevelSimple(inner)
+
+	if len(innerList) == 0 {
+		ctx.result.WriteByte(' ')
+		ctx.result.WriteString(
+			indentContinuationLines(returnsOut, ctx.contIndent),
+		)
+		return
+	}
+
+	ctx.formatParenthesizedReturns(innerList, returnsOut)
+}
+
+// formatParenthesizedReturns handles parenthesized return type lists.
+func (ctx *simpleReturnsContext) formatParenthesizedReturns(
+	innerList []string, returnsOut string,
+) {
+	needMulti := strings.Contains(ctx.result.String(), "\n") ||
+		visualLen(ctx.currentLine+" "+returnsOut, ctx.tabStop) > ctx.colLimit
+
+	itemIndent := ctx.contIndent + "\t"
+	formattedElems := make([]string, 0, len(innerList))
+
+	for _, elem := range innerList {
+		elem = strings.TrimSpace(elem)
+		if elem == "" {
+			continue
+		}
+		elemOut := elem
+		if ctx.expandTypes {
+			elemOut = expandInlineTypeLiterals(elemOut)
+			elemOut = indentContinuationLines(elemOut, itemIndent)
+		}
+		if strings.Contains(elemOut, "\n") {
+			needMulti = true
+		}
+		formattedElems = append(formattedElems, elemOut)
+	}
+
+	if !needMulti {
+		ctx.writeInlineReturns(formattedElems)
+		return
+	}
+
+	// Keep "(" on same line as ")" to avoid semicolon insertion.
+	ctx.result.WriteString(" (\n")
+	ctx.result.WriteString(
+		formatPackedMultilineTypeList(
+			formattedElems, itemIndent, ctx.contIndent,
+			ctx.colLimit, ctx.tabStop,
+		),
+	)
+}
+
+// writeInlineReturns writes return elements on a single line.
+func (ctx *simpleReturnsContext) writeInlineReturns(elems []string) {
+	ctx.result.WriteString(" (")
+	for i, elem := range elems {
+		if i > 0 {
+			ctx.result.WriteString(", ")
+		}
+		ctx.result.WriteString(elem)
+	}
+	ctx.result.WriteString(")")
+}
+
 // formatSignatureSimple is a fallback formatter that breaks at commas. Uses
 // left-flow packing: break BEFORE elements that would exceed the limit.
 func formatSignatureSimple(sig, indent string, colLimit,
@@ -3657,107 +3753,16 @@ func formatSignatureSimple(sig, indent string, colLimit,
 
 	// Format results (if present) before the opening brace.
 	if hasReturns {
-		// Keep a space between ")" and the return type list when
-		// staying on the same line. Note: newlines are legal whitespace
-		// in signatures, so we can break before returns.
-		returnsOut := returns
-		if expandTypes {
-			returnsOut = expandInlineTypeLiterals(returnsOut)
+		ctx := &simpleReturnsContext{
+			result:      &result,
+			returns:     returns,
+			contIndent:  contIndent,
+			currentLine: currentLine,
+			expandTypes: expandTypes,
+			colLimit:    colLimit,
+			tabStop:     tabStop,
 		}
-
-		if isParenthesizedTypeList(returns) {
-			inner := strings.TrimSpace(
-				returnsOut[1 : len(returnsOut)-1],
-			)
-			innerList := splitTopLevelSimple(inner)
-
-			// If we can't split, keep as-is.
-			if len(innerList) == 0 {
-				// Never break the line between ")" and the
-				// first return token: a newline here triggers
-				// Go's semicolon insertion and breaks parsing.
-				result.WriteByte(' ')
-				result.WriteString(
-					indentContinuationLines(
-						returnsOut, contIndent,
-					),
-				)
-			} else {
-				// Build multiline return list if needed. We
-				// prefer a multiline result list when:
-				// - params already broke, or
-				// - the combined line would exceed the limit,
-				//   or
-				// - any element becomes multiline due to
-				//   expanded inline struct/interface.
-				needMulti := strings.Contains(
-					result.String(), "\n",
-				) ||
-					visualLen(
-						currentLine+" "+returnsOut,
-						tabStop,
-					) > colLimit
-
-				formattedElems := make(
-					[]string, 0, len(innerList),
-				)
-				itemIndent := contIndent + "\t"
-				for _, elem := range innerList {
-					elem = strings.TrimSpace(elem)
-					if elem == "" {
-						continue
-					}
-					elemOut := elem
-					if expandTypes {
-						elemOut = expandInlineTypeLiterals(
-							elemOut,
-						)
-						elemOut = indentContinuationLines(
-							elemOut, itemIndent,
-						)
-					}
-					if strings.Contains(elemOut, "\n") {
-						needMulti = true
-					}
-					formattedElems = append(
-						formattedElems, elemOut,
-					)
-				}
-
-				if !needMulti {
-					result.WriteString(" (")
-					for i, elem := range formattedElems {
-						if i > 0 {
-							result.WriteString(", ")
-						}
-						result.WriteString(elem)
-					}
-					result.WriteString(")")
-				} else {
-					// Keep the opening "(" on the same line
-					// as ")" to avoid semicolon insertion
-					// after the parameter list.
-					result.WriteString(" (\n")
-					result.WriteString(
-						formatPackedMultilineTypeList(
-							formattedElems,
-							itemIndent, contIndent,
-							colLimit, tabStop,
-						),
-					)
-				}
-			}
-		} else {
-			// Single return type/expression. Never break the line
-			// between ")" and the return token: a newline after ")"
-			// triggers Go's semicolon insertion.
-			result.WriteByte(' ')
-			result.WriteString(
-				indentContinuationLines(
-					returnsOut, contIndent,
-				),
-			)
-		}
+		ctx.formatSimpleReturns()
 	}
 
 	// Append body opener.
@@ -4088,92 +4093,16 @@ func formatMethodSimple(method, indent string, colLimit, tabStop int) string {
 
 	// Results (if present).
 	if hasReturns {
-		returnsOut := returns
-		if expandTypes {
-			returnsOut = expandInlineTypeLiterals(returnsOut)
+		ctx := &simpleReturnsContext{
+			result:      &result,
+			returns:     returns,
+			contIndent:  contIndent,
+			currentLine: currentLine,
+			expandTypes: expandTypes,
+			colLimit:    colLimit,
+			tabStop:     tabStop,
 		}
-
-		if isParenthesizedTypeList(returns) {
-			inner := strings.TrimSpace(
-				returnsOut[1 : len(returnsOut)-1],
-			)
-			innerList := splitTopLevelSimple(inner)
-			if len(innerList) == 0 {
-				// Never break the line between ")" and the
-				// first return token: a newline here triggers
-				// semicolon insertion and breaks parsing.
-				result.WriteByte(' ')
-				result.WriteString(
-					indentContinuationLines(
-						returnsOut, contIndent,
-					),
-				)
-			} else {
-				needMulti := strings.Contains(
-					result.String(), "\n",
-				) ||
-					visualLen(
-						currentLine+" "+returnsOut,
-						tabStop,
-					) > colLimit
-
-				formattedElems := make(
-					[]string, 0, len(innerList),
-				)
-				itemIndent := contIndent + "\t"
-				for _, elem := range innerList {
-					elem = strings.TrimSpace(elem)
-					if elem == "" {
-						continue
-					}
-					elemOut := elem
-					if expandTypes {
-						elemOut = expandInlineTypeLiterals(
-							elemOut,
-						)
-						elemOut = indentContinuationLines(
-							elemOut, itemIndent,
-						)
-					}
-					if strings.Contains(elemOut, "\n") {
-						needMulti = true
-					}
-					formattedElems = append(
-						formattedElems, elemOut,
-					)
-				}
-
-				if !needMulti {
-					result.WriteString(" (")
-					for i, elem := range formattedElems {
-						if i > 0 {
-							result.WriteString(", ")
-						}
-						result.WriteString(elem)
-					}
-					result.WriteString(")")
-				} else {
-					// Keep "(" on the same line as ")" to
-					// avoid semicolon insertion.
-					result.WriteString(" (\n")
-					result.WriteString(
-						formatPackedMultilineTypeList(
-							formattedElems,
-							itemIndent, contIndent,
-							colLimit, tabStop,
-						),
-					)
-				}
-			}
-		} else {
-			// Never break the line between ")" and the return
-			// token: a newline after ")" triggers semicolon
-			// insertion.
-			result.WriteByte(' ')
-			result.WriteString(
-				indentContinuationLines(returnsOut, contIndent),
-			)
-		}
+		ctx.formatSimpleReturns()
 	}
 
 	return result.String()
