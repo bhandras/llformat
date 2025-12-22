@@ -854,6 +854,13 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 	// Track if we've seen a multiline call or composite.
 	seenMultilineCall := false      // After multiline call, all args break
 	seenMultilineComposite := false // After composite then single-line, break
+	stringCfg := stringLitArgConfig{
+		contIndent:       contIndent,
+		contIndentLen:    contIndentLen,
+		lineWidth:        lineWidth,
+		width:            width,
+		curLenAfterWrite: curLenAfterWrite,
+	}
 	for idx, raw := range args {
 		a := strings.TrimSpace(raw)
 		if a == "" {
@@ -863,104 +870,26 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 		// arg. After a multiline composite, the break logic is handled
 		// later in shouldBreak.
 		forcedBreak := !first && prevWasMultiline && prevWasCall
+
 		// Handle string literals (double-quoted) with potential
 		// splitting.
-		if e, err := parser.ParseExpr(a); err == nil {
-			if text, ok := llast.FlattenStringExprAST(e); ok {
-				stringWidth := width
-				if first || forcedBreak {
-					// Emit at continuation indent; split
-					// using contIndentLen as start.
-					split := buildSplitQuoted(
-						text, contIndentLen, contIndent,
-						stringWidth,
-					)
-					if !first {
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-					} else {
-						b.WriteString(contIndent)
-					}
-					b.WriteString(split)
-					curLen = curLenAfterWrite(split)
-					first = false
-					continue
-				}
-				// Not first: decide placement. 1) If the plain
-				// quoted string fits on current line after ",
-				// ", keep it.
-				plain := quoteGoString(text)
-				if advanceCols(curLen+2, plain) <= lineWidth {
-					b.WriteString(", ")
-					b.WriteString(plain)
-					curLen = advanceCols(curLen+2, plain)
-				} else {
-					// Decide whether to keep it whole on a
-					// fresh line or split.
-					effectiveWidth := stringWidth
-					hasMore := false
-					for j := idx + 1; j < len(args); j++ {
-						if strings.TrimSpace(args[j]) != "" {
-							hasMore = true
-							break
-						}
-					}
-					if !hasMore &&
-						advanceCols(
-							contIndentLen, plain,
-						) <= effectiveWidth {
+		state := callArgState{
+			curLen:                 curLen,
+			first:                  first,
+			prevWasMultiline:       prevWasMultiline,
+			prevWasCall:            prevWasCall,
+			seenMultilineCall:      seenMultilineCall,
+			seenMultilineComposite: seenMultilineComposite,
+		}
+		hasMore := hasMoreNonEmptyArgs(args, idx)
+		if handled, next := formatPackedStringLitArg(
+			&b, a, forcedBreak, hasMore, stringCfg, state,
+		); handled {
 
-						// Last argument: prefer placing
-						// whole on the next line.
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						b.WriteString(plain)
-						curLen = contIndentLen +
-							firstLineLen(plain)
-						first = false
-						continue
-					}
-					// 3) Finally, split across multiple
-					// lines.
-					tentative := buildSplitQuoted(
-						text, curLen+2, contIndent,
-						effectiveWidth,
-					)
-					need := 2 + firstLineLen(tentative)
-					if curLen+need <= effectiveWidth {
-						b.WriteString(", ")
-						b.WriteString(tentative)
-						if strings.Contains(
-							tentative, "\n",
-						) {
-
-							curLen = lastLineLen(
-								tentative,
-							)
-						} else {
-							curLen += need
-						}
-					} else {
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(
-							contIndent,
-						)
-						split := buildSplitQuoted(
-							text, contIndentLen,
-							contIndent,
-							effectiveWidth,
-						)
-						b.WriteString(split)
-						curLen = curLenAfterWrite(split)
-						prevWasMultiline = false
-					}
-				}
-				first = false
-				continue
-			}
+			curLen = next.curLen
+			first = next.first
+			prevWasMultiline = next.prevWasMultiline
+			continue
 		}
 		// Pretty-format composite literals only for keyed maps/structs;
 		// keep slices/arrays inline to avoid over-wrapping short
@@ -975,7 +904,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 		// If the argument is itself a call expression and it doesn't
 		// fit, recursively format it in packed multiline style without
 		// adding a trailing comma inside.
-		state := callArgState{
+		state = callArgState{
 			curLen:                 curLen,
 			first:                  first,
 			prevWasMultiline:       prevWasMultiline,
@@ -1170,6 +1099,249 @@ func markNestedCallState(nested string, state callArgState) callArgState {
 	return state
 }
 
+// stringLitArgConfig holds configuration for formatPackedStringLitArg.
+type stringLitArgConfig struct {
+	contIndent       string
+	contIndentLen    int
+	lineWidth        int
+	width            int
+	curLenAfterWrite func(string) int
+}
+
+// formatPackedStringLitArg handles string literal arguments in packed multiline
+// call formatting. It returns whether the argument was handled and the updated
+// state.
+func formatPackedStringLitArg(b *strings.Builder, arg string, forcedBreak bool,
+	hasMoreArgs bool, cfg stringLitArgConfig,
+	state callArgState) (bool, callArgState) {
+
+	e, err := parser.ParseExpr(arg)
+	if err != nil {
+		return false, state
+	}
+	text, ok := llast.FlattenStringExprAST(e)
+	if !ok {
+		return false, state
+	}
+
+	if state.first || forcedBreak {
+		state = emitStringLitOnFreshLine(
+			b, text, forcedBreak, cfg, state,
+		)
+
+		return true, state
+	}
+
+	plain := quoteGoString(text)
+	if advanceCols(state.curLen+2, plain) <= cfg.lineWidth {
+		b.WriteString(", ")
+		b.WriteString(plain)
+		state.curLen = advanceCols(state.curLen+2, plain)
+		state.first = false
+
+		return true, state
+	}
+
+	state = emitStringLitOverflow(b, text, plain, hasMoreArgs, cfg, state)
+
+	return true, state
+}
+
+// emitStringLitOnFreshLine emits a string literal at continuation indent,
+// optionally splitting it if needed.
+func emitStringLitOnFreshLine(b *strings.Builder, text string, forcedBreak bool,
+	cfg stringLitArgConfig, state callArgState) callArgState {
+
+	split := buildSplitQuoted(
+		text, cfg.contIndentLen, cfg.contIndent, cfg.width,
+	)
+	if forcedBreak {
+		b.WriteByte(',')
+		b.WriteByte('\n')
+		b.WriteString(cfg.contIndent)
+	} else {
+		b.WriteString(cfg.contIndent)
+	}
+	b.WriteString(split)
+	state.curLen = cfg.curLenAfterWrite(split)
+	state.first = false
+
+	return state
+}
+
+// emitStringLitOverflow handles a string literal that doesn't fit inline.
+func emitStringLitOverflow(b *strings.Builder, text, plain string,
+	hasMoreArgs bool, cfg stringLitArgConfig,
+	state callArgState) callArgState {
+
+	// If this is the last argument and fits whole on next line, place it
+	// there.
+	if !hasMoreArgs && advanceCols(cfg.contIndentLen, plain) <= cfg.width {
+		b.WriteByte(',')
+		b.WriteByte('\n')
+		b.WriteString(cfg.contIndent)
+		b.WriteString(plain)
+		state.curLen = cfg.contIndentLen + firstLineLen(plain)
+		state.first = false
+
+		return state
+	}
+
+	// Try to split starting on the current line.
+	tentative := buildSplitQuoted(
+		text, state.curLen+2, cfg.contIndent, cfg.width,
+	)
+	need := 2 + firstLineLen(tentative)
+	if state.curLen+need <= cfg.width {
+		b.WriteString(", ")
+		b.WriteString(tentative)
+		if strings.Contains(tentative, "\n") {
+			state.curLen = lastLineLen(tentative)
+		} else {
+			state.curLen += need
+		}
+		state.first = false
+
+		return state
+	}
+
+	// Start on a fresh continuation line and split there.
+	b.WriteByte(',')
+	b.WriteByte('\n')
+	b.WriteString(cfg.contIndent)
+	split := buildSplitQuoted(
+		text, cfg.contIndentLen, cfg.contIndent, cfg.width,
+	)
+	b.WriteString(split)
+	state.curLen = cfg.curLenAfterWrite(split)
+	state.prevWasMultiline = false
+	state.first = false
+
+	return state
+}
+
+// hasMoreNonEmptyArgs checks if there are more non-empty arguments after idx.
+func hasMoreNonEmptyArgs(args []string, idx int) bool {
+	for j := idx + 1; j < len(args); j++ {
+		if strings.TrimSpace(args[j]) != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// stringLitArgNextConfig holds configuration for formatPackedStringLitArgNext.
+type stringLitArgNextConfig struct {
+	contIndent       string
+	contIndentLen    int
+	lineWidth        int
+	width            int
+	curLenAfterWrite func(string) int
+}
+
+// formatPackedStringLitArgNext handles string literal arguments in packed
+// multiline call formatting for "next" style. It returns whether the argument
+// was handled and the updated curLen and first values.
+func formatPackedStringLitArgNext(b *strings.Builder, arg string, curLen int,
+	first, forcedBreak, hasMore bool, cfg stringLitArgNextConfig) (bool, int,
+	bool) {
+
+	e, err := parser.ParseExpr(arg)
+	if err != nil {
+		return false, curLen, first
+	}
+	text, ok := llast.FlattenStringExprAST(e)
+	if !ok {
+		return false, curLen, first
+	}
+
+	if first || forcedBreak {
+		curLen, first = emitStringLitOnFreshLineNext(
+			b, text, forcedBreak, hasMore, cfg,
+		)
+
+		return true, curLen, first
+	}
+
+	plain := quoteGoString(text)
+	if advanceCols(curLen+2, plain) <= cfg.lineWidth {
+		b.WriteString(", ")
+		b.WriteString(plain)
+
+		return true, advanceCols(curLen+2, plain), false
+	}
+
+	curLen, first = emitStringLitOverflowNext(
+		b, text, plain, curLen, hasMore, cfg,
+	)
+
+	return true, curLen, first
+}
+
+// emitStringLitOnFreshLineNext emits a string literal at continuation indent
+// for "next" style.
+func emitStringLitOnFreshLineNext(b *strings.Builder, text string, forcedBreak,
+	hasMore bool, cfg stringLitArgNextConfig) (curLen int, first bool) {
+
+	split := buildSplitQuotedForCallArg(
+		text, cfg.contIndentLen, cfg.contIndent, cfg.width, hasMore,
+	)
+	if forcedBreak {
+		b.WriteByte(',')
+		b.WriteByte('\n')
+		b.WriteString(cfg.contIndent)
+	} else {
+		b.WriteString(cfg.contIndent)
+	}
+	b.WriteString(split)
+
+	return cfg.curLenAfterWrite(split), false
+}
+
+// emitStringLitOverflowNext handles a string literal that doesn't fit inline
+// for "next" style.
+func emitStringLitOverflowNext(b *strings.Builder, text, plain string,
+	curLen int, hasMore bool, cfg stringLitArgNextConfig) (int, bool) {
+
+	// If this is the last argument and fits whole on next line, place it
+	// there.
+	if !hasMore && advanceCols(cfg.contIndentLen, plain) <= cfg.width {
+		b.WriteByte(',')
+		b.WriteByte('\n')
+		b.WriteString(cfg.contIndent)
+		b.WriteString(plain)
+
+		return cfg.contIndentLen + firstLineLen(plain), false
+	}
+
+	// Try to split starting on the current line.
+	tentative := buildSplitQuotedForCallArg(
+		text, curLen+2, cfg.contIndent, cfg.width, hasMore,
+	)
+	need := 2 + firstLineLen(tentative)
+	if curLen+need <= cfg.width {
+		b.WriteString(", ")
+		b.WriteString(tentative)
+		if strings.Contains(tentative, "\n") {
+			return lastLineLen(tentative), false
+		}
+
+		return curLen + need, false
+	}
+
+	// Start on a fresh continuation line and split there.
+	b.WriteByte(',')
+	b.WriteByte('\n')
+	b.WriteString(cfg.contIndent)
+	split := buildSplitQuotedForCallArg(
+		text, cfg.contIndentLen, cfg.contIndent, cfg.width, hasMore,
+	)
+	b.WriteString(split)
+
+	return cfg.curLenAfterWrite(split), false
+}
+
 // formatCallPackedMultiLineNext is an opt-in variant of
 // formatCallPackedMultiLine intended for "next" style formatting. It makes two
 // key changes:
@@ -1279,93 +1451,22 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 		// awkward `}, func(...) { ... }` packing.
 		forcedBreak := !first && curIsFuncLit
 
-		if e, err := parser.ParseExpr(a); err == nil {
-			if text, ok := llast.FlattenStringExprAST(e); ok {
-				hasMore := false
-				for j := idx + 1; j < len(args); j++ {
-					if strings.TrimSpace(args[j]) != "" {
-						hasMore = true
-						break
-					}
-				}
+		// Handle string literals with potential splitting.
+		hasMore := hasMoreNonEmptyArgs(args, idx)
+		stringCfg := stringLitArgNextConfig{
+			contIndent:       contIndent,
+			contIndentLen:    contIndentLen,
+			lineWidth:        lineWidth,
+			width:            width,
+			curLenAfterWrite: curLenAfterWrite,
+		}
+		if handled, newLen, newFirst := formatPackedStringLitArgNext(
+			&b, a, curLen, first, forcedBreak, hasMore, stringCfg,
+		); handled {
 
-				stringWidth := width
-				if first || forcedBreak {
-					split := buildSplitQuotedForCallArg(
-						text, contIndentLen, contIndent,
-						stringWidth, hasMore,
-					)
-					if !first {
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-					} else {
-						b.WriteString(contIndent)
-					}
-					b.WriteString(split)
-					curLen = curLenAfterWrite(split)
-					first = false
-					continue
-				}
-
-				plain := quoteGoString(text)
-				if advanceCols(curLen+2, plain) <= lineWidth {
-					b.WriteString(", ")
-					b.WriteString(plain)
-					curLen = advanceCols(curLen+2, plain)
-				} else {
-					effectiveWidth := stringWidth
-					if !hasMore &&
-						advanceCols(
-							contIndentLen, plain,
-						) <= effectiveWidth {
-
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						b.WriteString(plain)
-						curLen = contIndentLen +
-							firstLineLen(plain)
-						first = false
-						continue
-					}
-
-					tentative := buildSplitQuotedForCallArg(
-						text, curLen+2, contIndent,
-						effectiveWidth, hasMore,
-					)
-					need := 2 + firstLineLen(tentative)
-					if curLen+need <= effectiveWidth {
-						b.WriteString(", ")
-						b.WriteString(tentative)
-						if strings.Contains(
-							tentative, "\n",
-						) {
-
-							curLen = lastLineLen(
-								tentative,
-							)
-						} else {
-							curLen += need
-						}
-					} else {
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(
-							contIndent,
-						)
-						split := buildSplitQuotedForCallArg(
-							text, contIndentLen,
-							contIndent,
-							effectiveWidth, hasMore,
-						)
-						b.WriteString(split)
-						curLen = curLenAfterWrite(split)
-					}
-				}
-				first = false
-				continue
-			}
+			curLen = newLen
+			first = newFirst
+			continue
 		}
 
 		if fa, ok := FormatCompositeLiteralArg(
