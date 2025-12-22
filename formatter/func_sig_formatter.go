@@ -1124,79 +1124,43 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 			lineToCheck = testLine + ","
 		}
 
+		// Handle func params that need multiline formatting specially.
 		if needsFuncBreak {
-			// If the function-typed parameter itself needs
-			// multiline formatting, keep it on its own line (unless
-			// the current line ends with `}` which commonly
-			// indicates an inline struct param that will expand and
-			// should keep `}, handler func(` on the same line after
-			// gofmt).
-			if i > 0 && strings.Contains(paramToWrite, "\n") &&
-				!strings.HasSuffix(
-					strings.TrimSpace(currentLine), "}",
-				) {
-
-				result.WriteByte(',')
-				result.WriteByte('\n')
-				result.WriteString(contIndent)
-				result.WriteString(paramToWrite)
-				currentLine = lastLine(paramToWrite)
-				continue
-			}
-
-			// For func params that need internal breaking, try to
-			// keep the func header inline (e.g., ", handler func(")
-			// and only break the internal params
-			if i > 0 {
-				result.WriteString(", ")
-			}
-			result.WriteString(paramToWrite)
-			if strings.Contains(paramToWrite, "\n") {
-				currentLine = lastLine(paramToWrite)
-			} else {
-				currentLine = currentLine + ", " + paramToWrite
-			}
-		} else if forceParamListNewline && i == 0 {
-			// Inline struct types (with semicolons) will become
-			// multiline after gofmt; start the parameter list on a
-			// fresh line so the expanded struct block is indented
-			// cleanly and follow-up params can pack on the same
-			// continuation line.
-			result.WriteByte('\n')
-			result.WriteString(contIndent)
-			result.WriteString(paramToWrite)
-			if strings.Contains(paramToWrite, "\n") {
-				currentLine = lastLine(paramToWrite)
-			} else {
-				currentLine = contIndent + paramToWrite
-			}
-		} else if width.VisualLenWithTab(lineToCheck, f.cfg.TabStop) > f.
-			cfg.
-			ColumnLimit {
-
-			// Need to break - put param on new line
-			if i > 0 {
-				result.WriteByte(',')
-			}
-			result.WriteByte('\n')
-			result.WriteString(contIndent)
-			result.WriteString(paramToWrite)
-			if strings.Contains(paramToWrite, "\n") {
-				currentLine = lastLine(paramToWrite)
-			} else {
-				currentLine = contIndent + paramToWrite
-			}
-		} else {
-			if i > 0 {
-				result.WriteString(", ")
-			}
-			result.WriteString(paramToWrite)
-			if strings.Contains(paramToWrite, "\n") {
-				currentLine = lastLine(paramToWrite)
-			} else {
-				currentLine = testLine
-			}
+			currentLine = f.writeBreakSigFuncParam(
+				&result, paramToWrite, currentLine, contIndent,
+				i,
+			)
+			continue
 		}
+
+		// Determine if we need to break before this parameter.
+		needsBreak := forceParamListNewline && i == 0
+		if !needsBreak {
+			needsBreak = width.VisualLenWithTab(
+				lineToCheck, f.cfg.TabStop,
+			) > f.cfg.ColumnLimit
+		}
+
+		if needsBreak {
+			// Start param on new line.
+			if i > 0 {
+				result.WriteByte(',')
+			}
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(paramToWrite)
+			currentLine = lastLineOrFallback(
+				paramToWrite, contIndent+paramToWrite,
+			)
+			continue
+		}
+
+		// Param fits on current line.
+		if i > 0 {
+			result.WriteString(", ")
+		}
+		result.WriteString(paramToWrite)
+		currentLine = lastLineOrFallback(paramToWrite, testLine)
 	}
 
 	result.WriteByte(')')
@@ -1428,6 +1392,47 @@ func lastLine(s string) string {
 	}
 
 	return s
+}
+
+// lastLineOrFallback returns lastLine(s) if s contains newlines, otherwise
+// returns the fallback value. This is commonly used when updating the current
+// line tracking after writing a param.
+func lastLineOrFallback(s, fallback string) string {
+	if strings.Contains(s, "\n") {
+		return lastLine(s)
+	}
+	return fallback
+}
+
+// writeBreakSigFuncParam writes a function-typed parameter that needs internal
+// breaking. Returns the updated currentLine value.
+func (f *FuncSigFormatter) writeBreakSigFuncParam(result *strings.Builder,
+	paramToWrite, currentLine, contIndent string, i int) string {
+
+	// If the function-typed parameter itself needs multiline formatting,
+	// keep it on its own line (unless the current line ends with `}` which
+	// commonly indicates an inline struct param that will expand and should
+	// keep `}, handler func(` on the same line after gofmt).
+	isMultiline := strings.Contains(paramToWrite, "\n")
+	endsWithBrace := strings.HasSuffix(
+		strings.TrimSpace(currentLine), "}",
+	)
+	if i > 0 && isMultiline && !endsWithBrace {
+		result.WriteByte(',')
+		result.WriteByte('\n')
+		result.WriteString(contIndent)
+		result.WriteString(paramToWrite)
+		return lastLine(paramToWrite)
+	}
+
+	// For func params that need internal breaking, try to keep the func
+	// header inline (e.g., ", handler func(") and only break the internal
+	// params.
+	if i > 0 {
+		result.WriteString(", ")
+	}
+	result.WriteString(paramToWrite)
+	return lastLineOrFallback(paramToWrite, currentLine+", "+paramToWrite)
 }
 
 func hasInlineStructWithSemicolons(s string) bool {
