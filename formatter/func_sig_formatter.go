@@ -1203,227 +1203,10 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 
 	// Handle returns
 	if returns != "" {
-		if strings.HasPrefix(returns, "(") {
-			// Check if returns fit on current line (after the
-			// closing paren we just wrote)
-			testLine := currentLine + ") " + returns
-			if hasBrace {
-				testLine += " {"
-			}
-
-			if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.
-				cfg.
-				ColumnLimit {
-
-				// Returns don't all fit inline
-				retContent := returns[1 : len(returns)-1]
-				retList := f.splitParams(retContent)
-				retList = filterNonEmptyTrimmed(retList)
-
-				if f.cfg.CanonicalMultilineSigLists {
-					// For the "next" profile, avoid
-					// partially breaking the return list
-					// like: f(...) (a, b) Prefer the
-					// gofmt-like style: f(...) ( a, b, )
-					result.WriteString(" (")
-					result.WriteByte('\n')
-
-					for _, ret := range retList {
-						result.WriteString(contIndent)
-						result.WriteString(ret)
-						result.WriteString(",")
-						result.WriteByte('\n')
-					}
-
-					result.WriteString(indent)
-					result.WriteByte(')')
-				} else {
-					// Legacy behavior: attempt to keep the
-					// first return inline after ") (" and
-					// left-flow pack the remainder.
-					//
-					// Note: this may produce
-					// partially-broken return lists which
-					// are less gofmt-like, but is kept to
-					// preserve golden fixtures.
-					firstRet := ""
-					if len(retList) > 0 {
-						firstRet = strings.TrimSpace(
-							retList[0],
-						)
-					}
-					testFirstInline := currentLine + ") (" +
-						firstRet
-					if len(retList) > 1 {
-						testFirstInline += ","
-					} else {
-						testFirstInline += ")"
-						if hasBrace {
-							testFirstInline += " {"
-						}
-					}
-
-					if width.VisualLenWithTab(
-						testFirstInline, f.cfg.TabStop,
-					) > f.
-						cfg.
-						ColumnLimit {
-
-						// First return doesn't fit
-						// inline - put all returns on
-						// fresh line
-						result.WriteString(" (")
-						result.WriteByte('\n')
-						result.WriteString(contIndent)
-						currentLine = contIndent
-
-						// Now left-flow pack the
-						// returns from the fresh line
-						for i, ret := range retList {
-							ret = strings.TrimSpace(
-								ret,
-							)
-							if ret == "" {
-								continue
-							}
-
-							separator := ""
-							if i > 0 {
-								separator = ", "
-							}
-
-							testAdd := separator +
-								ret
-							isLastRet := i == len(
-								retList,
-							)-
-								1
-							testCheck := currentLine +
-								testAdd
-							if isLastRet {
-								testCheck += ")"
-								if hasBrace {
-									testCheck += " {"
-								}
-							}
-
-							if width.VisualLenWithTab(
-								testCheck,
-								f.cfg.TabStop,
-							) > f.
-								cfg.
-								ColumnLimit {
-
-								if i > 0 {
-									result.WriteByte(',')
-								}
-								result.WriteByte(
-									'\n',
-								)
-								result.WriteString(
-									contIndent,
-								)
-								currentLine = contIndent +
-									ret
-								result.WriteString(
-									ret,
-								)
-							} else {
-								if i > 0 {
-									result.WriteString(
-										", ",
-									)
-									currentLine += ", "
-								}
-								result.WriteString(
-									ret,
-								)
-								currentLine += ret
-							}
-						}
-						result.WriteByte(')')
-					} else {
-						// First return fits inline -
-						// use left-flow packing
-						result.WriteString(" (")
-						currentLine = currentLine +
-							") ("
-
-						for i, ret := range retList {
-							ret = strings.TrimSpace(
-								ret,
-							)
-							if ret == "" {
-								continue
-							}
-
-							separator := ""
-							if i > 0 {
-								separator = ", "
-							}
-
-							testAdd := separator +
-								ret
-							isLastRet := i == len(
-								retList,
-							)-
-								1
-							testCheck := currentLine +
-								testAdd
-							if isLastRet {
-								testCheck += ")"
-								if hasBrace {
-									testCheck += " {"
-								}
-							}
-
-							if width.VisualLenWithTab(
-								testCheck,
-								f.cfg.TabStop,
-							) > f.
-								cfg.
-								ColumnLimit {
-
-								if i > 0 {
-									result.WriteByte(',')
-								}
-								result.WriteByte(
-									'\n',
-								)
-								result.WriteString(
-									contIndent,
-								)
-								currentLine = contIndent +
-									ret
-								result.WriteString(
-									ret,
-								)
-							} else {
-								if i > 0 {
-									result.WriteString(
-										", ",
-									)
-									currentLine += ", "
-								}
-								result.WriteString(
-									ret,
-								)
-								currentLine += ret
-							}
-						}
-						result.WriteByte(')')
-					}
-				}
-			} else {
-				// Returns fit on the same line
-				result.WriteByte(' ')
-				result.WriteString(returns)
-			}
-		} else {
-			// Simple return type
-			result.WriteByte(' ')
-			result.WriteString(returns)
-		}
+		f.formatReturns(
+			&result, returns, currentLine, contIndent, indent,
+			hasBrace,
+		)
 	}
 
 	// Add brace if present
@@ -1446,6 +1229,161 @@ func filterNonEmptyTrimmed(items []string) []string {
 	}
 
 	return out
+}
+
+// formatReturns handles formatting the return type list of a function
+// signature.
+func (f *FuncSigFormatter) formatReturns(result *strings.Builder, returns,
+	currentLine, contIndent, indent string, hasBrace bool) {
+
+	if !strings.HasPrefix(returns, "(") {
+		// Simple return type (no parens).
+		result.WriteByte(' ')
+		result.WriteString(returns)
+
+		return
+	}
+
+	// Check if returns fit on current line.
+	testLine := currentLine + ") " + returns
+	if hasBrace {
+		testLine += " {"
+	}
+
+	if width.VisualLenWithTab(testLine, f.cfg.TabStop) <= f.cfg.ColumnLimit {
+		// Returns fit on the same line.
+		result.WriteByte(' ')
+		result.WriteString(returns)
+
+		return
+	}
+
+	// Returns don't all fit inline - need to break them.
+	retContent := returns[1 : len(returns)-1]
+	retList := f.splitParams(retContent)
+	retList = filterNonEmptyTrimmed(retList)
+
+	ctx := &returnFormatContext{
+		result:     result,
+		retList:    retList,
+		contIndent: contIndent,
+		indent:     indent,
+		hasBrace:   hasBrace,
+		tabStop:    f.cfg.TabStop,
+		colLimit:   f.cfg.ColumnLimit,
+	}
+
+	if f.cfg.CanonicalMultilineSigLists {
+		ctx.formatCanonicalReturns()
+	} else {
+		ctx.formatLegacyReturns(currentLine)
+	}
+}
+
+// returnFormatContext holds state for formatting return type lists.
+type returnFormatContext struct {
+	result     *strings.Builder
+	retList    []string
+	contIndent string
+	indent     string
+	hasBrace   bool
+	tabStop    int
+	colLimit   int
+}
+
+// formatCanonicalReturns formats returns in "next" profile style with each
+// return on its own line.
+func (ctx *returnFormatContext) formatCanonicalReturns() {
+	ctx.result.WriteString(" (")
+	ctx.result.WriteByte('\n')
+
+	for _, ret := range ctx.retList {
+		ctx.result.WriteString(ctx.contIndent)
+		ctx.result.WriteString(ret)
+		ctx.result.WriteString(",")
+		ctx.result.WriteByte('\n')
+	}
+
+	ctx.result.WriteString(ctx.indent)
+	ctx.result.WriteByte(')')
+}
+
+// leftFlowPackReturns packs return values using left-flow algorithm starting
+// from the given currentLine. Returns the final currentLine value.
+func (ctx *returnFormatContext) leftFlowPackReturns(currentLine string) string {
+	for i, ret := range ctx.retList {
+		ret = strings.TrimSpace(ret)
+		if ret == "" {
+			continue
+		}
+
+		separator := ""
+		if i > 0 {
+			separator = ", "
+		}
+
+		testAdd := separator + ret
+		isLastRet := i == len(ctx.retList)-1
+		testCheck := currentLine + testAdd
+		if isLastRet {
+			testCheck += ")"
+			if ctx.hasBrace {
+				testCheck += " {"
+			}
+		}
+
+		if width.VisualLenWithTab(testCheck, ctx.tabStop) > ctx.colLimit {
+			if i > 0 {
+				ctx.result.WriteByte(',')
+			}
+			ctx.result.WriteByte('\n')
+			ctx.result.WriteString(ctx.contIndent)
+			currentLine = ctx.contIndent + ret
+			ctx.result.WriteString(ret)
+		} else {
+			if i > 0 {
+				ctx.result.WriteString(", ")
+				currentLine += ", "
+			}
+			ctx.result.WriteString(ret)
+			currentLine += ret
+		}
+	}
+	ctx.result.WriteByte(')')
+
+	return currentLine
+}
+
+// formatLegacyReturns formats returns using legacy left-flow packing. It tries
+// to keep the first return inline if possible.
+func (ctx *returnFormatContext) formatLegacyReturns(currentLine string) {
+	firstRet := ""
+	if len(ctx.retList) > 0 {
+		firstRet = strings.TrimSpace(ctx.retList[0])
+	}
+
+	testFirstInline := currentLine + ") (" + firstRet
+	if len(ctx.retList) > 1 {
+		testFirstInline += ","
+	} else {
+		testFirstInline += ")"
+		if ctx.hasBrace {
+			testFirstInline += " {"
+		}
+	}
+
+	if width.VisualLenWithTab(testFirstInline, ctx.tabStop) > ctx.colLimit {
+		// First return doesn't fit inline - put all returns on fresh
+		// line.
+		ctx.result.WriteString(" (")
+		ctx.result.WriteByte('\n')
+		ctx.result.WriteString(ctx.contIndent)
+		ctx.leftFlowPackReturns(ctx.contIndent)
+	} else {
+		// First return fits inline - use left-flow packing.
+		ctx.result.WriteString(" (")
+		ctx.leftFlowPackReturns(currentLine + ") (")
+	}
 }
 
 func isSmallParenReturnList(returns string) bool {
