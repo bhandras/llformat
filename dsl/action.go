@@ -3897,7 +3897,6 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) (
 	[]byte, bool) {
 
 	node := resolveTarget(caps, a.Target)
-
 	field, ok := node.(*ast.Field)
 	if !ok || field == nil {
 		return nil, false
@@ -3961,37 +3960,13 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) (
 	// Find end of line after the method.
 	le := lineEnd(ctx.Source, fieldEnd)
 
-	// Preserve any trailing comment on the same line. Field.End() usually
-	// stops at the type expression, so replacing the whole line without
-	// re-attaching the suffix would drop comments.
-	suffix := ""
-	if fieldEnd >= 0 && le > fieldEnd && le <= len(ctx.Source) {
-		lineSuffix := string(ctx.Source[fieldEnd:le]) // includes newline
-		trimmed := strings.TrimLeft(lineSuffix, " \t")
-		if strings.HasPrefix(trimmed, "//") ||
-			strings.HasPrefix(trimmed, "/*") {
-
-			// Normalize to a single space before the comment.
-			newline := ""
-			if strings.HasSuffix(lineSuffix, "\n") {
-				newline = "\n"
-			}
-			suffix = " " + strings.TrimRight(trimmed, "\n") + newline
-		} else {
-			// Keep whitespace/newline as-is.
-			suffix = lineSuffix
-		}
-	}
-
+	// Preserve any trailing comment on the same line.
+	suffix := extractTrailingComment(ctx.Source, fieldEnd, le)
 	formattedWithSuffix := strings.TrimRight(formatted, "\n") + suffix
 	out, err := ApplySingleEdit(
 		ctx.Source, ls, le, []byte(formattedWithSuffix),
 	)
-	if err != nil {
-		return nil, false
-	}
-	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if err != nil || !parseCheckOK(out) {
 		return nil, false
 	}
 
@@ -4250,6 +4225,27 @@ func parseCheckOK(out []byte) bool {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 
 	return err == nil
+}
+
+// extractTrailingComment extracts and normalizes trailing comments from a line.
+func extractTrailingComment(source []byte, nodeEnd, lineEnd int) string {
+	if nodeEnd < 0 || lineEnd <= nodeEnd || lineEnd > len(source) {
+		return ""
+	}
+	lineSuffix := string(source[nodeEnd:lineEnd])
+	trimmed := strings.TrimLeft(lineSuffix, " \t")
+	if !strings.HasPrefix(trimmed, "//") &&
+		!strings.HasPrefix(trimmed, "/*") {
+
+		return lineSuffix
+	}
+	// Normalize to a single space before the comment.
+	newline := ""
+	if strings.HasSuffix(lineSuffix, "\n") {
+		newline = "\n"
+	}
+
+	return " " + strings.TrimRight(trimmed, "\n") + newline
 }
 
 func isWhitespaceOnlyLine(b []byte) bool {
