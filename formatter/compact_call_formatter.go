@@ -2101,16 +2101,7 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				b.WriteString(contIndent)
 				curLen = visualLen(contIndent)
 			}
-			if isTargetedCallStart(a.expr) {
-				formatted := formatCallGreedyWithOptions(
-					[]byte(a.expr), wsIndent, curLen, opts,
-				)
-				b.WriteString(formatted)
-				curLen = lastLineLen(formatted)
-			} else {
-				b.WriteString(a.expr)
-				curLen = advanceCols(curLen, a.expr)
-			}
+			curLen = writeExprArg(&b, a.expr, wsIndent, curLen, opts)
 			continue
 		}
 
@@ -2650,6 +2641,23 @@ func tryMoveStringToCont(
 		return true
 	}
 	return false
+}
+
+// writeExprArg writes an expression argument, recursively formatting nested
+// calls if needed. Returns the updated curLen.
+func writeExprArg(
+	b *strings.Builder, expr, wsIndent string, curLen int,
+	opts greedyCallOptions,
+) int {
+	if isTargetedCallStart(expr) {
+		formatted := formatCallGreedyWithOptions(
+			[]byte(expr), wsIndent, curLen, opts,
+		)
+		b.WriteString(formatted)
+		return lastLineLen(formatted)
+	}
+	b.WriteString(expr)
+	return advanceCols(curLen, expr)
 }
 
 // computePreferredReserve calculates how much space to reserve for trailing
