@@ -133,3 +133,13 @@ go run ./tools/gen_next_goldens --out .next_goldens
 
 The repository is **next-only**: legacy modes and legacy goldens have been
 removed.
+
+## Disclaimer
+
+This project was entirely **vibe coded** with the assistance of AI. While it
+works well for its intended purpose, it is provided **as-is**, without warranty
+of any kind, express or implied. The author assumes no responsibility for any
+issues, bugs, or unintended behavior that may arise from using this software.
+Use at your own risk.
+
+See [LICENSE](LICENSE) for the full MIT license terms.
