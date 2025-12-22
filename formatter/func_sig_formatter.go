@@ -1607,57 +1607,50 @@ func (f *FuncSigFormatter) funcParamNeedsBreaking(param,
 	// Check if the param itself exceeds the limit when placed on a
 	// continuation line
 	testLine := baseIndent + param
-	if width.VisualLenWithTab(testLine, f.cfg.TabStop) > f.cfg.ColumnLimit {
-		// In next-profile mode, allow breaking long function-typed
-		// parameters even when they do not contain nested struct types,
-		// but avoid breaking the inner parameter list for function
-		// types that already have explicit return types: those tend to
-		// look worse when we break both the inner params and the outer
-		// signature.
-		if f.cfg.BreakLongFuncTypeParams {
-			if strings.Contains(param, "func(") {
-				funcIdx := strings.Index(param, "func(")
-				if funcIdx >= 0 {
-					rest := param[funcIdx+
-						4:] // starts with "("
-					if len(rest) > 0 && rest[0] == '(' {
-						end := f.findMatchingParen(
-							rest, 0,
-						)
-						if end >= 0 &&
-							end+1 < len(rest) {
-
-							afterParams := strings.TrimSpace(
-								rest[end+1:],
-							)
-							// Has explicit results
-							// (e.g. `error` or `(T,
-							// error)`): don't break
-							// inner params unless
-							// we are forced by an
-							// inline struct
-							// (handled above).
-							if afterParams != "" {
-								return false
-							}
-						}
-					}
-				}
-			}
-
-			return true
-		}
-
-		// Legacy behavior: only break if it's a func type with complex
-		// params.
-		if strings.Contains(param, "func(") &&
-			strings.Contains(param, "struct") {
-
-			return true
-		}
+	if width.VisualLenWithTab(testLine, f.cfg.TabStop) <= f.cfg.ColumnLimit {
+		return false
 	}
 
-	return false
+	// In next-profile mode, allow breaking long function-typed parameters
+	// even when they do not contain nested struct types, but avoid
+	// breaking the inner parameter list for function types that already
+	// have explicit return types: those tend to look worse when we break
+	// both the inner params and the outer signature.
+	if f.cfg.BreakLongFuncTypeParams {
+		// If the func type has explicit return types (e.g. `error` or
+		// `(T, error)`), don't break inner params unless forced by an
+		// inline struct (handled above).
+		if f.funcTypeHasExplicitReturns(param) {
+			return false
+		}
+		return true
+	}
+
+	// Legacy behavior: only break if it's a func type with complex params.
+	return strings.Contains(param, "func(") &&
+		strings.Contains(param, "struct")
+}
+
+// funcTypeHasExplicitReturns returns true if param contains a func type with
+// explicit return types after the parameter list.
+func (f *FuncSigFormatter) funcTypeHasExplicitReturns(param string) bool {
+	if !strings.Contains(param, "func(") {
+		return false
+	}
+	funcIdx := strings.Index(param, "func(")
+	if funcIdx < 0 {
+		return false
+	}
+	rest := param[funcIdx+4:] // starts with "("
+	if len(rest) == 0 || rest[0] != '(' {
+		return false
+	}
+	end := f.findMatchingParen(rest, 0)
+	if end < 0 || end+1 >= len(rest) {
+		return false
+	}
+	afterParams := strings.TrimSpace(rest[end+1:])
+	return afterParams != ""
 }
 
 // funcTypeParamContext holds state for formatting function-typed parameters.
