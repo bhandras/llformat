@@ -3573,8 +3573,8 @@ type simpleReturnsContext struct {
 }
 
 // formatSimpleReturns formats return types for simple signature/method
-// formatters. Never breaks the line between ")" and the first return token
-// to avoid triggering Go's semicolon insertion.
+// formatters. Never breaks the line between ")" and the first return token to
+// avoid triggering Go's semicolon insertion.
 func (ctx *simpleReturnsContext) formatSimpleReturns() {
 	returnsOut := ctx.returns
 	if ctx.expandTypes {
@@ -3586,6 +3586,7 @@ func (ctx *simpleReturnsContext) formatSimpleReturns() {
 		ctx.result.WriteString(
 			indentContinuationLines(returnsOut, ctx.contIndent),
 		)
+
 		return
 	}
 
@@ -3597,6 +3598,7 @@ func (ctx *simpleReturnsContext) formatSimpleReturns() {
 		ctx.result.WriteString(
 			indentContinuationLines(returnsOut, ctx.contIndent),
 		)
+
 		return
 	}
 
@@ -3604,9 +3606,9 @@ func (ctx *simpleReturnsContext) formatSimpleReturns() {
 }
 
 // formatParenthesizedReturns handles parenthesized return type lists.
-func (ctx *simpleReturnsContext) formatParenthesizedReturns(
-	innerList []string, returnsOut string,
-) {
+func (ctx *simpleReturnsContext) formatParenthesizedReturns(innerList []string,
+	returnsOut string) {
+
 	needMulti := strings.Contains(ctx.result.String(), "\n") ||
 		visualLen(ctx.currentLine+" "+returnsOut, ctx.tabStop) > ctx.colLimit
 
@@ -3631,6 +3633,7 @@ func (ctx *simpleReturnsContext) formatParenthesizedReturns(
 
 	if !needMulti {
 		ctx.writeInlineReturns(formattedElems)
+
 		return
 	}
 

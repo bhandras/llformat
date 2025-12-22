@@ -1922,14 +1922,14 @@ type greedyCallOptions struct {
 	PreserveStringConcatExpr bool
 }
 
-// greedyArgFitParams contains parameters for determining if an argument fits
-// on the current line.
+// greedyArgFitParams contains parameters for determining if an argument fits on
+// the current line.
 type greedyArgFitParams struct {
-	curLen     int
-	width      int
-	numArgs    int
-	argIndex   int
-	opts       greedyCallOptions
+	curLen   int
+	width    int
+	numArgs  int
+	argIndex int
+	opts     greedyCallOptions
 }
 
 // exprFitsOnLine returns true if the expression argument fits on the current
@@ -1944,6 +1944,7 @@ func (p *greedyArgFitParams) exprFitsOnLine(expr string) (fits bool, need int) {
 	// Only reserve ')' for single-line expressions.
 	if p.opts.ReserveClosingParen && p.argIndex == p.numArgs-1 &&
 		!strings.Contains(expr, "\n") {
+
 		reserve = 1
 	}
 
@@ -1959,11 +1960,13 @@ func (p *greedyArgFitParams) exprFitsOnLine(expr string) (fits bool, need int) {
 	} else {
 		fits = total < p.width
 	}
+
 	return fits, need
 }
 
 // textFitsOnLine returns true if a text (string) argument's minimal form fits.
 func (p *greedyArgFitParams) textFitsOnLine() bool {
+
 	// minimal placeable segment on same line: "X" +
 	return p.curLen+2+(2+1+2) <= p.width // ", " + (quotes+char+ +)
 }
@@ -2057,7 +2060,9 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				}
 				var fits bool
 				if a.kind == argExpr {
-					fits, _ = fitParams.exprFitsOnLine(a.expr)
+					fits, _ = fitParams.exprFitsOnLine(
+						a.expr,
+					)
 				} else {
 					fits = fitParams.textFitsOnLine()
 				}
@@ -2088,7 +2093,8 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			fits, need := fitParams.exprFitsOnLine(a.expr)
 			// Note: fits is for "with separator", but here we're
 			// checking without separator (curLen + need > width).
-			needsBreak := !justBroke && !isRawStringLiteral(a.expr) &&
+			needsBreak := !justBroke &&
+				!isRawStringLiteral(a.expr) &&
 				curLen+need > width && !fits
 			if needsBreak {
 				b.WriteByte('\n')
@@ -2345,13 +2351,16 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 					rest, curLen, contIndent, width,
 					hasTrailingArgs,
 				) {
+
 					b.WriteByte('\n')
 					b.WriteString(contIndent)
 					curLen = visualLen(contIndent)
 					continue
 				}
 				// Hard cut by visual columns.
-				idx := cutIndexForWidthFrom(curLen, rest, capCols)
+				idx := cutIndexForWidthFrom(
+					curLen, rest, capCols,
+				)
 				if idx >= len(rest) {
 					// Splitting didn't make progress
 					// (typically because indentation
@@ -2693,14 +2702,15 @@ func isTinyTail(s string, minTailLen int) bool {
 	return len(trimmed) > 0 && len(trimmed) < minTailLen
 }
 
-// shouldWrapForWord checks if we're not on a continuation line and the
-// upcoming word would fit on a fresh continuation line. Used to decide
-// whether to wrap before a hard cut.
-func shouldWrapForWord(
-	rest string, curLen int, contIndent string, width int, hasTrailingArgs bool,
-) bool {
+// shouldWrapForWord checks if we're not on a continuation line and the upcoming
+// word would fit on a fresh continuation line. Used to decide whether to wrap
+// before a hard cut.
+func shouldWrapForWord(rest string, curLen int, contIndent string, width int,
+	hasTrailingArgs bool) bool {
+
 	base := visualLen(contIndent)
 	if curLen == base {
+
 		// Already on continuation line.
 		return false
 	}
@@ -2713,6 +2723,7 @@ func shouldWrapForWord(
 	if hasTrailingArgs {
 		nextCap++
 	}
+
 	return wordCols <= nextCap
 }
 

@@ -1367,6 +1367,7 @@ func lastLineOrFallback(s, fallback string) string {
 	if strings.Contains(s, "\n") {
 		return lastLine(s)
 	}
+
 	return fallback
 }
 
@@ -1388,6 +1389,7 @@ func (f *FuncSigFormatter) writeBreakSigFuncParam(result *strings.Builder,
 		result.WriteByte('\n')
 		result.WriteString(contIndent)
 		result.WriteString(paramToWrite)
+
 		return lastLine(paramToWrite)
 	}
 
@@ -1398,13 +1400,16 @@ func (f *FuncSigFormatter) writeBreakSigFuncParam(result *strings.Builder,
 		result.WriteString(", ")
 	}
 	result.WriteString(paramToWrite)
+
 	return lastLineOrFallback(paramToWrite, currentLine+", "+paramToWrite)
 }
 
-// appendInlineBody appends an inline function body to a formatted signature.
-// If the signature is single-line, the body stays inline; otherwise the body
-// and closing brace are placed on separate lines.
-func appendInlineBody(formatted, inlineBody, inlineAfterClose, indent string) string {
+// appendInlineBody appends an inline function body to a formatted signature. If
+// the signature is single-line, the body stays inline; otherwise the body and
+// closing brace are placed on separate lines.
+func appendInlineBody(formatted, inlineBody, inlineAfterClose,
+	indent string) string {
+
 	body := strings.TrimSpace(inlineBody)
 	afterClose := strings.TrimRight(inlineAfterClose, " \t")
 	isSingleLine := strings.Count(formatted, "\n") == 0
@@ -1416,6 +1421,7 @@ func appendInlineBody(formatted, inlineBody, inlineAfterClose, indent string) st
 		} else {
 			formatted += " }"
 		}
+
 		return formatted + afterClose
 	}
 
@@ -1424,12 +1430,15 @@ func appendInlineBody(formatted, inlineBody, inlineAfterClose, indent string) st
 	if body != "" {
 		formatted += "\n" + indent + "\t" + body
 	}
+
 	return formatted + "\n" + indent + "}" + afterClose
 }
 
 // maybeAddBlankAfterBrace adds a blank line after a multi-line signature's
 // opening brace if the next line is not already blank or the closing brace.
-func maybeAddBlankAfterBrace(formatted string, lines [][]byte, nextLineIdx int) string {
+func maybeAddBlankAfterBrace(formatted string, lines [][]byte,
+	nextLineIdx int) string {
+
 	isMultiLine := strings.Count(formatted, "\n") > 0
 	if !isMultiLine || nextLineIdx >= len(lines) {
 		return formatted
@@ -1438,6 +1447,7 @@ func maybeAddBlankAfterBrace(formatted string, lines [][]byte, nextLineIdx int) 
 	if nextLine == "" || nextLine == "}" {
 		return formatted
 	}
+
 	return formatted + "\n"
 }
 
@@ -1623,10 +1633,10 @@ func (f *FuncSigFormatter) funcParamNeedsBreaking(param,
 	}
 
 	// In next-profile mode, allow breaking long function-typed parameters
-	// even when they do not contain nested struct types, but avoid
-	// breaking the inner parameter list for function types that already
-	// have explicit return types: those tend to look worse when we break
-	// both the inner params and the outer signature.
+	// even when they do not contain nested struct types, but avoid breaking
+	// the inner parameter list for function types that already have
+	// explicit return types: those tend to look worse when we break both
+	// the inner params and the outer signature.
 	if f.cfg.BreakLongFuncTypeParams {
 		// If the func type has explicit return types (e.g. `error` or
 		// `(T, error)`), don't break inner params unless forced by an
@@ -1634,6 +1644,7 @@ func (f *FuncSigFormatter) funcParamNeedsBreaking(param,
 		if f.funcTypeHasExplicitReturns(param) {
 			return false
 		}
+
 		return true
 	}
 
@@ -1661,6 +1672,7 @@ func (f *FuncSigFormatter) funcTypeHasExplicitReturns(param string) bool {
 		return false
 	}
 	afterParams := strings.TrimSpace(rest[end+1:])
+
 	return afterParams != ""
 }
 
@@ -1712,6 +1724,7 @@ func (ctx *funcTypeParamContext) needsCanonicalBreak() bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -1733,6 +1746,7 @@ func (ctx *funcTypeParamContext) formatCanonical() string {
 	result.WriteString(ctx.baseIndent)
 	result.WriteString(")")
 	result.WriteString(ctx.afterParams)
+
 	return result.String()
 }
 
@@ -1782,6 +1796,7 @@ func (ctx *funcTypeParamContext) formatPacked() string {
 
 	result.WriteString(")")
 	result.WriteString(ctx.afterParams)
+
 	return result.String()
 }
 
@@ -2130,6 +2145,7 @@ func (f *FuncSigFormatter) formatInterfaceReturns(result *strings.Builder,
 	if !strings.HasPrefix(returns, "(") {
 		result.WriteByte(' ')
 		result.WriteString(returns)
+
 		return
 	}
 
@@ -2138,6 +2154,7 @@ func (f *FuncSigFormatter) formatInterfaceReturns(result *strings.Builder,
 	if width.VisualLenWithTab(testLine, f.cfg.TabStop) <= f.cfg.ColumnLimit {
 		result.WriteByte(' ')
 		result.WriteString(returns)
+
 		return
 	}
 
@@ -2145,7 +2162,9 @@ func (f *FuncSigFormatter) formatInterfaceReturns(result *strings.Builder,
 	result.WriteString(" (")
 	retContent := returns[1 : len(returns)-1]
 	retList := f.splitParams(retContent)
-	f.writeInterfaceReturnList(result, retList, currentLine+") (", contIndent)
+	f.writeInterfaceReturnList(
+		result, retList, currentLine+") (", contIndent,
+	)
 	result.WriteByte(')')
 }
 
