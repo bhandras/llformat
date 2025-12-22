@@ -824,47 +824,13 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int,
 	// body. The formatter's job is to reflow the signature, not to delete
 	// code.
 	if inlineBodyFound {
-		body := strings.TrimSpace(inlineBody)
-		afterClose := strings.TrimRight(inlineAfterClose, " \t")
-
-		if strings.Count(formatted, "\n") == 0 {
-			// Signature stayed on a single line; keep the body
-			// inline.
-			//
-			// Always emit the closing brace, since we trimmed at
-			// the opening brace when building `sig`.
-			if body != "" {
-				formatted += " " + body + " }"
-			} else {
-				formatted += " }"
-			}
-			formatted += afterClose
-		} else {
-			// Signature became multi-line; put the body on the next
-			// line and keep the closing brace on its own line (plus
-			// any trailing comment).
-			if body != "" {
-				formatted += "\n" + indent + "\t" + body
-			}
-			formatted += "\n" + indent + "}" + afterClose
-		}
+		formatted = appendInlineBody(
+			formatted, inlineBody, inlineAfterClose, indent,
+		)
 	} else {
-		// Check if we need to add a blank line after the opening brace
-		// (only if signature became multi-line)
-		isMultiLine := strings.Count(formatted, "\n") > 0
-		if isMultiLine {
-			// Check if next non-empty line is not already blank
-			nextLineIdx := startIdx + linesConsumed
-			if nextLineIdx < len(lines) {
-				nextLine := strings.TrimSpace(
-					string(lines[nextLineIdx]),
-				)
-				if nextLine != "" && nextLine != "}" {
-					// Add blank line after the signature
-					formatted += "\n"
-				}
-			}
-		}
+		formatted = maybeAddBlankAfterBrace(
+			formatted, lines, startIdx+linesConsumed,
+		)
 	}
 
 	// Add trailing newline if not the last line
@@ -1433,6 +1399,46 @@ func (f *FuncSigFormatter) writeBreakSigFuncParam(result *strings.Builder,
 	}
 	result.WriteString(paramToWrite)
 	return lastLineOrFallback(paramToWrite, currentLine+", "+paramToWrite)
+}
+
+// appendInlineBody appends an inline function body to a formatted signature.
+// If the signature is single-line, the body stays inline; otherwise the body
+// and closing brace are placed on separate lines.
+func appendInlineBody(formatted, inlineBody, inlineAfterClose, indent string) string {
+	body := strings.TrimSpace(inlineBody)
+	afterClose := strings.TrimRight(inlineAfterClose, " \t")
+	isSingleLine := strings.Count(formatted, "\n") == 0
+
+	if isSingleLine {
+		// Signature stayed on a single line; keep the body inline.
+		if body != "" {
+			formatted += " " + body + " }"
+		} else {
+			formatted += " }"
+		}
+		return formatted + afterClose
+	}
+
+	// Signature became multi-line; put the body on the next line and keep
+	// the closing brace on its own line (plus any trailing comment).
+	if body != "" {
+		formatted += "\n" + indent + "\t" + body
+	}
+	return formatted + "\n" + indent + "}" + afterClose
+}
+
+// maybeAddBlankAfterBrace adds a blank line after a multi-line signature's
+// opening brace if the next line is not already blank or the closing brace.
+func maybeAddBlankAfterBrace(formatted string, lines [][]byte, nextLineIdx int) string {
+	isMultiLine := strings.Count(formatted, "\n") > 0
+	if !isMultiLine || nextLineIdx >= len(lines) {
+		return formatted
+	}
+	nextLine := strings.TrimSpace(string(lines[nextLineIdx]))
+	if nextLine == "" || nextLine == "}" {
+		return formatted
+	}
+	return formatted + "\n"
 }
 
 func hasInlineStructWithSemicolons(s string) bool {
