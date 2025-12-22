@@ -890,33 +890,10 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	var result strings.Builder
 	result.WriteString(indent)
 
-	// Handle receiver if present: func (r *Type) Name(params)
-	var funcPart string
-	var rest string
-	var paramStart int
-
-	if strings.HasPrefix(sig, "func (") {
-		// Method with receiver - find end of receiver paren
-		recvEnd := f.findMatchingParen(sig, 5)
-		if recvEnd == -1 {
-			return indent + sig
-		}
-		// Find the actual params start (after receiver and method name)
-		paramStart = strings.Index(sig[recvEnd+1:], "(")
-		if paramStart == -1 {
-			return indent + sig
-		}
-		paramStart += recvEnd + 1
-		funcPart = sig[:paramStart]
-		rest = sig[paramStart:]
-	} else {
-		// Regular function
-		paramStart = strings.Index(sig, "(")
-		if paramStart == -1 {
-			return indent + sig
-		}
-		funcPart = sig[:paramStart]
-		rest = sig[paramStart:]
+	// Parse the signature into its component parts.
+	funcPart, rest, _, ok := f.parseSigParts(sig)
+	if !ok {
+		return indent + sig
 	}
 
 	// Find matching close paren for params
@@ -926,35 +903,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	}
 
 	params := rest[1:paramEnd] // content inside parens
-	afterParams := rest[paramEnd+1:]
-
-	// Check for return values
-	var returns string
-	var afterReturns string
-
-	afterParams = strings.TrimLeft(afterParams, " ")
-	if strings.HasPrefix(afterParams, "(") {
-		// Has return value list in parens
-		retEnd := f.findMatchingParen(afterParams, 0)
-		if retEnd != -1 {
-			returns = afterParams[:retEnd+1]
-			afterReturns = afterParams[retEnd+1:]
-		}
-	} else if afterParams != "" && afterParams != "{" &&
-		!strings.HasPrefix(afterParams, "{") {
-
-		// Simple return type (no parens) - find where it ends
-		braceIdx := strings.Index(afterParams, "{")
-		if braceIdx != -1 {
-			returns = strings.TrimSpace(afterParams[:braceIdx])
-			afterReturns = afterParams[braceIdx:]
-		} else {
-			returns = strings.TrimSpace(afterParams)
-			afterReturns = ""
-		}
-	} else {
-		afterReturns = afterParams
-	}
+	returns, afterReturns := f.parseSigReturns(rest[paramEnd+1:])
 
 	// Now build the formatted signature
 	result.WriteString(funcPart)
@@ -966,186 +915,153 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	paramList := f.splitFuncParamList(params)
 	paramList = filterNonEmptyTrimmed(paramList)
 
-	forceParamListNewline := false
-	if f.cfg.FormatInlineStructParams {
-		for _, p := range paramList {
-			if strings.Contains(p, "\n") ||
-				hasInlineStructWithSemicolons(p) {
+	forceParamListNewline := f.needsForceParamNewline(paramList)
 
-				forceParamListNewline = true
-				break
-			}
-		}
-	}
-
-	// Calculate trailing for last param For params, we only consider ") ("
-	// as trailing if there are returns that might need to break
-	hasBrace := strings.TrimSpace(afterReturns) == "{" ||
-		strings.HasPrefix(strings.TrimSpace(afterReturns), "{")
+	// Calculate trailing for last param
+	hasBrace := sigHasBrace(afterReturns)
 	hasParenReturns := returns != "" && strings.HasPrefix(returns, "(")
+	trailingMinimal, trailingFull := computeSigTrailing(
+		returns, hasBrace, hasParenReturns,
+	)
 
-	// Minimal trailing when we might break returns to a new line
-	trailingMinimal := ")"
-	if hasParenReturns {
-		trailingMinimal = ") ("
-	} else if returns != "" {
-		trailingMinimal = ") " + returns
-		if hasBrace {
-			trailingMinimal += " {"
-		}
-	} else if hasBrace {
-		trailingMinimal += " {"
-	}
-
-	// Full trailing if everything fits on one line
-	trailingFull := ")"
-	if returns != "" {
-		trailingFull = ") " + returns
-	}
-	if hasBrace {
-		trailingFull += " {"
-	}
-
-	// In the "next" profile we prefer to keep short return lists inline,
-	// and instead break parameters earlier if necessary.
-	//
-	// This avoids awkward (but parseable) formats like: M(a, b) ([]T,
-	// error)
-	//
-	// and also helps avoid edge cases where a trailing comma ends up
-	// exactly on the column boundary. Keep this conservative: apply it for
-	// - function declarations without a receiver
-	// - interface methods but not for receiver methods, where breaking
-	//   results is often clearer.
-	trimmedSig := strings.TrimSpace(sig)
-	sigAtFunc, hasFuncKeyword := signatureAtFunc(trimmedSig)
-
-	isFuncDeclNoRecv := strings.HasPrefix(sigAtFunc, "func ") &&
-		!strings.HasPrefix(sigAtFunc, "func (")
-	isInterfaceMethod := !hasFuncKeyword
-	isFuncLit := isFuncLitSignature(sigAtFunc)
-	// Function literals are common in call-arg position; for readability we
-	// prefer keeping their parameter list intact and breaking the return
-	// list instead (matching the "next" golden spec).
-	shouldPreferInlineReturns := (isFuncDeclNoRecv || isInterfaceMethod) &&
-		!isFuncLit
-	if f.cfg.PreferInlineSmallReturnList && shouldPreferInlineReturns &&
-		hasParenReturns && len(paramList) > 1 && isSmallParenReturnList(
-		returns,
+	// In the "next" profile we prefer to keep short return lists inline.
+	if f.shouldUseInlineReturns(
+		sig, returns, hasParenReturns, len(paramList),
 	) {
 
 		trailingMinimal = trailingFull
 	}
 
-	for i, param := range paramList {
-		param = strings.TrimSpace(param)
-		if param == "" {
-			continue
-		}
-
-		separator := ""
-		if i > 0 {
-			separator = ", "
-		}
-
-		// Check if this param is a function type that needs breaking We
-		// break func types when they contain nested complex types
-		// (struct{}, etc.)
-		paramToWrite := param
-		isFuncParam := strings.Contains(param, "func(")
-		needsFuncBreak := false
-		currentLineIndent := leadingWhitespace(currentLine)
-		if isFuncParam &&
-			f.funcParamNeedsBreaking(param, currentLineIndent) {
-
-			needsFuncBreak = true
-			paramToWrite = f.formatFuncTypeParam(
-				param, currentLineIndent,
-			)
-		}
-
-		testAdd := separator + param
-		testLine := currentLine + testAdd
-
-		// For the last param, check both scenarios: 1. With minimal
-		// trailing (allows returns to break to next line) 2. With full
-		// trailing (everything on same line)
-		isLast := i == len(paramList)-1
-		var lineWithTrailing string
-		if isLast {
-			// Use minimal trailing - we can always break returns
-			// later if needed
-			lineWithTrailing = testLine + trailingMinimal
-		} else {
-			lineWithTrailing = testLine
-		}
-
-		// In the "next" profile, when we break before the next
-		// parameter we append a comma to the current line. Reserve
-		// space for that comma so we don't end up with punctuation
-		// exactly on the column boundary (or a one-column overflow) due
-		// to a late comma insertion.
-		lineToCheck := lineWithTrailing
-		if f.cfg.ReserveTrailingComma && !isLast {
-			lineToCheck = testLine + ","
-		}
-
-		// Handle func params that need multiline formatting specially.
-		if needsFuncBreak {
-			currentLine = f.writeBreakSigFuncParam(
-				&result, paramToWrite, currentLine, contIndent,
-				i,
-			)
-			continue
-		}
-
-		// Determine if we need to break before this parameter.
-		needsBreak := forceParamListNewline && i == 0
-		if !needsBreak {
-			needsBreak = width.VisualLenWithTab(
-				lineToCheck, f.cfg.TabStop,
-			) > f.cfg.ColumnLimit
-		}
-
-		if needsBreak {
-			// Start param on new line.
-			if i > 0 {
-				result.WriteByte(',')
-			}
-			result.WriteByte('\n')
-			result.WriteString(contIndent)
-			result.WriteString(paramToWrite)
-			currentLine = lastLineOrFallback(
-				paramToWrite, contIndent+paramToWrite,
-			)
-			continue
-		}
-
-		// Param fits on current line.
-		if i > 0 {
-			result.WriteString(", ")
-		}
-		result.WriteString(paramToWrite)
-		currentLine = lastLineOrFallback(paramToWrite, testLine)
+	pctx := &paramFormatContext{
+		f:                     f,
+		result:                &result,
+		contIndent:            contIndent,
+		trailingMinimal:       trailingMinimal,
+		forceParamListNewline: forceParamListNewline,
+		currentLine:           currentLine,
 	}
+	for i, param := range paramList {
+		pctx.currentLine = pctx.formatParam(i, param, len(paramList))
+	}
+	currentLine = pctx.currentLine
 
 	result.WriteByte(')')
-
-	// Handle returns
 	if returns != "" {
 		f.formatReturns(
 			&result, returns, currentLine, contIndent, indent,
 			hasBrace,
 		)
 	}
-
-	// Add brace if present
-	afterReturns = strings.TrimSpace(afterReturns)
-	if strings.HasPrefix(afterReturns, "{") {
+	if hasBrace {
 		result.WriteString(" {")
 	}
 
 	return result.String()
+}
+
+// paramFormatContext holds state for formatting function parameters.
+type paramFormatContext struct {
+	f                     *FuncSigFormatter
+	result                *strings.Builder
+	contIndent            string
+	trailingMinimal       string
+	forceParamListNewline bool
+	currentLine           string
+}
+
+// formatParam formats a single parameter and updates currentLine. Returns the
+// updated currentLine.
+func (ctx *paramFormatContext) formatParam(i int, param string,
+	paramCount int) string {
+
+	param = strings.TrimSpace(param)
+	if param == "" {
+		return ctx.currentLine
+	}
+
+	// Check if this param is a function type that needs breaking
+	paramToWrite := param
+	needsFuncBreak := false
+	currentLineIndent := leadingWhitespace(ctx.currentLine)
+	if strings.Contains(param, "func(") &&
+		ctx.f.funcParamNeedsBreaking(param, currentLineIndent) {
+
+		needsFuncBreak = true
+		paramToWrite = ctx.f.formatFuncTypeParam(
+			param, currentLineIndent,
+		)
+	}
+
+	testLine := ctx.currentLine
+	if i > 0 {
+		testLine += ", "
+	}
+	testLine += param
+
+	// Handle func params that need multiline formatting specially.
+	if needsFuncBreak {
+		return ctx.f.writeBreakSigFuncParam(
+			ctx.result, paramToWrite, ctx.currentLine,
+			ctx.contIndent, i,
+		)
+	}
+
+	// Determine line to check for width
+	isLast := i == paramCount-1
+	lineToCheck := ctx.computeLineToCheck(testLine, isLast)
+
+	// Determine if we need to break before this parameter.
+	needsBreak := ctx.forceParamListNewline && i == 0
+	if !needsBreak {
+		needsBreak = width.VisualLenWithTab(
+			lineToCheck, ctx.f.cfg.TabStop,
+		) > ctx.f.cfg.ColumnLimit
+	}
+
+	if needsBreak {
+		return ctx.writeParamOnNewLine(i, paramToWrite)
+	}
+
+	return ctx.writeParamInline(i, paramToWrite, testLine)
+}
+
+// computeLineToCheck calculates the line width test string.
+func (ctx *paramFormatContext) computeLineToCheck(testLine string,
+	isLast bool) string {
+
+	lineWithTrailing := testLine
+	if isLast {
+		lineWithTrailing = testLine + ctx.trailingMinimal
+	}
+	if ctx.f.cfg.ReserveTrailingComma && !isLast {
+		return testLine + ","
+	}
+
+	return lineWithTrailing
+}
+
+// writeParamOnNewLine writes a param on a new line.
+func (ctx *paramFormatContext) writeParamOnNewLine(i int, param string) string {
+	if i > 0 {
+		ctx.result.WriteByte(',')
+	}
+	ctx.result.WriteByte('\n')
+	ctx.result.WriteString(ctx.contIndent)
+	ctx.result.WriteString(param)
+
+	return lastLineOrFallback(param, ctx.contIndent+param)
+}
+
+// writeParamInline writes a param on the current line.
+func (ctx *paramFormatContext) writeParamInline(i int, param,
+	testLine string) string {
+
+	if i > 0 {
+		ctx.result.WriteString(", ")
+	}
+	ctx.result.WriteString(param)
+
+	return lastLineOrFallback(param, testLine)
 }
 
 func filterNonEmptyTrimmed(items []string) []string {
@@ -1219,6 +1135,138 @@ type returnFormatContext struct {
 	hasBrace   bool
 	tabStop    int
 	colLimit   int
+}
+
+// parseSigParts parses a function signature into its component parts. Returns
+// funcPart (up to params), paramStart index, rest (from params), and ok.
+func (f *FuncSigFormatter) parseSigParts(sig string) (funcPart, rest string,
+	paramStart int, ok bool) {
+
+	if strings.HasPrefix(sig, "func (") {
+		// Method with receiver - find end of receiver paren
+		recvEnd := f.findMatchingParen(sig, 5)
+		if recvEnd == -1 {
+			return "", "", 0, false
+		}
+		paramStart = strings.Index(sig[recvEnd+1:], "(")
+		if paramStart == -1 {
+			return "", "", 0, false
+		}
+		paramStart += recvEnd + 1
+
+		return sig[:paramStart], sig[paramStart:], paramStart, true
+	}
+	// Regular function
+	paramStart = strings.Index(sig, "(")
+	if paramStart == -1 {
+		return "", "", 0, false
+	}
+
+	return sig[:paramStart], sig[paramStart:], paramStart, true
+}
+
+// sigHasBrace returns true if afterReturns indicates a trailing brace.
+func sigHasBrace(afterReturns string) bool {
+	s := strings.TrimSpace(afterReturns)
+
+	return s == "{" || strings.HasPrefix(s, "{")
+}
+
+// shouldUseInlineReturns determines if we should prefer keeping returns inline
+// by treating trailingMinimal as trailingFull. This avoids awkward formats like
+// M(a, b) ([]T, error) and helps avoid edge cases with trailing commas.
+func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
+	hasParenReturns bool, paramCount int) bool {
+
+	if !f.cfg.PreferInlineSmallReturnList || !hasParenReturns ||
+		paramCount <= 1 || !isSmallParenReturnList(returns) {
+
+		return false
+	}
+	trimmedSig := strings.TrimSpace(sig)
+	sigAtFunc, hasFuncKeyword := signatureAtFunc(trimmedSig)
+	isFuncDeclNoRecv := strings.HasPrefix(sigAtFunc, "func ") &&
+		!strings.HasPrefix(sigAtFunc, "func (")
+	isInterfaceMethod := !hasFuncKeyword
+	isFuncLit := isFuncLitSignature(sigAtFunc)
+
+	// Function literals are common in call-arg position; for readability we
+	// prefer keeping their parameter list intact and breaking the return
+	// list instead (matching the "next" golden spec).
+	return (isFuncDeclNoRecv || isInterfaceMethod) && !isFuncLit
+}
+
+// needsForceParamNewline returns true if any param contains multiline content
+// or inline structs that require forced newlines.
+func (f *FuncSigFormatter) needsForceParamNewline(paramList []string) bool {
+	if !f.cfg.FormatInlineStructParams {
+		return false
+	}
+	for _, p := range paramList {
+		if strings.Contains(p, "\n") ||
+			hasInlineStructWithSemicolons(p) {
+
+			return true
+		}
+	}
+
+	return false
+}
+
+// parseSigReturns extracts the return type and trailing content from
+// afterParams. afterParams is the signature content after the closing paren of
+// params.
+func (f *FuncSigFormatter) parseSigReturns(afterParams string) (returns,
+	afterReturns string) {
+
+	afterParams = strings.TrimLeft(afterParams, " ")
+	if strings.HasPrefix(afterParams, "(") {
+		// Has return value list in parens
+		retEnd := f.findMatchingParen(afterParams, 0)
+		if retEnd != -1 {
+			return afterParams[:retEnd+1], afterParams[retEnd+1:]
+		}
+	} else if afterParams != "" && afterParams != "{" &&
+		!strings.HasPrefix(afterParams, "{") {
+
+		// Simple return type (no parens) - find where it ends
+		braceIdx := strings.Index(afterParams, "{")
+		if braceIdx != -1 {
+			return strings.TrimSpace(afterParams[:braceIdx]), afterParams[braceIdx:]
+		}
+
+		return strings.TrimSpace(afterParams), ""
+	}
+
+	return "", afterParams
+}
+
+// computeSigTrailing computes the minimal and full trailing strings for a
+// function signature based on returns and brace presence.
+func computeSigTrailing(returns string, hasBrace,
+	hasParenReturns bool) (minimal, full string) {
+
+	minimal = ")"
+	if hasParenReturns {
+		minimal = ") ("
+	} else if returns != "" {
+		minimal = ") " + returns
+		if hasBrace {
+			minimal += " {"
+		}
+	} else if hasBrace {
+		minimal += " {"
+	}
+
+	full = ")"
+	if returns != "" {
+		full = ") " + returns
+	}
+	if hasBrace {
+		full += " {"
+	}
+
+	return minimal, full
 }
 
 // formatCanonicalReturns formats returns in "next" profile style with each
