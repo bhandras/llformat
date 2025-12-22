@@ -233,18 +233,24 @@ func (e *Engine) detectCycle(seen map[uint64]struct{}, seed maphash.Seed,
 
 	h := e.hashBytes(seed, result)
 	if _, ok := seen[h]; ok {
-		if e.TraceReasons && !e.Trace {
-			fmt.Fprintf(
-				os.Stderr, "dsl: stage=%s iter=%d reason=%s\n",
-				e.StageName, iter, "cycle_detected",
-			)
-		}
+		e.traceCycleDetected(iter)
 
 		return true
 	}
 	seen[h] = struct{}{}
 
 	return false
+}
+
+func (e *Engine) traceCycleDetected(iter int) {
+	if !e.TraceReasons || e.Trace {
+		return
+	}
+
+	fmt.Fprintf(
+		os.Stderr, "dsl: stage=%s iter=%d reason=%s\n", e.StageName,
+		iter, "cycle_detected",
+	)
 }
 
 func (e *Engine) hashBytes(seed maphash.Seed, b []byte) uint64 {
@@ -624,10 +630,8 @@ func nodeOrderOffset(ctx *Context, n ast.Node) int {
 	// For call expressions, use the '(' position. For selector calls this
 	// avoids the "all calls start at the receiver" ambiguity and more
 	// closely matches legacy scanner left-to-right behavior.
-	if call, ok := n.(*ast.CallExpr); ok {
-		if call.Lparen.IsValid() {
-			return ctx.Fset.Position(call.Lparen).Offset
-		}
+	if call, ok := n.(*ast.CallExpr); ok && call.Lparen.IsValid() {
+		return ctx.Fset.Position(call.Lparen).Offset
 	}
 
 	return ctx.Fset.Position(n.Pos()).Offset

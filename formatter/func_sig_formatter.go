@@ -459,6 +459,17 @@ func isFuncLitSignature(signature string) bool {
 	return len(rest) == 0 || rest[0] != '('
 }
 
+func signatureAtFunc(signature string) (string, bool) {
+	hasFuncKeyword := strings.Contains(signature, "func")
+	if hasFuncKeyword && !strings.HasPrefix(signature, "func") {
+		if idx := strings.Index(signature, "func"); idx >= 0 {
+			return strings.TrimSpace(signature[idx:]), true
+		}
+	}
+
+	return signature, hasFuncKeyword
+}
+
 // hasNewlineOutsideBraces reports whether s contains a newline at brace nesting
 // depth 0. This is used to decide whether to insert an extra blank line after a
 // signature's opening brace: only line breaks in the outer signature lists
@@ -1026,16 +1037,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	// - interface methods but not for receiver methods, where breaking
 	//   results is often clearer.
 	trimmedSig := strings.TrimSpace(sig)
-	hasFuncKeyword := strings.Contains(trimmedSig, "func")
-	// When a signature includes a prefix before `func` (e.g. `Field:
-	// func...`), classify using the substring starting at `func` so
-	// heuristics don't treat it like an interface method.
-	sigAtFunc := trimmedSig
-	if hasFuncKeyword && !strings.HasPrefix(sigAtFunc, "func") {
-		if idx := strings.Index(sigAtFunc, "func"); idx >= 0 {
-			sigAtFunc = strings.TrimSpace(sigAtFunc[idx:])
-		}
-	}
+	sigAtFunc, hasFuncKeyword := signatureAtFunc(trimmedSig)
 
 	isFuncDeclNoRecv := strings.HasPrefix(sigAtFunc, "func ") &&
 		!strings.HasPrefix(sigAtFunc, "func (")

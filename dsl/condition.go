@@ -936,22 +936,29 @@ func isStringConcat(n ast.Node) bool {
 		return false
 	}
 	found := false
-	ast.Inspect(n, func(node ast.Node) bool {
-		if bin, ok := node.(*ast.BinaryExpr); ok {
-			// Check if either operand is a string literal
-			if bin.Op.String() == "+" {
-				if isStringLit(bin.X) || isStringLit(bin.Y) {
-					found = true
+	ast.Inspect(
+		n,
+		func(node ast.Node) bool {
+			if bin, ok := node.(*ast.BinaryExpr); ok &&
+				isStringConcatBinary(bin) {
 
-					return false
-				}
+				found = true
+
+				return false
 			}
-		}
 
-		return !found
-	})
+			return !found
+		},
+	)
 
 	return found
+}
+
+func isStringConcatBinary(bin *ast.BinaryExpr) bool {
+
+	// Check if either operand is a string literal.
+	return bin.Op.String() == "+" &&
+		(isStringLit(bin.X) || isStringLit(bin.Y))
 }
 
 // isStringLit checks if a node is a string literal (directly or in concat

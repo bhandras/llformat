@@ -128,23 +128,7 @@ func callExprDocWithKind(call *ast.CallExpr, ctx *Context,
 	kind exprDocKind) (exprDocInfo, bool) {
 
 	if kind == exprDocKindCallArg {
-		if doc, ok := methodChainDocWithKind(call, ctx, kind); ok {
-			return exprDocInfo{
-				Doc:                     doc,
-				NeedsContinuationIndent: true,
-			}, true
-		}
-		// Fall back to generic call formatting so nested calls can
-		// break their arguments (including generic callees like `f[T,
-		// U](...)`).
-		if doc, ok := genericCallDoc(call, ctx); ok {
-			return exprDocInfo{
-				Doc:                     doc,
-				NeedsContinuationIndent: false,
-			}, true
-		}
-
-		return exprDocInfo{}, false
+		return callArgExprDoc(call, ctx)
 	}
 
 	// Top-level expression rules: call formatting is owned by the
@@ -159,6 +143,29 @@ func callExprDocWithKind(call *ast.CallExpr, ctx *Context,
 		Doc:                     doc,
 		NeedsContinuationIndent: true,
 	}, true
+}
+
+func callArgExprDoc(call *ast.CallExpr, ctx *Context) (exprDocInfo, bool) {
+	if doc, ok := methodChainDocWithKind(
+		call, ctx, exprDocKindCallArg,
+	); ok {
+
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: true,
+		}, true
+	}
+
+	// Fall back to generic call formatting so nested calls can break their
+	// arguments (including generic callees like `f[T, U](...)`).
+	if doc, ok := genericCallDoc(call, ctx); ok {
+		return exprDocInfo{
+			Doc:                     doc,
+			NeedsContinuationIndent: false,
+		}, true
+	}
+
+	return exprDocInfo{}, false
 }
 
 func binaryExprDocWithKind(expr *ast.BinaryExpr, ctx *Context,
@@ -968,21 +975,24 @@ func sameOpBinaryChainDocWithKind(bin *ast.BinaryExpr, ctx *Context,
 				layout.L(),
 			)
 		}
-
-		// In call-arg context, prefer structured docs for terms so
-		// selector/method chains can break within the binary
-		// expression.
-		if kind == exprDocKindCallArg {
-			if info, ok := exprDocWithKind(term, ctx, kind); ok {
-				docs = append(docs, indentExprDocIfNeeded(info))
-				continue
-			}
-		}
-
-		docs = append(docs, layout.T(renderNode(term, ctx.Fset)))
+		docs = appendBinaryTermDoc(docs, term, ctx, kind)
 	}
 
 	return layout.G(layout.C(docs...)), true
+}
+
+func appendBinaryTermDoc(docs []layout.Doc, term ast.Expr, ctx *Context,
+	kind exprDocKind) []layout.Doc {
+
+	// In call-arg context, prefer structured docs for terms so
+	// selector/method chains can break within the binary expression.
+	if kind == exprDocKindCallArg {
+		if info, ok := exprDocWithKind(term, ctx, kind); ok {
+			return append(docs, indentExprDocIfNeeded(info))
+		}
+	}
+
+	return append(docs, layout.T(renderNode(term, ctx.Fset)))
 }
 
 func indexExprDoc(idx *ast.IndexExpr, ctx *Context,

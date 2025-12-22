@@ -59,10 +59,8 @@ func applyContinuationIndent(src []byte, start, end int, indent string) ([]byte,
 	bool, error) {
 
 	replacement := continuationIndentBytes(indent)
-	if start >= 0 && end >= start && end <= len(src) {
-		if bytes.Equal(src[start:end], replacement) {
-			return src, false, nil
-		}
+	if hasReplacement(src, start, end, replacement) {
+		return src, false, nil
 	}
 
 	out, err := ApplySingleEdit(src, start, end, replacement)
@@ -71,6 +69,14 @@ func applyContinuationIndent(src []byte, start, end int, indent string) ([]byte,
 	}
 
 	return out, true, nil
+}
+
+func hasReplacement(src []byte, start, end int, replacement []byte) bool {
+	if start < 0 || end < start || end > len(src) {
+		return false
+	}
+
+	return bytes.Equal(src[start:end], replacement)
 }
 
 // applyContinuationIndentAfter replaces horizontal whitespace after pos with

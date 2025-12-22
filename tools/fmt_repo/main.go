@@ -185,22 +185,16 @@ func collectGoFiles(root string,
 	excludeDirSet map[string]struct{}) ([]string, error) {
 
 	var goFiles []string
-	if err := filepath.WalkDir(
+	err := filepath.WalkDir(
 		root,
 		func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-
 			if d.IsDir() {
-				if _, ok := excludeDirSet[d.Name()]; ok {
-					return fs.SkipDir
-				}
-
-				return nil
+				return skipIfExcludedDir(d, excludeDirSet)
 			}
-
-			if filepath.Ext(path) != ".go" {
+			if !isGoFile(path) {
 				return nil
 			}
 
@@ -208,8 +202,8 @@ func collectGoFiles(root string,
 
 			return nil
 		},
-	); err != nil {
-
+	)
+	if err != nil {
 		return nil, err
 	}
 
@@ -218,6 +212,22 @@ func collectGoFiles(root string,
 
 func shouldSkipPath(path string) bool {
 	return strings.HasPrefix(filepath.ToSlash(path), "testdata/")
+}
+
+func skipIfExcludedDir(
+	d fs.DirEntry,
+	excludeDirSet map[string]struct{},
+) error {
+
+	if _, ok := excludeDirSet[d.Name()]; ok {
+		return fs.SkipDir
+	}
+
+	return nil
+}
+
+func isGoFile(path string) bool {
+	return filepath.Ext(path) == ".go"
 }
 
 func formatGoFile(path string, cfg runConfig) (bool, error) {

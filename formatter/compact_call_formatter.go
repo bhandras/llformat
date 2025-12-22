@@ -116,58 +116,8 @@ func (f *CompactCallFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
 		}
 
 		if f.cfg.FallbackNonTargets {
-			if start, end := findGenericCallAt(src, i); end > start {
-				// Avoid claiming ownership of calls that
-				// contain inline comments; rewriting those can
-				// cause non-idempotent comment attachment
-				// across pipeline runs.
-				span := src[start:end]
-				if spanHasCommentOutsideStrings(span) {
-					i = end
-					continue
-				}
-				// Keep ownership consistent with formatting
-				// selection: excluded calls should not be
-				// considered owned by this stage.
-				if openRel := bytes.IndexByte(
-					src[start:end], '(',
-				); openRel > 0 {
-
-					callee := strings.TrimSpace(
-						string(
-							src[start : start+openRel],
-						),
-					)
-					if callNameContainsAny(
-						callee, f.cfg.Excludes,
-					) {
-
-						i = end
-						continue
-					}
-					if f.
-						cfg.
-						FallbackNonTargetsExcludeSelectors {
-
-						if isSelectorChainCallStart(
-							src, start,
-						) ||
-							strings.Contains(
-								callee, ".",
-							) {
-
-							i = end
-							continue
-						}
-					}
-				}
-				owned = append(
-					owned, llast.OffsetSpan{
-						Start: start,
-						End:   end,
-					},
-				)
-				i = end
+			if next, ok := f.tryOwnGenericCall(src, i, &owned); ok {
+				i = next
 				continue
 			}
 		}
@@ -176,6 +126,61 @@ func (f *CompactCallFormatter) OwnedSpans(src []byte) llast.OffsetSpanSet {
 	}
 
 	return llast.NewOffsetSpanSet(owned)
+}
+
+func (f *CompactCallFormatter) tryOwnGenericCall(src []byte, start int,
+	owned *[]llast.OffsetSpan) (int, bool) {
+
+	callStart, callEnd := findGenericCallAt(src, start)
+	if callEnd <= callStart {
+		return start, false
+	}
+	if !f.shouldOwnGenericCall(src, callStart, callEnd) {
+		return callEnd, true
+	}
+
+	*owned = append(
+		*owned, llast.OffsetSpan{
+			Start: callStart,
+			End:   callEnd,
+		},
+	)
+
+	return callEnd, true
+}
+
+func (f *CompactCallFormatter) shouldOwnGenericCall(src []byte, start int,
+	end int) bool {
+
+	// Avoid claiming ownership of calls that contain inline comments;
+	// rewriting those can cause non-idempotent comment attachment across
+	// pipeline runs.
+	span := src[start:end]
+	if spanHasCommentOutsideStrings(span) {
+		return false
+	}
+
+	// Keep ownership consistent with formatting selection: excluded calls
+	// should not be considered owned by this stage.
+	openRel := bytes.IndexByte(span, '(')
+	if openRel <= 0 {
+		return true
+	}
+
+	callee := strings.TrimSpace(string(src[start : start+openRel]))
+	if callNameContainsAny(callee, f.cfg.Excludes) {
+		return false
+	}
+	if !f.cfg.FallbackNonTargetsExcludeSelectors {
+		return true
+	}
+	if isSelectorChainCallStart(src, start) ||
+		strings.Contains(callee, ".") {
+
+		return false
+	}
+
+	return true
 }
 
 // NewCompactCallFormatter creates a new compact packing formatter with
@@ -970,85 +975,25 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 		// If the argument is itself a call expression and it doesn't
 		// fit, recursively format it in packed multiline style without
 		// adding a trailing comma inside.
-		if llast.IsCallExpr(a) {
-			// Greedy, algorithmic rule for nested calls: inline if
-			// the entire call fits on the current line and it
-			// contains no always-multiline composites and no nested
-			// calls among its direct args; otherwise reflow
-			// recursively and start on a fresh continuation line.
-			fits := false
-			if first {
-				fits = advanceCols(contIndentLen, a) <= lineWidth
-			} else {
-				fits = advanceCols(curLen+2, a) <= lineWidth
-			}
-			hasAlways := callHasAlwaysMultilineComposite(a)
-			hasNested := llast.HasNestedCall(a)
+		state := callArgState{
+			curLen:                 curLen,
+			first:                  first,
+			prevWasMultiline:       prevWasMultiline,
+			prevWasCall:            prevWasCall,
+			seenMultilineCall:      seenMultilineCall,
+			seenMultilineComposite: seenMultilineComposite,
+		}
+		if handled, next := formatPackedCallExprArg(
+			&b, a, contIndent, contIndentLen, lineWidth,
+			forcedBreak, curLenAfterWrite, state,
+		); handled {
 
-			if fits && !hasAlways && !hasNested {
-				if first {
-					b.WriteString(contIndent)
-					b.WriteString(a)
-					curLen = contIndentLen + firstLineLen(a)
-					first = false
-				} else {
-					if forcedBreak {
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = contIndentLen
-					} else {
-						b.WriteString(", ")
-					}
-					b.WriteString(a)
-					curLen = advanceCols(curLen+2, a)
-				}
-				prevWasMultiline = false
-				continue
-			}
-			nested := formatCallPackedMultiLine(
-				[]byte(a), contIndent, contIndent, true,
-			)
-			if first {
-				b.WriteString(contIndent)
-				b.WriteString(nested)
-				curLen = curLenAfterWrite(nested)
-				first = false
-				nestedMulti := strings.Contains(nested, "\n")
-				prevWasMultiline = nestedMulti
-				prevWasCall = true
-				if nestedMulti {
-					seenMultilineCall = true
-				}
-				continue
-			}
-			if forcedBreak {
-				b.WriteByte(',')
-				b.WriteByte('\n')
-				b.WriteString(contIndent)
-				b.WriteString(nested)
-				curLen = curLenAfterWrite(nested)
-				first = false
-				nestedMulti := strings.Contains(nested, "\n")
-				prevWasMultiline = nestedMulti
-				prevWasCall = true
-				if nestedMulti {
-					seenMultilineCall = true
-				}
-				continue
-			}
-			b.WriteByte(',')
-			b.WriteByte('\n')
-			b.WriteString(contIndent)
-			b.WriteString(nested)
-			curLen = curLenAfterWrite(nested)
-			first = false
-			nestedMulti := strings.Contains(nested, "\n")
-			prevWasMultiline = nestedMulti
-			prevWasCall = true
-			if nestedMulti {
-				seenMultilineCall = true
-			}
+			curLen = next.curLen
+			first = next.first
+			prevWasMultiline = next.prevWasMultiline
+			prevWasCall = next.prevWasCall
+			seenMultilineCall = next.seenMultilineCall
+			seenMultilineComposite = next.seenMultilineComposite
 			continue
 		}
 		if first {
@@ -1116,6 +1061,113 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+type callArgState struct {
+	curLen                 int
+	first                  bool
+	prevWasMultiline       bool
+	prevWasCall            bool
+	seenMultilineCall      bool
+	seenMultilineComposite bool
+}
+
+func formatPackedCallExprArg(b *strings.Builder, arg string, contIndent string,
+	contIndentLen int, lineWidth int, forcedBreak bool,
+	curLenAfterWrite func(string) int,
+	state callArgState) (bool, callArgState) {
+
+	if !llast.IsCallExpr(arg) {
+		return false, state
+	}
+
+	// Greedy, algorithmic rule for nested calls: inline if the entire call
+	// fits on the current line and it contains no always-multiline
+	// composites and no nested calls among its direct args; otherwise
+	// reflow recursively and start on a fresh continuation line.
+	fits := false
+	if state.first {
+		fits = advanceCols(contIndentLen, arg) <= lineWidth
+	} else {
+		fits = advanceCols(state.curLen+2, arg) <= lineWidth
+	}
+	hasAlways := callHasAlwaysMultilineComposite(arg)
+	hasNested := llast.HasNestedCall(arg)
+	if fits && !hasAlways && !hasNested {
+		return true, writeInlineCallArg(
+			b, arg, contIndent, contIndentLen, forcedBreak, state,
+		)
+	}
+
+	nested := formatCallPackedMultiLine(
+		[]byte(arg), contIndent, contIndent, true,
+	)
+	state = writeNestedCallArg(
+		b, nested, contIndent, curLenAfterWrite, state,
+	)
+
+	return true, state
+}
+
+func writeInlineCallArg(b *strings.Builder, arg string, contIndent string,
+	contIndentLen int, forcedBreak bool, state callArgState) callArgState {
+
+	if state.first {
+		b.WriteString(contIndent)
+		b.WriteString(arg)
+		state.curLen = contIndentLen + firstLineLen(arg)
+		state.first = false
+		state.prevWasMultiline = false
+
+		return state
+	}
+
+	if forcedBreak {
+		b.WriteByte(',')
+		b.WriteByte('\n')
+		b.WriteString(contIndent)
+		state.curLen = contIndentLen
+	} else {
+		b.WriteString(", ")
+	}
+	b.WriteString(arg)
+	state.curLen = advanceCols(state.curLen+2, arg)
+	state.prevWasMultiline = false
+
+	return state
+}
+
+func writeNestedCallArg(b *strings.Builder, nested string, contIndent string,
+	curLenAfterWrite func(string) int, state callArgState) callArgState {
+
+	if state.first {
+		b.WriteString(contIndent)
+		b.WriteString(nested)
+		state.curLen = curLenAfterWrite(nested)
+		state.first = false
+
+		return markNestedCallState(nested, state)
+	}
+
+	b.WriteByte(',')
+	b.WriteByte('\n')
+	b.WriteString(contIndent)
+	b.WriteString(nested)
+	state.curLen = curLenAfterWrite(nested)
+	state.first = false
+
+	return markNestedCallState(nested, state)
+}
+
+func markNestedCallState(nested string, state callArgState) callArgState {
+	nestedMulti := strings.Contains(nested, "\n")
+	state.prevWasMultiline = nestedMulti
+	state.prevWasCall = true
+	if nestedMulti {
+		state.seenMultilineCall = true
+	}
+
+	return state
 }
 
 // formatCallPackedMultiLineNext is an opt-in variant of
@@ -1732,50 +1784,7 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 	rawArgs := scanner.SplitTopLevel(argsBody)
 	hasInlineComment := strings.Contains(argsBody, "/*") ||
 		strings.Contains(argsBody, "//")
-	normArgs := make([]arg, 0, len(rawArgs))
-	for _, ra := range rawArgs {
-		trimmed := strings.TrimSpace(ra)
-		if e, err := parser.ParseExpr(trimmed); err == nil {
-			if str, ok := llast.FlattenStringExprAST(e); ok {
-				// If this is a concatenation expression used as
-				// a format string with trailing arguments, we
-				// generally want to flatten it so we can
-				// re-split it more intelligently (e.g. to keep
-				// `..., a, b)` packed instead of breaking `b`
-				// onto its own line).
-				//
-				// Preserve user-authored split points only when
-				// there are no other arguments following this
-				// string.
-				if opts.PreserveStringConcatExpr &&
-					!isBasicStringLitExpr(e) &&
-					(len(rawArgs) <= 1 ||
-						!containsFormatVerb(str)) {
-
-					normArgs = append(
-						normArgs, arg{
-							kind: argExpr,
-							expr: trimmed,
-						},
-					)
-					continue
-				}
-
-				normArgs = append(
-					normArgs, arg{
-						kind: argText,
-						text: str,
-						raw:  trimmed,
-						containsFormatVerb: containsFormatVerb(
-							str,
-						),
-					},
-				)
-				continue
-			}
-		}
-		normArgs = append(normArgs, arg{kind: argExpr, expr: trimmed})
-	}
+	normArgs := normalizeCallArgs(rawArgs, opts)
 
 	width := columnLimit
 	var b strings.Builder
@@ -2384,6 +2393,53 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+func normalizeCallArgs(rawArgs []string, opts greedyCallOptions) []arg {
+	normArgs := make([]arg, 0, len(rawArgs))
+	rawCount := len(rawArgs)
+	for _, ra := range rawArgs {
+		trimmed := strings.TrimSpace(ra)
+		normArgs = append(
+			normArgs, normalizeCallArg(trimmed, rawCount, opts),
+		)
+	}
+
+	return normArgs
+}
+
+func normalizeCallArg(trimmed string, rawCount int,
+	opts greedyCallOptions) arg {
+
+	e, err := parser.ParseExpr(trimmed)
+	if err != nil {
+		return arg{kind: argExpr, expr: trimmed}
+	}
+	str, ok := llast.FlattenStringExprAST(e)
+	if !ok {
+		return arg{kind: argExpr, expr: trimmed}
+	}
+
+	// If this is a concatenation expression used as a format string with
+	// trailing arguments, we generally want to flatten it so we can
+	// re-split it more intelligently (e.g. to keep `..., a, b)` packed
+	// instead of breaking `b` onto its own line).
+	//
+	// Preserve user-authored split points only when there are no other
+	// arguments following this string.
+	if opts.PreserveStringConcatExpr &&
+		!isBasicStringLitExpr(e) &&
+		(rawCount <= 1 || !containsFormatVerb(str)) {
+
+		return arg{kind: argExpr, expr: trimmed}
+	}
+
+	return arg{
+		kind:               argText,
+		text:               str,
+		raw:                trimmed,
+		containsFormatVerb: containsFormatVerb(str),
+	}
 }
 
 type argKind int

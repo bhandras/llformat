@@ -1,9 +1,5 @@
 package dsl
 
-import (
-	"bytes"
-)
-
 // EditBuilder accumulates source edits and applies them in one validated pass.
 // It is a small convenience layer over ApplyEdits.
 type EditBuilder struct {
@@ -57,10 +53,8 @@ func (b *EditBuilder) filterNoOps(src []byte, edits []Edit) []Edit {
 		if e.Start == e.End && len(e.Replace) == 0 {
 			continue
 		}
-		if e.Start >= 0 && e.End >= e.Start && e.End <= len(src) {
-			if bytes.Equal(src[e.Start:e.End], e.Replace) {
-				continue
-			}
+		if hasReplacement(src, e.Start, e.End, e.Replace) {
+			continue
 		}
 		filtered = append(filtered, e)
 	}

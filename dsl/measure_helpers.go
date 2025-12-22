@@ -50,9 +50,7 @@ func maxVisualLineLenInSpan(src []byte, start, end int, tabStop int) int {
 	for i < end && src[i] != '\n' {
 		i++
 	}
-	if w := visualLen(string(src[ls:i]), tabStop); w > max {
-		max = w
-	}
+	updateMaxVisualLineLen(&max, src, ls, i, tabStop)
 
 	// Subsequent full lines within the span.
 	for i < end {
@@ -64,12 +62,17 @@ func maxVisualLineLenInSpan(src []byte, start, end int, tabStop int) int {
 		for i < end && src[i] != '\n' {
 			i++
 		}
-		if lineStartOff < i {
-			if w := visualLen(string(src[lineStartOff:i]), tabStop); w > max {
-				max = w
-			}
-		}
+		updateMaxVisualLineLen(&max, src, lineStartOff, i, tabStop)
 	}
 
 	return max
+}
+
+func updateMaxVisualLineLen(max *int, src []byte, start, end int, tabStop int) {
+	if start >= end {
+		return
+	}
+	if w := visualLen(string(src[start:end]), tabStop); w > *max {
+		*max = w
+	}
 }

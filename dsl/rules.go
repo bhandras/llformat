@@ -2052,12 +2052,7 @@ func SignatureRules(config ...SignatureConfig) []Rule {
 	methodAction := &BreakInterfaceMethodAction{Target: "node"}
 
 	if len(config) > 0 {
-		if config[0].FuncFormatter != nil {
-			action.FormatFunc = config[0].FuncFormatter
-		}
-		if config[0].MethodFormatter != nil {
-			methodAction.FormatFunc = config[0].MethodFormatter
-		}
+		applySignatureConfig(config[0], action, methodAction)
 	}
 
 	return []Rule{
@@ -2105,6 +2100,17 @@ func SignatureRules(config ...SignatureConfig) []Rule {
 			Priority: 90,
 			Action:   methodAction,
 		},
+	}
+}
+
+func applySignatureConfig(cfg SignatureConfig, action *BreakFuncSignatureAction,
+	methodAction *BreakInterfaceMethodAction) {
+
+	if cfg.FuncFormatter != nil {
+		action.FormatFunc = cfg.FuncFormatter
+	}
+	if cfg.MethodFormatter != nil {
+		methodAction.FormatFunc = cfg.MethodFormatter
 	}
 }
 

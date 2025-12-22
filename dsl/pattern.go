@@ -34,48 +34,58 @@ func (p *NodePattern) Match(n ast.Node, fset *token.FileSet) (Captures, bool) {
 
 	// Match each field constraint
 	for fieldName, fm := range p.Fields {
-		child := getField(n, fieldName)
-
-		// Capture if requested
-		if fm.Capture != "" {
-			caps[fm.Capture] = child
-		}
-
-		// Check literal match
-		if fm.Literal != "" {
-			if !matchLiteral(n, child, fm.Literal) {
-				return nil, false
-			}
-		}
-
-		// Check OneOf match
-		if len(fm.OneOf) > 0 {
-			matched := false
-			for _, lit := range fm.OneOf {
-				if matchLiteral(n, child, lit) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				return nil, false
-			}
-		}
-
-		// Recurse into sub-pattern
-		if fm.SubPattern != nil {
-			if child == nil {
-				return nil, false
-			}
-			childCaps, ok := fm.SubPattern.Match(child, fset)
-			if !ok {
-				return nil, false
-			}
-			mergeCaps(caps, childCaps)
+		if !p.matchField(n, fset, fieldName, fm, caps) {
+			return nil, false
 		}
 	}
 
 	return caps, true
+}
+
+func (p *NodePattern) matchField(n ast.Node, fset *token.FileSet,
+	fieldName string, fm FieldMatch, caps Captures) bool {
+
+	child := getField(n, fieldName)
+
+	// Capture if requested.
+	if fm.Capture != "" {
+		caps[fm.Capture] = child
+	}
+
+	// Check literal match.
+	if fm.Literal != "" && !matchLiteral(n, child, fm.Literal) {
+		return false
+	}
+
+	// Check OneOf match.
+	if len(fm.OneOf) > 0 && !matchOneOfLiteral(n, child, fm.OneOf) {
+		return false
+	}
+
+	// Recurse into sub-pattern.
+	if fm.SubPattern == nil {
+		return true
+	}
+	if child == nil {
+		return false
+	}
+	childCaps, ok := fm.SubPattern.Match(child, fset)
+	if !ok {
+		return false
+	}
+	mergeCaps(caps, childCaps)
+
+	return true
+}
+
+func matchOneOfLiteral(n ast.Node, child ast.Node, oneOf []string) bool {
+	for _, lit := range oneOf {
+		if matchLiteral(n, child, lit) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *NodePattern) matchType(n ast.Node) bool {
