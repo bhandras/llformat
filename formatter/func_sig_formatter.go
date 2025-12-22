@@ -2126,69 +2126,70 @@ func (f *FuncSigFormatter) formatInterfaceReturns(result *strings.Builder,
 		return
 	}
 
-	if strings.HasPrefix(returns, "(") {
-		testLine := currentLine + ") " + returns
-		if width.VisualLenWithTab(testLine, f.cfg.TabStop) <= f.cfg.
-			ColumnLimit {
-
-			result.WriteByte(' ')
-			result.WriteString(returns)
-
-			return
-		}
-
-		result.WriteString(" (")
-		currentLine = currentLine + ") ("
-
-		retContent := returns[1 : len(returns)-1]
-		retList := f.splitParams(retContent)
-
-		for i, ret := range retList {
-			ret = strings.TrimSpace(ret)
-			if ret == "" {
-				continue
-			}
-
-			separator := ""
-			if i > 0 {
-				separator = ", "
-			}
-
-			testAdd := separator + ret
-			isLastRet := i == len(retList)-1
-			testCheck := currentLine + testAdd
-			if isLastRet {
-				testCheck += ")"
-			}
-
-			if width.VisualLenWithTab(testCheck, f.cfg.TabStop) > f.
-				cfg.
-				ColumnLimit {
-
-				// Need to break.
-				if i > 0 {
-					result.WriteByte(',')
-				}
-				result.WriteByte('\n')
-				result.WriteString(contIndent)
-				currentLine = contIndent + ret
-				result.WriteString(ret)
-			} else {
-				if i > 0 {
-					result.WriteString(", ")
-					currentLine += ", "
-				}
-				result.WriteString(ret)
-				currentLine += ret
-			}
-		}
-		result.WriteByte(')')
-
+	// Simple return type (no parens).
+	if !strings.HasPrefix(returns, "(") {
+		result.WriteByte(' ')
+		result.WriteString(returns)
 		return
 	}
 
-	result.WriteByte(' ')
-	result.WriteString(returns)
+	// Parenthesized return list.
+	testLine := currentLine + ") " + returns
+	if width.VisualLenWithTab(testLine, f.cfg.TabStop) <= f.cfg.ColumnLimit {
+		result.WriteByte(' ')
+		result.WriteString(returns)
+		return
+	}
+
+	// Need to break the return list.
+	result.WriteString(" (")
+	retContent := returns[1 : len(returns)-1]
+	retList := f.splitParams(retContent)
+	f.writeInterfaceReturnList(result, retList, currentLine+") (", contIndent)
+	result.WriteByte(')')
+}
+
+// writeInterfaceReturnList writes a return list with left-flow packing.
+func (f *FuncSigFormatter) writeInterfaceReturnList(result *strings.Builder,
+	retList []string, currentLine, contIndent string) {
+
+	for i, ret := range retList {
+		ret = strings.TrimSpace(ret)
+		if ret == "" {
+			continue
+		}
+
+		testAdd := ret
+		if i > 0 {
+			testAdd = ", " + ret
+		}
+		testCheck := currentLine + testAdd
+		if i == len(retList)-1 {
+			testCheck += ")"
+		}
+
+		needsBreak := width.VisualLenWithTab(
+			testCheck, f.cfg.TabStop,
+		) > f.cfg.ColumnLimit
+
+		if needsBreak {
+			if i > 0 {
+				result.WriteByte(',')
+			}
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(ret)
+			currentLine = contIndent + ret
+			continue
+		}
+
+		if i > 0 {
+			result.WriteString(", ")
+			currentLine += ", "
+		}
+		result.WriteString(ret)
+		currentLine += ret
+	}
 }
 
 // FormatFuncSignature formats a function signature (the line starting with
