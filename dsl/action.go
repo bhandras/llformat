@@ -1161,79 +1161,86 @@ func (a *BreakMethodChainLayoutAction) Execute(caps Captures, ctx *Context) (
 	return out, true
 }
 
+// getNodeSpan extracts start, end offsets and original text for a node. Returns
+// false if the span is invalid.
+func getNodeSpan(node ast.Node, ctx *Context) (start, end int, original string,
+	ok bool) {
+
+	start = ctx.Fset.Position(node.Pos()).Offset
+	end = ctx.Fset.Position(node.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return 0, 0, "", false
+	}
+
+	return start, end, string(ctx.Source[start:end]), true
+}
+
+// isWideCallExpr returns true if the call expression exceeds width limits.
+func isWideCallExpr(caps Captures, ctx *Context, target string) bool {
+	return (&OrCond{Conds: []Condition{
+		&LineWidthCond{
+			Target: target,
+			Op:     ">",
+			Value:  0,
+		},
+		&CollapsedWidthCond{
+			Target: target,
+			Op:     ">",
+			Value:  0,
+		},
+	}}).Eval(caps,
+		ctx,
+	)
+}
+
+// callFunDoc builds a layout.Doc for the function part of a call expression.
+func callFunDoc(fun ast.Expr, ctx *Context) layout.Doc {
+	doc := layout.T(renderNode(fun, ctx.Fset))
+	if fun != nil {
+		if info, ok := exprDocWithKind(fun, ctx, exprDocKindCallArg); ok {
+			doc = info.Doc
+		}
+	}
+
+	return doc
+}
+
+// isCallToMake returns true if the call is to the builtin make function.
+func isCallToMake(call *ast.CallExpr) bool {
+	ident, ok := call.Fun.(*ast.Ident)
+
+	return ok && ident.Name == "make"
+}
+
 // Execute implements Action for BreakCallArgsLayoutAction.
 func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 	[]byte, bool) {
 
 	node := resolveTarget(caps, a.Target)
 	call, ok := node.(*ast.CallExpr)
-	if !ok || call == nil {
-		return nil, false
-	}
-	if len(call.Args) == 0 {
+	if !ok || call == nil || len(call.Args) == 0 {
 		return nil, false
 	}
 
-	start := ctx.Fset.Position(call.Pos()).Offset
-	end := ctx.Fset.Position(call.End()).Offset
-	if start < 0 || end > len(ctx.Source) || start >= end {
-		return nil, false
-	}
-	original := string(ctx.Source[start:end])
-	if !isSafeStandaloneExprSpan(original) {
+	start, end, original, ok := getNodeSpan(call, ctx)
+	if !ok || !isSafeStandaloneExprSpan(original) {
 		return nil, false
 	}
 
-	// Only attempt this on "long" calls. Consider both the actual line
-	// width (useful for single-line nodes with extra spacing) and the
-	// collapsed width (useful for multiline nodes where the first line may
-	// be short).
-	if !(&OrCond{Conds: []Condition{
-		&LineWidthCond{
-			Target: a.Target,
-			Op:     ">",
-			Value:  0,
-		},
-		&CollapsedWidthCond{
-			Target: a.Target,
-			Op:     ">",
-			Value:  0,
-		},
-	}}).Eval(caps,
-		ctx,
-	) {
-
+	// Only attempt on "long" calls (line or collapsed width exceeds limit).
+	if !isWideCallExpr(caps, ctx, a.Target) {
 		return nil, false
 	}
 
 	indent := ctx.IndentAt(call)
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
-	funDoc := layout.T(renderNode(call.Fun, ctx.Fset))
-	// Prefer structured docs for the callee too (useful for generic
-	// instantiation expressions like `f[T, U]`), but keep it tightly
-	// coupled to the `(` to avoid semicolon-insertion hazards (`f\n(` is
-	// not valid Go).
-	if call.Fun != nil {
-		if info, ok := exprDocWithKind(
-			call.Fun, ctx, exprDocKindCallArg,
-		); ok {
-
-			funDoc = info.Doc
-		}
-	}
-
+	funDoc := callFunDoc(call.Fun, ctx)
 	argDocs, ok := buildCallArgsDocs(call.Args, a.Grouping, ctx)
 	if !ok {
 		return nil, false
 	}
-
-	isMake := false
-	if ident, okIdent := call.Fun.(*ast.Ident); okIdent &&
-		ident.Name == "make" {
-
-		isMake = true
-	}
+	isMake := isCallToMake(call)
 
 	// Note: this action is only selected for "long" calls, so we always
 	// include a ForceBreak barrier to ensure the output becomes multiline
