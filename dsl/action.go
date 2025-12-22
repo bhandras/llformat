@@ -4144,11 +4144,41 @@ func (a *BlankLinesBatchAction) Execute(caps Captures, ctx *Context) ([]byte,
 		return nil, false
 	}
 
-	// Evaluate the same conditions used by the per-node rules so batch and
-	// per-node behavior stays aligned.
-	caseCond := &HasPrecedingSiblingCond{Target: "node"}
-	returnCond := &IsReturnNeedingBlankCond{Target: "node"}
-	ifaceMethodCond := &AndCond{Conds: []Condition{
+	bctx := &blankLineBatchContext{
+		ctx:           ctx,
+		insertOffsets: make(map[int]struct{}),
+		opts:          a.Options,
+	}
+	bctx.initConditions()
+	bctx.inspectFile(file)
+
+	out, changed, err := bctx.b.Apply(ctx.Source)
+	if err != nil || !changed {
+		return nil, false
+	}
+	if !parseCheckOK(out) {
+		return nil, false
+	}
+
+	return out, true
+}
+
+// blankLineBatchContext holds state for the blank line batch action.
+type blankLineBatchContext struct {
+	ctx             *Context
+	b               EditBuilder
+	insertOffsets   map[int]struct{}
+	opts            BlankLineOptions
+	caseCond        Condition
+	returnCond      Condition
+	ifaceMethodCond Condition
+	ifErrReturnCond Condition
+}
+
+func (c *blankLineBatchContext) initConditions() {
+	c.caseCond = &HasPrecedingSiblingCond{Target: "node"}
+	c.returnCond = &IsReturnNeedingBlankCond{Target: "node"}
+	c.ifaceMethodCond = &AndCond{Conds: []Condition{
 		&IsInterfaceMethodCond{
 			Target: "node",
 		},
@@ -4156,83 +4186,70 @@ func (a *BlankLinesBatchAction) Execute(caps Captures, ctx *Context) ([]byte,
 			Target: "node",
 		},
 	}}
-	ifErrReturnCond := &IsIfErrReturnNeedingBlankCond{Target: "node"}
+	c.ifErrReturnCond = &IsIfErrReturnNeedingBlankCond{Target: "node"}
+}
 
-	insertOffsets := make(map[int]struct{})
-	var b EditBuilder
-
-	maybeInsertBlankBefore := func(n ast.Node) {
-		if n == nil {
-			return
-		}
-		start := ctx.Fset.Position(n.Pos()).Offset
-		if start <= 0 || start >= len(ctx.Source) {
-			return
-		}
-		ls := lineStart(ctx.Source, start)
-		ls = leadingCommentBlockLineStart(ctx.Source, ls)
-		if ls <= 0 {
-			return
-		}
-		if hasBlankLineBeforeLineStart(ctx.Source, ls) {
-			return
-		}
-		if _, ok := insertOffsets[ls]; ok {
-			return
-		}
-		insertOffsets[ls] = struct{}{}
-		b.Insert(ls, []byte("\n"))
+func (c *blankLineBatchContext) maybeInsertBlankBefore(n ast.Node) {
+	if n == nil {
+		return
 	}
+	start := c.ctx.Fset.Position(n.Pos()).Offset
+	if start <= 0 || start >= len(c.ctx.Source) {
+		return
+	}
+	ls := lineStart(c.ctx.Source, start)
+	ls = leadingCommentBlockLineStart(c.ctx.Source, ls)
+	if ls <= 0 || hasBlankLineBeforeLineStart(c.ctx.Source, ls) {
+		return
+	}
+	if _, ok := c.insertOffsets[ls]; ok {
+		return
+	}
+	c.insertOffsets[ls] = struct{}{}
+	c.b.Insert(ls, []byte("\n"))
+}
 
+func (c *blankLineBatchContext) inspectFile(file *ast.File) {
 	ast.Inspect(
 		file,
 		func(n ast.Node) bool {
+			caps := Captures{"node": n}
 			switch n.(type) {
 			case *ast.CaseClause:
-				caps := Captures{"node": n}
-				if caseCond.Eval(caps, ctx) {
-					maybeInsertBlankBefore(n)
+				if c.caseCond.Eval(caps, c.ctx) {
+					c.maybeInsertBlankBefore(n)
 				}
 
 			case *ast.ReturnStmt:
-				caps := Captures{"node": n}
-				if returnCond.Eval(caps, ctx) {
-					maybeInsertBlankBefore(n)
+				if c.returnCond.Eval(caps, c.ctx) {
+					c.maybeInsertBlankBefore(n)
 				}
 
 			case *ast.Field:
-				caps := Captures{"node": n}
-				if ifaceMethodCond.Eval(caps, ctx) {
-					maybeInsertBlankBefore(n)
+				if c.ifaceMethodCond.Eval(caps, c.ctx) {
+					c.maybeInsertBlankBefore(n)
 				}
 
 			case *ast.IfStmt:
-				if a.Options.ExtraIfErrReturn {
-					caps := Captures{"node": n}
-					if ifErrReturnCond.Eval(caps, ctx) {
-						maybeInsertBlankBefore(n)
-					}
+				if c.opts.ExtraIfErrReturn && c.ifErrReturnCond.Eval(
+					caps, c.ctx,
+				) {
+
+					c.maybeInsertBlankBefore(n)
 				}
 			}
 
 			return true
 		},
 	)
+}
 
-	out, changed, err := b.Apply(ctx.Source)
-	if err != nil || !changed {
-		return nil, false
-	}
-
-	// Defensive parse check: inserting whitespace should never break
-	// parsing, but keep the DSL engine parse-safe by refusing edits that
-	// would.
+// parseCheckOK performs a defensive parse check on the output.
+func parseCheckOK(out []byte) bool {
 	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
-		return nil, false
-	}
+	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 
-	return out, true
+	return err == nil
 }
 
 func isWhitespaceOnlyLine(b []byte) bool {
