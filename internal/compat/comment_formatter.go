@@ -68,60 +68,25 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 	i := 0
 	for i < len(lines) {
 		line := lines[i]
+
 		// Try line comment block
-		if isStandaloneLineComment(line) {
-			// Preserve directive comments verbatim. These lines are
-			// not "text" in the normal sense; tools expect specific
-			// formats.
-			if isDirectiveLineComment(line) {
-				out = append(out, line)
-				i++
-				continue
-			}
+		if newOut, newIdx, handled := processLineCommentBlock(
+			lines, i, out,
+		); handled {
 
-			indent, _ := splitIndent(line)
-			// Collect consecutive standalone `//` lines.
-			start := i
-			for i < len(lines) &&
-				isStandaloneLineComment(lines[i]) && !isDirectiveLineComment(
-				lines[i],
-			) {
-
-				i++
-			}
-			block := lines[start:i]
-			out = append(
-				out, reflowLineCommentBlock(block, indent)...,
-			)
+			out = newOut
+			i = newIdx
 			continue
 		}
 
 		// Try standalone block comment
-		if isStandaloneBlockStart(line) {
-			indent, _ := splitIndent(line)
-			// Find end line.
-			j := i + 1
-			for j < len(lines) && !isStandaloneBlockEnd(lines[j]) {
-				j++
-			}
-			if j < len(lines) && isStandaloneBlockEnd(lines[j]) {
-				block := lines[i : j+1]
-				// Preserve directive-like blocks verbatim (e.g.
-				// cgo directives).
-				if isDirectiveBlockComment(block) {
-					out = append(out, block...)
-					i = j + 1
-					continue
-				}
-				out = append(
-					out,
-					reflowBlockComment(block, indent)...,
-				)
-				i = j + 1
-				continue
-			}
-			// Not a complete standalone block; fall through, copy
-			// as-is.
+		if newOut, newIdx, handled := processBlockComment(
+			lines, i, out,
+		); handled {
+
+			out = newOut
+			i = newIdx
+			continue
 		}
 
 		// Default: copy unchanged.
@@ -721,4 +686,75 @@ func consumeStringCharCompat(c byte, inStr *byte, esc *bool) bool {
 	}
 
 	return true
+}
+
+// processLineCommentBlock handles a contiguous block of line comments starting
+// at index i. Returns the updated output slice, new index, and whether a block
+// was processed.
+func processLineCommentBlock(lines []string, i int, out []string) ([]string, int,
+	bool) {
+
+	line := lines[i]
+	if !isStandaloneLineComment(line) || isDirectiveLineComment(line) {
+		return out, i, false
+	}
+
+	indent, _ := splitIndent(line)
+	block := []string{line}
+	j := i + 1
+	for j < len(lines) {
+		next := lines[j]
+		if !isStandaloneLineComment(next) {
+			break
+		}
+		if isDirectiveLineComment(next) {
+			break
+		}
+		nextIndent, _ := splitIndent(next)
+		if nextIndent != indent {
+			break
+		}
+		block = append(block, next)
+		j++
+	}
+
+	reflowed := reflowLineCommentBlock(block, indent)
+	out = append(out, reflowed...)
+
+	return out, j, true
+}
+
+// processBlockComment handles a standalone block comment starting at index i.
+// Returns the updated output slice, new index, and whether a block was
+// processed.
+func processBlockComment(lines []string, i int, out []string) ([]string, int,
+	bool) {
+
+	line := lines[i]
+	if !isStandaloneBlockStart(line) {
+		return out, i, false
+	}
+
+	indent, _ := splitIndent(line)
+	block := []string{line}
+	j := i + 1
+	for j < len(lines) {
+		block = append(block, lines[j])
+		if isStandaloneBlockEnd(lines[j]) {
+			j++
+			break
+		}
+		j++
+	}
+
+	if isDirectiveBlockComment(block) {
+		out = append(out, block...)
+
+		return out, j, true
+	}
+
+	reflowed := reflowBlockComment(block, indent)
+	out = append(out, reflowed...)
+
+	return out, j, true
 }
