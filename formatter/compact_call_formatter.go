@@ -2160,112 +2160,36 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				commaReserve = 1
 			}
 
-			// Preferred reserve: if this is a printf-style format
-			// string and there are trailing expression args, try to
-			// keep a small number of those args packed with the
-			// final string segment *when it is actually
-			// achievable*.
-			//
-			// This is a preference, not a hard constraint: if it
-			// can't be met, keep the string whole and break args
-			// instead of producing awkward extra concatenation
-			// lines.
-			preferredReserve := commaReserve
-			if hasTrailingArgs &&
-				opts.ReserveTrailingExprArgs > 0 && a.containsFormatVerb {
-
-				reserve := 0
-				kept := 0
-				for j := i + 1; j < len(normArgs) &&
-					kept < opts.ReserveTrailingExprArgs; j++ {
-
-					if normArgs[j].kind != argExpr {
-						break
-					}
-					need := firstLineLen(normArgs[j].expr)
-					if isTargetedCallStart(normArgs[j].expr) {
-						need = exprHeadLen(
-							normArgs[j].expr,
-						)
-					}
-					reserve += 2 + need // ", " + expr
-					kept++
-				}
-				// If we reserved all remaining args, also
-				// reserve the closing paren.
-				if i+kept == len(normArgs)-1 && kept > 0 {
-					reserve += 1
-				}
-				if reserve > preferredReserve {
-					preferredReserve = reserve
-				}
-			}
+			preferredReserve := computePreferredReserve(
+				normArgs, i, commaReserve, opts,
+				hasTrailingArgs, a.containsFormatVerb,
+			)
 
 			contStart := visualLen(contIndent)
-			fitsPreferredHere := advanceCols(curLen, q)+
-				preferredReserve <= width
-			fitsHere := advanceCols(curLen, q)+commaReserve <= width
 
-			if fitsPreferredHere {
-				b.WriteString(q)
-				curLen = advanceCols(curLen, q)
+			// Try writing the string whole on current line.
+			if tryWriteStringWhole(&b, q, &curLen, width, preferredReserve) {
 				rest = ""
 				break
 			}
-			if fitsHere {
-				// Even if we'd like to keep additional args on
-				// the same line, avoid splitting a string
-				// literal that already fits; let args break
-				// instead.
-				b.WriteString(q)
-				curLen = advanceCols(curLen, q)
+			if tryWriteStringWhole(&b, q, &curLen, width, commaReserve) {
 				rest = ""
 				break
 			}
 
 			// Before splitting the string on the current line, try
-			// moving the whole literal to a continuation line. This
-			// primarily helps when the call starts mid-line (e.g.
-			// `return nil, fmt.Errorf(...)`) and the literal would
-			// fit cleanly once the prefix is removed.
-			isPrintfString := hasTrailingArgs &&
-				a.containsFormatVerb
-			if opts.PreferBreakBeforeSplit &&
-				curLen != visualLen(contIndent) &&
-				// Avoid creating hanging-paren layouts for
-				// single-string calls like: fmt.Errorf( "...")
-				// Prefer splitting the string on the current
-				// line instead.
-				hasTrailingArgs &&
-				(!opts.AvoidHangingParenForPrintf ||
-					!isPrintfString) {
+			// moving the whole literal to a continuation line.
+			isPrintfString := hasTrailingArgs && a.containsFormatVerb
+			canTryContLine := opts.PreferBreakBeforeSplit &&
+				curLen != contStart && hasTrailingArgs &&
+				(!opts.AvoidHangingParenForPrintf || !isPrintfString)
 
-				fitsPreferredCont := advanceCols(contStart, q)+
-					preferredReserve <= width
-				fitsCont := advanceCols(contStart, q)+
-					commaReserve <= width
-
-				if fitsPreferredCont {
-					b.WriteByte('\n')
-					b.WriteString(contIndent)
-					curLen = contStart
-					b.WriteString(q)
-					curLen = advanceCols(curLen, q)
+			if canTryContLine {
+				if tryMoveStringToCont(&b, q, contIndent, &curLen, contStart, width, preferredReserve) {
 					rest = ""
 					break
 				}
-
-				if fitsCont {
-					// Prefer keeping the string whole on a
-					// clean continuation line. If there are
-					// trailing args, let them break rather
-					// than introducing string concatenation
-					// solely to "make room".
-					b.WriteByte('\n')
-					b.WriteString(contIndent)
-					curLen = contStart
-					b.WriteString(q)
-					curLen = advanceCols(curLen, q)
+				if tryMoveStringToCont(&b, q, contIndent, &curLen, contStart, width, commaReserve) {
 					rest = ""
 					break
 				}
@@ -2275,33 +2199,16 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			// taking into account escape expansion inside the
 			// literal and gofmt's context-sensitive spacing around
 			// '+'.
-			//
-			// Important: do this *before* forcing a newline due to
-			// "capCols <= 0". When `hasTrailingArgs` and the
-			// segment ends with a space, gofmt emits `"..."+"..."`
-			// (no space before '+'), which is one column cheaper
-			// than `"..." + "..."`. The join-aware cut helpers
-			// already account for this.
-			cut := lastQuotedSpaceBefore(curLen, rest, width)
-			if opts.UseJoinAwareSpaceCut {
-				cut = lastQuotedSpaceBeforeWithJoin(
-					curLen, rest, width, hasTrailingArgs,
-				)
+			cutParams := &spaceCutParams{
+				curLen:            curLen,
+				rest:              rest,
+				width:             width,
+				hasTrailingArgs:   hasTrailingArgs,
+				minTailLen:        minTailLen,
+				avoidTinyVerbTail: avoidTinyVerbTail,
+				useJoinAware:      opts.UseJoinAwareSpaceCut,
 			}
-			if avoidTinyVerbTail || minTailLen > 0 {
-				if opts.UseJoinAwareSpaceCut {
-					cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(
-						curLen, rest, width,
-						hasTrailingArgs, minTailLen,
-						avoidTinyVerbTail,
-					)
-				} else {
-					cut = lastQuotedSpaceBeforeAvoidingTails(
-						curLen, rest, width, minTailLen,
-						avoidTinyVerbTail,
-					)
-				}
-			}
+			cut := cutParams.compute()
 
 			// Capacity for content (excluding quotes and join
 			// operator) of this split segment. This is a non-final
@@ -2318,29 +2225,8 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				}
 				// Recompute cut now that we're on a
 				// continuation line.
-				cut = lastQuotedSpaceBefore(curLen, rest, width)
-				if opts.UseJoinAwareSpaceCut {
-					cut = lastQuotedSpaceBeforeWithJoin(
-						curLen, rest, width,
-						hasTrailingArgs,
-					)
-				}
-				if avoidTinyVerbTail || minTailLen > 0 {
-					if opts.UseJoinAwareSpaceCut {
-						cut = lastQuotedSpaceBeforeWithJoinAvoidingTails(
-							curLen, rest, width,
-							hasTrailingArgs,
-							minTailLen,
-							avoidTinyVerbTail,
-						)
-					} else {
-						cut = lastQuotedSpaceBeforeAvoidingTails(
-							curLen, rest, width,
-							minTailLen,
-							avoidTinyVerbTail,
-						)
-					}
-				}
+				cutParams.curLen = curLen
+				cut = cutParams.compute()
 			}
 
 			if cut <= 0 {
@@ -2700,6 +2586,102 @@ func isTinyTail(s string, minTailLen int) bool {
 	}
 
 	return len(trimmed) > 0 && len(trimmed) < minTailLen
+}
+
+// spaceCutParams encapsulates parameters for computing where to split a string
+// at a space boundary.
+type spaceCutParams struct {
+	curLen            int
+	rest              string
+	width             int
+	hasTrailingArgs   bool
+	minTailLen        int
+	avoidTinyVerbTail bool
+	useJoinAware      bool
+}
+
+// compute returns the index of the last space where the quoted prefix fits.
+func (p *spaceCutParams) compute() int {
+	if p.avoidTinyVerbTail || p.minTailLen > 0 {
+		if p.useJoinAware {
+			return lastQuotedSpaceBeforeWithJoinAvoidingTails(
+				p.curLen, p.rest, p.width,
+				p.hasTrailingArgs, p.minTailLen,
+				p.avoidTinyVerbTail,
+			)
+		}
+		return lastQuotedSpaceBeforeAvoidingTails(
+			p.curLen, p.rest, p.width,
+			p.minTailLen, p.avoidTinyVerbTail,
+		)
+	}
+	if p.useJoinAware {
+		return lastQuotedSpaceBeforeWithJoin(
+			p.curLen, p.rest, p.width, p.hasTrailingArgs,
+		)
+	}
+	return lastQuotedSpaceBefore(p.curLen, p.rest, p.width)
+}
+
+// tryWriteStringWhole attempts to write the quoted string if it fits within
+// width with the given reserve. Returns true if written, updating curLen.
+func tryWriteStringWhole(
+	b *strings.Builder, q string, curLen *int, width, reserve int,
+) bool {
+	if advanceCols(*curLen, q)+reserve <= width {
+		b.WriteString(q)
+		*curLen = advanceCols(*curLen, q)
+		return true
+	}
+	return false
+}
+
+// tryMoveStringToCont attempts to move a string to continuation line if it
+// fits there. Returns true if moved, updating curLen.
+func tryMoveStringToCont(
+	b *strings.Builder, q, contIndent string, curLen *int,
+	contStart, width, reserve int,
+) bool {
+	if advanceCols(contStart, q)+reserve <= width {
+		b.WriteByte('\n')
+		b.WriteString(contIndent)
+		b.WriteString(q)
+		*curLen = advanceCols(contStart, q)
+		return true
+	}
+	return false
+}
+
+// computePreferredReserve calculates how much space to reserve for trailing
+// expression arguments when formatting a printf-style string.
+func computePreferredReserve(
+	normArgs []arg, argIndex int, commaReserve int,
+	opts greedyCallOptions, hasTrailingArgs, containsFormatVerb bool,
+) int {
+	if !hasTrailingArgs || opts.ReserveTrailingExprArgs <= 0 || !containsFormatVerb {
+		return commaReserve
+	}
+	reserve := 0
+	kept := 0
+	for j := argIndex + 1; j < len(normArgs) && kept < opts.ReserveTrailingExprArgs; j++ {
+		if normArgs[j].kind != argExpr {
+			break
+		}
+		need := firstLineLen(normArgs[j].expr)
+		if isTargetedCallStart(normArgs[j].expr) {
+			need = exprHeadLen(normArgs[j].expr)
+		}
+		reserve += 2 + need // ", " + expr
+		kept++
+	}
+	// If we reserved all remaining args, also reserve the closing paren.
+	if argIndex+kept == len(normArgs)-1 && kept > 0 {
+		reserve++
+	}
+	if reserve > commaReserve {
+		return reserve
+	}
+	return commaReserve
 }
 
 // shouldWrapForWord checks if we're not on a continuation line and the upcoming
