@@ -1476,80 +1476,23 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 			a = fa
 		}
 
-		if llast.IsCallExpr(a) {
-			fits := false
-			if first {
-				fits = advanceCols(contIndentLen, a) <= lineWidth
-			} else {
-				fits = advanceCols(curLen+2, a) <= lineWidth
-			}
-			fitsFresh := advanceCols(contIndentLen, a) <= lineWidth
-			hasAlways := callHasAlwaysMultilineComposite(a)
-			hasNested := llast.HasNestedCall(a)
-
-			if fits && !hasAlways && !hasNested {
-				if first {
-					b.WriteString(contIndent)
-					b.WriteString(a)
-					curLen = contIndentLen + firstLineLen(a)
-					first = false
-				} else {
-					if forcedBreak {
-						b.WriteByte(',')
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = contIndentLen
-					} else {
-						b.WriteString(", ")
-					}
-					b.WriteString(a)
-					curLen = advanceCols(curLen+2, a)
-				}
-				continue
-			}
-
-			if !hasAlways && !hasNested && fitsFresh {
-				// Keep as-is and let the generic placement
-				// logic below decide whether to break before
-				// it. This avoids nested-call explosions like:
-				// len( x, )
-			} else {
-				nested := formatCallPackedMultiLineNext(
-					[]byte(a), contIndent, contIndent, true,
-				)
-				if first {
-					b.WriteString(contIndent)
-					b.WriteString(nested)
-					curLen = curLenAfterWrite(nested)
-					first = false
-					if strings.Contains(nested, "\n") {
-						seenMultilineCall = true
-					}
-					continue
-				}
-				if forcedBreak {
-					b.WriteByte(',')
-					b.WriteByte('\n')
-					b.WriteString(contIndent)
-					b.WriteString(nested)
-					curLen = curLenAfterWrite(nested)
-					first = false
-					if strings.Contains(nested, "\n") {
-						seenMultilineCall = true
-					}
-					continue
-				}
-				b.WriteByte(',')
-				b.WriteByte('\n')
-				b.WriteString(contIndent)
-				b.WriteString(nested)
-				curLen = curLenAfterWrite(nested)
-				first = false
-				if strings.Contains(nested, "\n") {
-					seenMultilineCall = true
-				}
-				continue
-			}
+		// Handle call expression arguments with potential nesting.
+		callState := &callExprArgNextState{
+			b:                      &b,
+			contIndent:             contIndent,
+			contIndentLen:          contIndentLen,
+			lineWidth:              lineWidth,
+			curLen:                 curLen,
+			first:                  first,
+			forcedBreak:            forcedBreak,
+			seenMultilineCall:      seenMultilineCall,
+			seenMultilineComposite: seenMultilineComposite,
+		}
+		if callState.handleCallExprArgNext(a) {
+			curLen = callState.curLen
+			first = callState.first
+			seenMultilineCall = callState.seenMultilineCall
+			continue
 		}
 
 		if first {
@@ -1598,6 +1541,116 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+// callExprArgNextState holds state for processing call expression arguments.
+type callExprArgNextState struct {
+	b                      *strings.Builder
+	contIndent             string
+	contIndentLen          int
+	lineWidth              int
+	curLen                 int
+	first                  bool
+	forcedBreak            bool
+	seenMultilineCall      bool
+	seenMultilineComposite bool
+}
+
+// handleCallExprArgNext processes a call expression argument and returns
+// whether it was handled. If handled, it updates the state accordingly.
+func (s *callExprArgNextState) handleCallExprArgNext(a string) bool {
+	if !llast.IsCallExpr(a) {
+		return false
+	}
+
+	fits := false
+	if s.first {
+		fits = advanceCols(s.contIndentLen, a) <= s.lineWidth
+	} else {
+		fits = advanceCols(s.curLen+2, a) <= s.lineWidth
+	}
+	fitsFresh := advanceCols(s.contIndentLen, a) <= s.lineWidth
+	hasAlways := callHasAlwaysMultilineComposite(a)
+	hasNested := llast.HasNestedCall(a)
+
+	// Simple case: fits inline without complications.
+	if fits && !hasAlways && !hasNested {
+		s.writeArgSimple(a)
+
+		return true
+	}
+
+	// Check if we can use generic placement logic.
+	if !hasAlways && !hasNested && fitsFresh {
+
+		// Let the caller's generic placement logic handle it.
+		return false
+	}
+
+	// Need to recursively format the nested call.
+	nested := formatCallPackedMultiLineNext(
+		[]byte(a), s.contIndent, s.contIndent, true,
+	)
+	s.writeNestedCall(nested)
+
+	return true
+}
+
+// writeArgSimple writes an argument that fits inline.
+func (s *callExprArgNextState) writeArgSimple(a string) {
+	if s.first {
+		s.b.WriteString(s.contIndent)
+		s.b.WriteString(a)
+		s.curLen = s.contIndentLen + firstLineLen(a)
+		s.first = false
+
+		return
+	}
+
+	if s.forcedBreak {
+		s.b.WriteByte(',')
+		s.b.WriteByte('\n')
+		s.b.WriteString(s.contIndent)
+		s.curLen = s.contIndentLen
+	} else {
+		s.b.WriteString(", ")
+	}
+	s.b.WriteString(a)
+	s.curLen = advanceCols(s.curLen+2, a)
+}
+
+// writeNestedCall writes a recursively formatted nested call.
+func (s *callExprArgNextState) writeNestedCall(nested string) {
+	if s.first {
+		s.b.WriteString(s.contIndent)
+		s.b.WriteString(nested)
+		s.curLen = s.curLenAfterWrite(nested)
+		s.first = false
+		if strings.Contains(nested, "\n") {
+			s.seenMultilineCall = true
+		}
+
+		return
+	}
+
+	s.b.WriteByte(',')
+	s.b.WriteByte('\n')
+	s.b.WriteString(s.contIndent)
+	s.b.WriteString(nested)
+	s.curLen = s.curLenAfterWrite(nested)
+	s.first = false
+	if strings.Contains(nested, "\n") {
+		s.seenMultilineCall = true
+	}
+}
+
+// curLenAfterWrite calculates curLen after writing a string.
+func (s *callExprArgNextState) curLenAfterWrite(str string) int {
+	if strings.Contains(str, "\n") {
+		return lastLineLen(str)
+	}
+
+	return s.contIndentLen + firstLineLen(str)
 }
 
 func expandFuncLitArgBodyNext(arg string, argIndent string) (string, bool) {
