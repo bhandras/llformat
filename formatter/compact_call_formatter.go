@@ -1922,6 +1922,52 @@ type greedyCallOptions struct {
 	PreserveStringConcatExpr bool
 }
 
+// greedyArgFitParams contains parameters for determining if an argument fits
+// on the current line.
+type greedyArgFitParams struct {
+	curLen     int
+	width      int
+	numArgs    int
+	argIndex   int
+	opts       greedyCallOptions
+}
+
+// exprFitsOnLine returns true if the expression argument fits on the current
+// line with the separator, and returns the needed width.
+func (p *greedyArgFitParams) exprFitsOnLine(expr string) (fits bool, need int) {
+	need = firstLineLen(expr)
+	if isTargetedCallStart(expr) {
+		need = exprHeadLen(expr)
+	}
+
+	reserve := 0
+	// Only reserve ')' for single-line expressions.
+	if p.opts.ReserveClosingParen && p.argIndex == p.numArgs-1 &&
+		!strings.Contains(expr, "\n") {
+		reserve = 1
+	}
+
+	// Reserve trailing comma if we might break after this arg.
+	trailingCommaReserve := 0
+	if p.opts.AllowExactFit && p.argIndex < p.numArgs-1 {
+		trailingCommaReserve = 1
+	}
+
+	total := p.curLen + 2 + need + reserve + trailingCommaReserve
+	if p.opts.AllowExactFit {
+		fits = total <= p.width
+	} else {
+		fits = total < p.width
+	}
+	return fits, need
+}
+
+// textFitsOnLine returns true if a text (string) argument's minimal form fits.
+func (p *greedyArgFitParams) textFitsOnLine() bool {
+	// minimal placeable segment on same line: "X" +
+	return p.curLen+2+(2+1+2) <= p.width // ", " + (quotes+char+ +)
+}
+
 func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 	opts greedyCallOptions) string {
 
@@ -2002,125 +2048,49 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				// Greedy argument packing: keep each argument
 				// on the current line if it fits, otherwise
 				// break before it.
-				//
-				// Note: Avoid lookahead that forces a break
-				// before the first arg just to keep pairs
-				// together; that can under-fill the current
-				// line and "repack" arguments in a surprising
-				// way.
-				switch a.kind {
-				case argExpr:
-					need := firstLineLen(a.expr)
-					if isTargetedCallStart(a.expr) {
-						need = exprHeadLen(a.expr)
-					}
-					// If this is the final argument, also
-					// account for the closing paren.
-					reserve := 0
-					// Only reserve ')' for single-line
-					// expressions; for multi-line
-					// expressions (including explicit
-					// string concatenations), ')' will end
-					// up on the last line, so reserving it
-					// against the first line can cause
-					// unnecessary breaks.
-					if opts.ReserveClosingParen &&
-						i == len(normArgs)-
-							1 && !strings.Contains(
-						a.expr, "\n",
-					) {
-
-						reserve = 1
-					}
-
-					// If we might need to break after
-					// placing this arg (i.e. there are
-					// trailing args), we must leave room
-					// for the trailing comma we will append
-					// to end the line (`,\n`).
-					//
-					// This only matters when AllowExactFit
-					// is enabled; otherwise the strict `<
-					// width` check naturally leaves at
-					// least one column of slack.
-					trailingCommaReserve := 0
-					if opts.AllowExactFit &&
-						i < len(normArgs)-1 {
-
-						trailingCommaReserve = 1
-					}
-
-					fits := curLen+2+need+reserve+
-						trailingCommaReserve < width
-					if opts.AllowExactFit {
-						fits = curLen+2+need+reserve+
-							trailingCommaReserve <= width
-					}
-					if fits {
-						b.WriteString(", ")
-						curLen += 2
-						curLen = emitCommentPrefixes(
-							&b, prefixes, curLen,
-						)
-					} else {
-						curLen = emitBreakWithComments(
-							&b, prefixes,
-							contIndent,
-						)
-						justBroke = true
-					}
-
-				case argText:
-					// minimal placeable segment on same
-					// line: "X" +
-					if curLen+2+
-						(2+1+
-							2) <= width { // ", " + (quotes+char+ +)
-
-						b.WriteString(", ")
-						curLen += 2
-						curLen = emitCommentPrefixes(
-							&b, prefixes, curLen,
-						)
-					} else {
-						curLen = emitBreakWithComments(
-							&b, prefixes,
-							contIndent,
-						)
-						justBroke = true
-					}
+				fitParams := &greedyArgFitParams{
+					curLen:   curLen,
+					width:    width,
+					numArgs:  len(normArgs),
+					argIndex: i,
+					opts:     opts,
+				}
+				var fits bool
+				if a.kind == argExpr {
+					fits, _ = fitParams.exprFitsOnLine(a.expr)
+				} else {
+					fits = fitParams.textFitsOnLine()
+				}
+				if fits {
+					b.WriteString(", ")
+					curLen += 2
+					curLen = emitCommentPrefixes(
+						&b, prefixes, curLen,
+					)
+				} else {
+					curLen = emitBreakWithComments(
+						&b, prefixes, contIndent,
+					)
+					justBroke = true
 				}
 			}
 		}
 
 		if a.kind == argExpr {
-			// For nested targeted calls, use the head length to
-			// decide fit.
-			need := firstLineLen(a.expr)
-			if isTargetedCallStart(a.expr) {
-				need = exprHeadLen(a.expr)
+			// Check if we need to break before this expr.
+			fitParams := &greedyArgFitParams{
+				curLen:   curLen,
+				width:    width,
+				numArgs:  len(normArgs),
+				argIndex: i,
+				opts:     opts,
 			}
-			reserve := 0
-			if opts.ReserveClosingParen && i == len(normArgs)-1 &&
-				!strings.Contains(a.expr, "\n") {
-
-				reserve = 1
-			}
-
-			// See trailingCommaReserve rationale above: avoid
-			// placing an arg such that it ends exactly at the
-			// column limit when there are more args, since we may
-			// need to append a trailing comma to break before the
-			// next arg.
-			trailingCommaReserve := 0
-			if opts.AllowExactFit && i < len(normArgs)-1 {
-				trailingCommaReserve = 1
-			}
-
-			if !justBroke && !isRawStringLiteral(a.expr) &&
-				curLen+need+reserve+
-					trailingCommaReserve > width {
-
+			fits, need := fitParams.exprFitsOnLine(a.expr)
+			// Note: fits is for "with separator", but here we're
+			// checking without separator (curLen + need > width).
+			needsBreak := !justBroke && !isRawStringLiteral(a.expr) &&
+				curLen+need > width && !fits
+			if needsBreak {
 				b.WriteByte('\n')
 				b.WriteString(contIndent)
 				curLen = visualLen(contIndent)
