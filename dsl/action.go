@@ -2901,14 +2901,10 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	bool) {
 
 	node := resolveTarget(caps, a.Target)
-
 	funcDecl, ok := node.(*ast.FuncDecl)
-	if !ok || funcDecl == nil {
-		return nil, false
-	}
+	if !ok || funcDecl == nil || funcDecl.Body == nil ||
+		!funcDecl.Body.Lbrace.IsValid() {
 
-	// Find the opening brace of the function body
-	if funcDecl.Body == nil || !funcDecl.Body.Lbrace.IsValid() {
 		return nil, false
 	}
 
@@ -2969,11 +2965,7 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	out, err := ApplySingleEdit(
 		ctx.Source, lineStart, afterBrace, []byte(formatted),
 	)
-	if err != nil {
-		return nil, false
-	}
-	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if err != nil || !parseCheckOK(out) {
 		return nil, false
 	}
 
