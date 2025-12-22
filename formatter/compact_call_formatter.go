@@ -2101,7 +2101,9 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				b.WriteString(contIndent)
 				curLen = visualLen(contIndent)
 			}
-			curLen = writeExprArg(&b, a.expr, wsIndent, curLen, opts)
+			curLen = writeExprArg(
+				&b, a.expr, wsIndent, curLen, opts,
+			)
 			continue
 		}
 
@@ -2159,28 +2161,44 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			contStart := visualLen(contIndent)
 
 			// Try writing the string whole on current line.
-			if tryWriteStringWhole(&b, q, &curLen, width, preferredReserve) {
+			if tryWriteStringWhole(
+				&b, q, &curLen, width, preferredReserve,
+			) {
+
 				rest = ""
 				break
 			}
-			if tryWriteStringWhole(&b, q, &curLen, width, commaReserve) {
+			if tryWriteStringWhole(
+				&b, q, &curLen, width, commaReserve,
+			) {
+
 				rest = ""
 				break
 			}
 
 			// Before splitting the string on the current line, try
 			// moving the whole literal to a continuation line.
-			isPrintfString := hasTrailingArgs && a.containsFormatVerb
+			isPrintfString := hasTrailingArgs &&
+				a.containsFormatVerb
 			canTryContLine := opts.PreferBreakBeforeSplit &&
 				curLen != contStart && hasTrailingArgs &&
-				(!opts.AvoidHangingParenForPrintf || !isPrintfString)
+				(!opts.AvoidHangingParenForPrintf ||
+					!isPrintfString)
 
 			if canTryContLine {
-				if tryMoveStringToCont(&b, q, contIndent, &curLen, contStart, width, preferredReserve) {
+				if tryMoveStringToCont(
+					&b, q, contIndent, &curLen, contStart,
+					width, preferredReserve,
+				) {
+
 					rest = ""
 					break
 				}
-				if tryMoveStringToCont(&b, q, contIndent, &curLen, contStart, width, commaReserve) {
+				if tryMoveStringToCont(
+					&b, q, contIndent, &curLen, contStart,
+					width, commaReserve,
+				) {
+
 					rest = ""
 					break
 				}
@@ -2596,14 +2614,14 @@ func (p *spaceCutParams) compute() int {
 	if p.avoidTinyVerbTail || p.minTailLen > 0 {
 		if p.useJoinAware {
 			return lastQuotedSpaceBeforeWithJoinAvoidingTails(
-				p.curLen, p.rest, p.width,
-				p.hasTrailingArgs, p.minTailLen,
-				p.avoidTinyVerbTail,
+				p.curLen, p.rest, p.width, p.hasTrailingArgs,
+				p.minTailLen, p.avoidTinyVerbTail,
 			)
 		}
+
 		return lastQuotedSpaceBeforeAvoidingTails(
-			p.curLen, p.rest, p.width,
-			p.minTailLen, p.avoidTinyVerbTail,
+			p.curLen, p.rest, p.width, p.minTailLen,
+			p.avoidTinyVerbTail,
 		)
 	}
 	if p.useJoinAware {
@@ -2611,67 +2629,75 @@ func (p *spaceCutParams) compute() int {
 			p.curLen, p.rest, p.width, p.hasTrailingArgs,
 		)
 	}
+
 	return lastQuotedSpaceBefore(p.curLen, p.rest, p.width)
 }
 
 // tryWriteStringWhole attempts to write the quoted string if it fits within
 // width with the given reserve. Returns true if written, updating curLen.
-func tryWriteStringWhole(
-	b *strings.Builder, q string, curLen *int, width, reserve int,
-) bool {
+func tryWriteStringWhole(b *strings.Builder, q string, curLen *int, width,
+	reserve int) bool {
+
 	if advanceCols(*curLen, q)+reserve <= width {
 		b.WriteString(q)
 		*curLen = advanceCols(*curLen, q)
+
 		return true
 	}
+
 	return false
 }
 
-// tryMoveStringToCont attempts to move a string to continuation line if it
-// fits there. Returns true if moved, updating curLen.
-func tryMoveStringToCont(
-	b *strings.Builder, q, contIndent string, curLen *int,
-	contStart, width, reserve int,
-) bool {
+// tryMoveStringToCont attempts to move a string to continuation line if it fits
+// there. Returns true if moved, updating curLen.
+func tryMoveStringToCont(b *strings.Builder, q, contIndent string, curLen *int,
+	contStart, width, reserve int) bool {
+
 	if advanceCols(contStart, q)+reserve <= width {
 		b.WriteByte('\n')
 		b.WriteString(contIndent)
 		b.WriteString(q)
 		*curLen = advanceCols(contStart, q)
+
 		return true
 	}
+
 	return false
 }
 
 // writeExprArg writes an expression argument, recursively formatting nested
 // calls if needed. Returns the updated curLen.
-func writeExprArg(
-	b *strings.Builder, expr, wsIndent string, curLen int,
-	opts greedyCallOptions,
-) int {
+func writeExprArg(b *strings.Builder, expr, wsIndent string, curLen int,
+	opts greedyCallOptions) int {
+
 	if isTargetedCallStart(expr) {
 		formatted := formatCallGreedyWithOptions(
 			[]byte(expr), wsIndent, curLen, opts,
 		)
 		b.WriteString(formatted)
+
 		return lastLineLen(formatted)
 	}
 	b.WriteString(expr)
+
 	return advanceCols(curLen, expr)
 }
 
 // computePreferredReserve calculates how much space to reserve for trailing
 // expression arguments when formatting a printf-style string.
-func computePreferredReserve(
-	normArgs []arg, argIndex int, commaReserve int,
-	opts greedyCallOptions, hasTrailingArgs, containsFormatVerb bool,
-) int {
-	if !hasTrailingArgs || opts.ReserveTrailingExprArgs <= 0 || !containsFormatVerb {
+func computePreferredReserve(normArgs []arg, argIndex int, commaReserve int,
+	opts greedyCallOptions, hasTrailingArgs, containsFormatVerb bool) int {
+
+	if !hasTrailingArgs || opts.ReserveTrailingExprArgs <= 0 ||
+		!containsFormatVerb {
+
 		return commaReserve
 	}
 	reserve := 0
 	kept := 0
-	for j := argIndex + 1; j < len(normArgs) && kept < opts.ReserveTrailingExprArgs; j++ {
+	for j := argIndex + 1; j < len(normArgs) &&
+		kept < opts.ReserveTrailingExprArgs; j++ {
+
 		if normArgs[j].kind != argExpr {
 			break
 		}
@@ -2689,6 +2715,7 @@ func computePreferredReserve(
 	if reserve > commaReserve {
 		return reserve
 	}
+
 	return commaReserve
 }
 
