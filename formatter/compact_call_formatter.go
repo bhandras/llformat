@@ -1929,34 +1929,11 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			// If this arg starts with a comment, detach it so we
 			// can place it next to the preceding argument in the
 			// correct position.
-			lineCommentPrefix := ""
-			blockCommentPrefix := ""
+			var prefixes commentPrefixes
 			if a.kind == argExpr {
-				tl := strings.TrimLeftFunc(
-					a.expr, unicode.IsSpace,
+				a.expr, prefixes = extractCommentPrefixes(
+					a.expr,
 				)
-				if strings.HasPrefix(tl, "//") {
-					k := 0
-					for k < len(tl) && tl[k] != '\n' {
-						k++
-					}
-					lineCommentPrefix = tl[:k]
-					a.expr = strings.TrimLeftFunc(
-						tl[k:], unicode.IsSpace,
-					)
-					tl = strings.TrimLeftFunc(
-						a.expr, unicode.IsSpace,
-					)
-				}
-				if strings.HasPrefix(tl, "/*") {
-					if end := strings.Index(tl, "*/"); end >= 0 {
-						blockCommentPrefix = tl[:end+2]
-						a.expr = strings.TrimLeftFunc(
-							tl[end+2:],
-							unicode.IsSpace,
-						)
-					}
-				}
 			}
 			if hasInlineComment {
 				// Separator on same line; attach trailing line
@@ -1964,16 +1941,9 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 				// comment before next arg.
 				b.WriteString(", ")
 				curLen += 2
-				if lineCommentPrefix != "" {
-					b.WriteString(lineCommentPrefix)
-					curLen += visualLen(lineCommentPrefix)
-				}
-				if blockCommentPrefix != "" {
-					b.WriteByte(' ')
-					b.WriteString(blockCommentPrefix)
-					curLen += 1 +
-						visualLen(blockCommentPrefix)
-				}
+				curLen = emitCommentPrefixes(
+					&b, prefixes, curLen,
+				)
 				// Fall through to printing arg on same line.
 			} else {
 				// Greedy argument packing: keep each argument
@@ -2036,55 +2006,15 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 					if fits {
 						b.WriteString(", ")
 						curLen += 2
-						if lineCommentPrefix != "" {
-							b.WriteString(
-								lineCommentPrefix,
-							)
-							curLen += visualLen(
-								lineCommentPrefix,
-							)
-						}
-						if blockCommentPrefix != "" {
-							b.WriteByte(' ')
-							b.WriteString(
-								blockCommentPrefix,
-							)
-							curLen += 1 +
-								visualLen(
-									blockCommentPrefix,
-								)
-						}
-						// Reset after the first
-						// decision.
+						curLen = emitCommentPrefixes(
+							&b, prefixes, curLen,
+						)
 					} else {
-						// Put trailing line comment on
-						// the same line as the comma.
-						b.WriteByte(',')
-						if lineCommentPrefix != "" {
-							b.WriteByte(' ')
-							b.WriteString(
-								lineCommentPrefix,
-							)
-						}
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = visualLen(contIndent)
+						curLen = emitBreakWithComments(
+							&b, prefixes,
+							contIndent,
+						)
 						justBroke = true
-						if blockCommentPrefix != "" {
-							// Place block comment
-							// before the arg on the
-							// new line.
-							b.WriteString(
-								blockCommentPrefix,
-							)
-							b.WriteByte(' ')
-							curLen += visualLen(
-								blockCommentPrefix,
-							) +
-								1
-						}
-						// Reset after the first
-						// decision.
 					}
 
 				case argText:
@@ -2096,46 +2026,15 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 
 						b.WriteString(", ")
 						curLen += 2
-						if lineCommentPrefix != "" {
-							b.WriteString(
-								lineCommentPrefix,
-							)
-							curLen += visualLen(
-								lineCommentPrefix,
-							)
-						}
-						if blockCommentPrefix != "" {
-							b.WriteByte(' ')
-							b.WriteString(
-								blockCommentPrefix,
-							)
-							curLen += 1 +
-								visualLen(
-									blockCommentPrefix,
-								)
-						}
+						curLen = emitCommentPrefixes(
+							&b, prefixes, curLen,
+						)
 					} else {
-						b.WriteByte(',')
-						if lineCommentPrefix != "" {
-							b.WriteByte(' ')
-							b.WriteString(
-								lineCommentPrefix,
-							)
-						}
-						b.WriteByte('\n')
-						b.WriteString(contIndent)
-						curLen = visualLen(contIndent)
+						curLen = emitBreakWithComments(
+							&b, prefixes,
+							contIndent,
+						)
 						justBroke = true
-						if blockCommentPrefix != "" {
-							b.WriteString(
-								blockCommentPrefix,
-							)
-							b.WriteByte(' ')
-							curLen += visualLen(
-								blockCommentPrefix,
-							) +
-								1
-						}
 					}
 				}
 			}
@@ -2557,6 +2456,76 @@ type arg struct {
 	raw  string
 
 	containsFormatVerb bool
+}
+
+// commentPrefixes holds extracted comment prefixes from an argument.
+type commentPrefixes struct {
+	line  string
+	block string
+}
+
+// extractCommentPrefixes extracts leading line and block comment prefixes from
+// an expression argument, returning the cleaned expression and the prefixes.
+func extractCommentPrefixes(expr string) (string, commentPrefixes) {
+	var prefixes commentPrefixes
+
+	tl := strings.TrimLeftFunc(expr, unicode.IsSpace)
+	if strings.HasPrefix(tl, "//") {
+		k := 0
+		for k < len(tl) && tl[k] != '\n' {
+			k++
+		}
+		prefixes.line = tl[:k]
+		expr = strings.TrimLeftFunc(tl[k:], unicode.IsSpace)
+		tl = strings.TrimLeftFunc(expr, unicode.IsSpace)
+	}
+	if strings.HasPrefix(tl, "/*") {
+		if end := strings.Index(tl, "*/"); end >= 0 {
+			prefixes.block = tl[:end+2]
+			expr = strings.TrimLeftFunc(tl[end+2:], unicode.IsSpace)
+		}
+	}
+
+	return expr, prefixes
+}
+
+// emitCommentPrefixes writes comment prefixes to a builder and updates curLen.
+func emitCommentPrefixes(b *strings.Builder, prefixes commentPrefixes,
+	curLen int) int {
+
+	if prefixes.line != "" {
+		b.WriteString(prefixes.line)
+		curLen += visualLen(prefixes.line)
+	}
+	if prefixes.block != "" {
+		b.WriteByte(' ')
+		b.WriteString(prefixes.block)
+		curLen += 1 + visualLen(prefixes.block)
+	}
+
+	return curLen
+}
+
+// emitBreakWithComments writes a comma, optional line comment, newline, indent,
+// and optional block comment. Returns the new curLen.
+func emitBreakWithComments(b *strings.Builder, prefixes commentPrefixes,
+	contIndent string) int {
+
+	b.WriteByte(',')
+	if prefixes.line != "" {
+		b.WriteByte(' ')
+		b.WriteString(prefixes.line)
+	}
+	b.WriteByte('\n')
+	b.WriteString(contIndent)
+	curLen := visualLen(contIndent)
+	if prefixes.block != "" {
+		b.WriteString(prefixes.block)
+		b.WriteByte(' ')
+		curLen += visualLen(prefixes.block) + 1
+	}
+
+	return curLen
 }
 
 func hasPrefixAt(b []byte, i int, s string) bool {
