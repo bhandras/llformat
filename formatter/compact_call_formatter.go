@@ -2338,47 +2338,20 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			}
 
 			if cut <= 0 {
-				// No space within capacity. If we are not on a
-				// continuation line and the upcoming word (up
-				// to the next space) would fit on a
-				// continuation line, wrap before it to avoid
-				// splitting a word on the head line.
-				if curLen != visualLen(contIndent) {
-					if sp := strings.IndexByte(rest, ' '); sp > 0 {
-						base := visualLen(contIndent)
-						// compute content width of the
-						// first word at cont indent
-						wordCols := advanceCols(
-							base, rest[:sp],
-						) -
-							base
-						nextCap := (width) - base - 2 -
-							2 // quotes + " +"
-						if hasTrailingArgs {
-							// If we can split at a
-							// space, gofmt may emit
-							// `"..."+"..."` (no
-							// space before '+'),
-							// which is one column
-							// cheaper.
-							nextCap++
-						}
-						if wordCols <= nextCap {
-							b.WriteByte('\n')
-							b.WriteString(
-								contIndent,
-							)
-							curLen = visualLen(
-								contIndent,
-							)
-							continue
-						}
-					}
+				// No space within capacity. Check if we should
+				// wrap to continuation line for the upcoming
+				// word.
+				if shouldWrapForWord(
+					rest, curLen, contIndent, width,
+					hasTrailingArgs,
+				) {
+					b.WriteByte('\n')
+					b.WriteString(contIndent)
+					curLen = visualLen(contIndent)
+					continue
 				}
 				// Hard cut by visual columns.
-				idx := cutIndexForWidthFrom(
-					curLen, rest, capCols,
-				)
+				idx := cutIndexForWidthFrom(curLen, rest, capCols)
 				if idx >= len(rest) {
 					// Splitting didn't make progress
 					// (typically because indentation
@@ -2718,6 +2691,29 @@ func isTinyTail(s string, minTailLen int) bool {
 	}
 
 	return len(trimmed) > 0 && len(trimmed) < minTailLen
+}
+
+// shouldWrapForWord checks if we're not on a continuation line and the
+// upcoming word would fit on a fresh continuation line. Used to decide
+// whether to wrap before a hard cut.
+func shouldWrapForWord(
+	rest string, curLen int, contIndent string, width int, hasTrailingArgs bool,
+) bool {
+	base := visualLen(contIndent)
+	if curLen == base {
+		// Already on continuation line.
+		return false
+	}
+	sp := strings.IndexByte(rest, ' ')
+	if sp <= 0 {
+		return false
+	}
+	wordCols := advanceCols(base, rest[:sp]) - base
+	nextCap := width - base - 2 - 2 // quotes + " +"
+	if hasTrailingArgs {
+		nextCap++
+	}
+	return wordCols <= nextCap
 }
 
 func lastQuotedSpaceBeforeAvoidingTails(startCol int, s string, boundary int,
