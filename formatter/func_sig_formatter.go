@@ -76,41 +76,54 @@ func NewFuncSigFormatter(cfg FuncSigConfig) *FuncSigFormatter {
 	return &FuncSigFormatter{cfg: cfg}
 }
 
+// interfaceState tracks whether we're inside an interface block.
+type interfaceState struct {
+	inInterface bool
+	braceDepth  int
+}
+
+// updateInterfaceState updates the interface tracking state based on the line.
+func (s *interfaceState) update(trimmed string) {
+	if strings.Contains(trimmed, "interface") &&
+		strings.Contains(trimmed, "{") {
+
+		s.inInterface = true
+		s.braceDepth = 1
+
+		return
+	}
+
+	if !s.inInterface {
+		return
+	}
+
+	for _, c := range trimmed {
+		switch c {
+		case '{':
+			s.braceDepth++
+
+		case '}':
+			s.braceDepth--
+			if s.braceDepth == 0 {
+				s.inInterface = false
+			}
+		}
+	}
+}
+
 // FormatFile formats long function signatures in the source file.
 func (f *FuncSigFormatter) FormatFile(src []byte) []byte {
 	var out bytes.Buffer
 	lines := bytes.Split(src, []byte("\n"))
 
-	// Track if we're inside an interface block
-	inInterface := false
-	braceDepth := 0
+	var state interfaceState
 
 	i := 0
 	for i < len(lines) {
 		line := string(lines[i])
 		trimmed := strings.TrimLeft(line, " \t")
 
-		// Track interface blocks
-		if strings.Contains(trimmed, "interface") &&
-			strings.Contains(trimmed, "{") {
-
-			inInterface = true
-			braceDepth = 1
-		} else if inInterface {
-			// Count braces to track when we exit the interface
-			for _, c := range trimmed {
-				switch c {
-				case '{':
-					braceDepth++
-
-				case '}':
-					braceDepth--
-					if braceDepth == 0 {
-						inInterface = false
-					}
-				}
-			}
-		}
+		state.update(trimmed)
 
 		// Check if this looks like a function signature
 		if f.isFuncSignature(trimmed) {
@@ -128,7 +141,7 @@ func (f *FuncSigFormatter) FormatFile(src []byte) []byte {
 				i += linesConsumed
 				continue
 			}
-		} else if inInterface && f.isInterfaceMethod(trimmed) {
+		} else if state.inInterface && f.isInterfaceMethod(trimmed) {
 			// Get the indent
 			indent := line[:len(line)-len(trimmed)]
 
@@ -863,46 +876,48 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int,
 }
 
 // breakSignature breaks a function signature to fit within column limit.
+// signatureNeedsFormatting checks if a signature needs to be reformatted.
+func (f *FuncSigFormatter) signatureNeedsFormatting(sig, indent string) bool {
+	if strings.Contains(sig, "\n") {
+		return f.multilineSignatureNeedsFormatting(sig, indent)
+	}
+
+	if width.VisualLenWithTab(indent+sig, f.cfg.TabStop) > f.cfg.ColumnLimit {
+		return true
+	}
+
+	return f.cfg.FormatInlineStructParams &&
+		hasInlineStructWithSemicolons(sig)
+}
+
+// multilineSignatureNeedsFormatting checks if a multiline signature exceeds
+// limits.
+func (f *FuncSigFormatter) multilineSignatureNeedsFormatting(sig,
+	indent string) bool {
+
+	for _, line := range strings.Split(sig, "\n") {
+		if width.VisualLenWithTab(indent+line, f.cfg.TabStop) >
+			f.cfg.ColumnLimit {
+
+			return true
+		}
+	}
+
+	// Check if there are func types with multiline content that need
+	// breaking.
+	if strings.Contains(sig, "func(") && strings.Contains(sig, "struct") {
+		return true
+	}
+
+	return f.cfg.FormatInlineStructParams &&
+		hasInlineStructWithSemicolons(sig)
+}
+
 func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 	// Parse the signature parts Format: [func ][(receiver) ][name](params)[
 	// (returns)][ {]
 
-	// Check if it already fits and doesn't need formatting for readability
-	// For multiline signatures, check each line
-	needsFormatting := false
-	if strings.Contains(sig, "\n") {
-		// Multiline signature - check if any line exceeds limit
-		for _, line := range strings.Split(sig, "\n") {
-			if width.VisualLenWithTab(indent+line, f.cfg.TabStop) > f.
-				cfg.
-				ColumnLimit {
-
-				needsFormatting = true
-				break
-			}
-		}
-		// Also check if there are func types with multiline content
-		// that need breaking
-		if !needsFormatting && strings.Contains(sig, "func(") &&
-			strings.Contains(sig, "struct") {
-
-			needsFormatting = true
-		}
-	} else {
-		// Single line - simple check
-		if width.VisualLenWithTab(indent+sig, f.cfg.TabStop) > f.
-			cfg.
-			ColumnLimit {
-
-			needsFormatting = true
-		}
-	}
-	if !needsFormatting && f.cfg.FormatInlineStructParams &&
-		hasInlineStructWithSemicolons(sig) {
-
-		needsFormatting = true
-	}
-	if !needsFormatting {
+	if !f.signatureNeedsFormatting(sig, indent) {
 		return indent + sig
 	}
 
