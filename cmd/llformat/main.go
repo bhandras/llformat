@@ -24,6 +24,8 @@ type cliFlags struct {
 	logCallsMinTailLen int
 	printPlan          bool
 	fixpointIters      int
+	traceDSL           bool
+	traceDSLReasons    bool
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -65,6 +67,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(
 		&f.printPlan, "print-plan", false,
 		"print resolved pipeline plan and exit",
+	)
+	fs.BoolVar(
+		&f.traceDSL, "trace-dsl", false,
+		"trace applied DSL edits to stderr",
+	)
+	fs.BoolVar(
+		&f.traceDSLReasons, "trace-dsl-reasons", false,
+		"trace DSL rule skip/apply reasons to stderr",
 	)
 	fs.IntVar(
 		&f.fixpointIters, "fixpoint-iters", 0,
@@ -153,6 +163,14 @@ func printUsage(w io.Writer) {
 		w, "  --print-plan              print resolved pipeline "+
 			"plan and exit",
 	)
+	fmt.Fprintln(
+		w, "  --trace-dsl               trace applied DSL edits to "+
+			"stderr",
+	)
+	fmt.Fprintln(
+		w, "  --trace-dsl-reasons       trace DSL rule skip/apply "+
+			"reasons to stderr",
+	)
 }
 
 func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
@@ -175,6 +193,8 @@ func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 		Excludes:              excludes,
 		LogCallsMinTailLen:    f.logCallsMinTailLen,
 		MaxPipelineIterations: fixpointIters,
+		TraceDSL:              f.traceDSL,
+		TraceDSLReasons:       f.traceDSLReasons,
 	}
 
 	if err := formatter.ValidatePipelineConfig(cfg); err != nil {
