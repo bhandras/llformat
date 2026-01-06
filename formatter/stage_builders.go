@@ -190,6 +190,8 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig,
 			cond := &dsl.IsLogOrPrintfCallCond{
 				Target:                 "node",
 				MatchAnySelectorPrefix: true,
+				SelectorNames:          opts.Style.DSLLogCallsSelectorNames,
+				SelectorPrefixes:       opts.Style.DSLLogCallsSelectorPrefixes,
 				IncludeNonFStringCalls: true,
 			}
 
@@ -265,6 +267,8 @@ func multilineCallOwnedSpans(src []byte,
 	logCond := &dsl.IsLogOrPrintfCallCond{
 		Target:                 "node",
 		MatchAnySelectorPrefix: true,
+		SelectorNames:          opts.Style.DSLLogCallsSelectorNames,
+		SelectorPrefixes:       opts.Style.DSLLogCallsSelectorPrefixes,
 		IncludeNonFStringCalls: true,
 	}
 	nonFLogCond := &dsl.IsNonFLogCallCond{Target: "node"}

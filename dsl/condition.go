@@ -1,8 +1,10 @@
 package dsl
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"strings"
 )
@@ -1301,6 +1303,29 @@ type IsLogOrPrintfCallCond struct {
 	// should not be rewritten.
 	MatchAnySelectorPrefix bool
 
+	// SelectorNames overrides the set of recognized printf-style selector
+	// names for suffix-only matching (e.g. "Infof", "Errorf").
+	//
+	// When empty, a built-in default set is used.
+	//
+	// This does not affect canonical exact matches (e.g. "fmt.Errorf"),
+	// which remain matched regardless of SelectorNames.
+	SelectorNames []string
+
+	// SelectorPrefixes restricts selector-prefix matching for log/printf
+	// calls. This supports allowlist-style targeting of custom loggers.
+	//
+	// When empty (default), selector-prefix matching behavior is controlled
+	// only by MatchAnySelectorPrefix.
+	//
+	// When non-empty, a selector expression is treated as a log/printf call
+	// only if its receiver expression string (e.g. "rpcSLog", "zap.S()",
+	// "zap.L().Sugar()") has one of these prefixes.
+	//
+	// Canonical patterns (e.g. "fmt.Errorf") remain matched regardless of
+	// SelectorPrefixes.
+	SelectorPrefixes []string
+
 	// IncludeNonFStringCalls enables matching a small subset of non-`*f`
 	// log calls (e.g. `logger.Error("...")`) when the first argument is a
 	// string. This is intended for "next" where string-call formatting is
@@ -1313,6 +1338,12 @@ var logPrintfPatterns = []string{
 	"log.Infof", "log.Debugf", "log.Tracef", "log.Errorf", "log.Warnf",
 	"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
 	"errors.New",
+}
+
+// LogPrintfCanonicalPatterns returns the canonical "pkg.Func" patterns that are
+// always recognized as log/printf-style calls.
+func LogPrintfCanonicalPatterns() []string {
+	return append([]string{}, logPrintfPatterns...)
 }
 
 // IsNonFLogCallCond checks if a call expression is a non-printf-style logging
@@ -1337,6 +1368,34 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
+	// Canonical pattern matching is always enabled, even when
+	// MatchAnySelectorPrefix/SelectorPrefixes are used to broaden or
+	// restrict suffix-based matching.
+	funcName := getFuncName(call)
+	if funcName != "" {
+		for _, pattern := range logPrintfPatterns {
+			if funcName == pattern {
+				return true
+			}
+		}
+	}
+
+	// When MatchAnySelectorPrefix is off, allow an opt-in allowlist of
+	// selector prefixes to expand targeting beyond canonical patterns.
+	if len(c.SelectorPrefixes) > 0 {
+		if c.MatchAnySelectorPrefix {
+			return isLogPrintfCallWithAllowedPrefixes(
+				call, c.SelectorPrefixes, c.SelectorNames,
+			)
+		}
+		if isLogPrintfCallWithAllowedPrefixes(
+			call, c.SelectorPrefixes, c.SelectorNames,
+		) {
+
+			return true
+		}
+	}
+
 	if isErrorsNewCall(call) {
 		return true
 	}
@@ -1346,19 +1405,7 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	if c.MatchAnySelectorPrefix {
-		return isLogPrintfCallWithAnyPrefix(call)
-	}
-
-	// Get the function name
-	funcName := getFuncName(call)
-	if funcName == "" {
-		return false
-	}
-
-	for _, pattern := range logPrintfPatterns {
-		if funcName == pattern {
-			return true
-		}
+		return isLogPrintfCallWithAnyPrefix(call, c.SelectorNames)
 	}
 
 	return false
@@ -1397,23 +1444,98 @@ func isNonFStringLogCall(call *ast.CallExpr) bool {
 	}
 }
 
-func isLogPrintfCallWithAnyPrefix(call *ast.CallExpr) bool {
+func isLogPrintfCallWithAnyPrefix(call *ast.CallExpr,
+	allowedNames []string) bool {
+
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 
 		// Support dot-imported variants (e.g. `Infof(...)`) when
 		// enabled.
-		return isLogPrintfName(fun.Name)
+		return isLogPrintfName(fun.Name, allowedNames)
 
 	case *ast.SelectorExpr:
-		return fun.Sel != nil && isLogPrintfName(fun.Sel.Name)
+		return fun.Sel != nil &&
+			isLogPrintfName(fun.Sel.Name, allowedNames)
 
 	default:
 		return false
 	}
 }
 
-func isLogPrintfName(name string) bool {
+func isLogPrintfCallWithAllowedPrefixes(call *ast.CallExpr,
+	allowedPrefixes []string, allowedNames []string) bool {
+
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+
+		// No selector prefix exists to validate; treat as a
+		// dot-imported log/printf-style call when enabled by the
+		// caller.
+		return isLogPrintfName(fun.Name, allowedNames)
+
+	case *ast.SelectorExpr:
+		if fun.Sel == nil ||
+			!isLogPrintfName(fun.Sel.Name, allowedNames) {
+
+			return false
+		}
+
+		recv := renderExprString(fun.X)
+		if recv == "" {
+			return false
+		}
+
+		for _, p := range allowedPrefixes {
+			if selectorPrefixMatches(recv, p) {
+				return true
+			}
+		}
+
+		return false
+
+	default:
+		return false
+	}
+}
+
+func selectorPrefixMatches(receiverExpr string, prefix string) bool {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return false
+	}
+
+	if strings.HasSuffix(prefix, ".") {
+
+		// Treat prefixes as "selector prefix" matchers: "rpcSLog."
+		// should match a receiver expression of "rpcSLog".
+		return strings.HasPrefix(receiverExpr+".", prefix)
+	}
+
+	return strings.HasPrefix(receiverExpr, prefix)
+}
+
+func renderExprString(expr ast.Expr) string {
+	if expr == nil {
+		return ""
+	}
+
+	// Use a stable printer representation so users can specify prefixes
+	// like "zap.L().Sugar()" (gofmt-style) and have them match regardless
+	// of original whitespace.
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, token.NewFileSet(), expr); err != nil {
+		return ""
+	}
+
+	return buf.String()
+}
+
+func isLogPrintfName(name string, allowedNames []string) bool {
+	if len(allowedNames) > 0 {
+		return stringInSlice(name, allowedNames)
+	}
+
 	switch name {
 	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf",
 		"Sprintf":
@@ -1422,6 +1544,14 @@ func isLogPrintfName(name string) bool {
 
 	default:
 		return false
+	}
+}
+
+// LogPrintfSelectorNames returns the selector/ident names that are recognized
+// as printf-style calls when suffix-only matching is enabled.
+func LogPrintfSelectorNames() []string {
+	return []string{
+		"Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf", "Sprintf",
 	}
 }
 
@@ -1447,6 +1577,12 @@ func isNonFStringLogName(name string) bool {
 	default:
 		return false
 	}
+}
+
+// NonFStringLogNames returns the selector/ident names that are recognized as
+// message-only string calls when IncludeNonFStringCalls is enabled.
+func NonFStringLogNames() []string {
+	return []string{"Info", "Debug", "Trace", "Warn", "Error"}
 }
 
 // Eval implements Condition for IsNonFLogCallCond.

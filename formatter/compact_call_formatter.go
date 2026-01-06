@@ -2298,18 +2298,41 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 func normalizeCallArgs(rawArgs []string, opts greedyCallOptions) []arg {
 	normArgs := make([]arg, 0, len(rawArgs))
 	rawCount := len(rawArgs)
-	for _, ra := range rawArgs {
+
+	// Only split one "primary" string argument. This avoids extremely poor
+	// output for structured logging calls that have many short string key
+	// arguments (e.g. "actor_id") that should never be split.
+	//
+	// This also prevents pathological cases where indentation leaves very
+	// little room, and the greedy algorithm would otherwise split even tiny
+	// string literals.
+	primaryStringIndex := -1
+	for i, ra := range rawArgs {
+		trimmed := strings.TrimSpace(ra)
+		e, err := parser.ParseExpr(trimmed)
+		if err != nil {
+			continue
+		}
+		if _, ok := llast.FlattenStringExprAST(e); ok {
+			primaryStringIndex = i
+			break
+		}
+	}
+
+	for i, ra := range rawArgs {
 		trimmed := strings.TrimSpace(ra)
 		normArgs = append(
-			normArgs, normalizeCallArg(trimmed, rawCount, opts),
+			normArgs, normalizeCallArg(
+				trimmed, i, rawCount, primaryStringIndex, opts,
+			),
 		)
 	}
 
 	return normArgs
 }
 
-func normalizeCallArg(trimmed string, rawCount int,
-	opts greedyCallOptions) arg {
+func normalizeCallArg(trimmed string, argIndex int, rawCount int,
+	primaryStringIndex int, opts greedyCallOptions) arg {
 
 	e, err := parser.ParseExpr(trimmed)
 	if err != nil {
@@ -2318,6 +2341,19 @@ func normalizeCallArg(trimmed string, rawCount int,
 	str, ok := llast.FlattenStringExprAST(e)
 	if !ok {
 		return arg{kind: argExpr, expr: trimmed}
+	}
+
+	// For non-primary string args (typically structured logging keys), keep
+	// them as expressions so the call formatter can break between arguments
+	// instead of splitting inside a short literal. If the user already has
+	// an explicit concatenation expression (e.g. "ac"+"tor_id"), collapse
+	// it back to a single literal.
+	if argIndex != primaryStringIndex {
+		if isBasicStringLitExpr(e) {
+			return arg{kind: argExpr, expr: trimmed}
+		}
+
+		return arg{kind: argExpr, expr: quoteGoString(str)}
 	}
 
 	// If this is a concatenation expression used as a format string with

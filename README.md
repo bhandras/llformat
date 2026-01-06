@@ -91,9 +91,17 @@ Helpful flags:
   call formatting
 - `--logcalls-min-tail-len N`: avoid leaving tiny tails when splitting long
   format strings (0 means default)
+- `--logcalls-selector-names n1,n2`: override the set of `*f` selector names to
+  treat as printf/log calls for compact formatting (default includes `Infof`,
+  `Errorf`, `Sprintf`, etc.)
+- `--logcalls-selector-prefixes p1,p2`: restrict compact log/printf call
+  formatting to specific selector receiver expression prefixes (e.g.
+  `rpcSLog,zap.L().Sugar()`)
 - `--fixpoint-iters N`: run the full pipeline repeatedly until stable (default
   is `3` in the CLI)
 - `--print-plan`: print resolved stage plan and exit
+- `--print-logcalls-patterns`: print the currently recognized log/printf call
+  patterns and exit
 
 ## Tests
 

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lightninglabs/llformat/dsl"
 	"github.com/lightninglabs/llformat/formatter"
 )
 
@@ -22,7 +23,10 @@ type cliFlags struct {
 	moveInline         bool
 	multilineExclude   string
 	logCallsMinTailLen int
+	logCallsNames      string
+	logCallsPrefixes   string
 	printPlan          bool
+	printLogCalls      bool
 	fixpointIters      int
 	traceDSL           bool
 	traceDSLReasons    bool
@@ -64,9 +68,25 @@ func run(args []string, stdout, stderr io.Writer) int {
 			"tail length when splitting printf/logcall strings "+
 			"in next profile (0 => default)",
 	)
+	fs.StringVar(
+		&f.logCallsNames, "logcalls-selector-names", "", "comma-separ"+
+			"ated list of selector/ident names to treat as "+
+			"printf-style calls for suffix-only matching (empty "+
+			"=> built-in default)",
+	)
+	fs.StringVar(
+		&f.logCallsPrefixes, "logcalls-selector-prefixes", "", "comma"+
+			"-separated list of selector receiver expression "+
+			"prefixes to target for log/printf call formatting "+
+			"(empty => match any selector prefix in next profile)",
+	)
 	fs.BoolVar(
 		&f.printPlan, "print-plan", false,
 		"print resolved pipeline plan and exit",
+	)
+	fs.BoolVar(
+		&f.printLogCalls, "print-logcalls-patterns", false,
+		"print log/printf call matching patterns and exit",
 	)
 	fs.BoolVar(
 		&f.traceDSL, "trace-dsl", false,
@@ -98,6 +118,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if f.printPlan {
 		return runPrintPlan(stdout, cfg)
 	}
+	if f.printLogCalls {
+		return runPrintLogCallsPatterns(stdout, cfg)
+	}
 
 	if fs.NArg() != 1 {
 		fs.Usage()
@@ -124,11 +147,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 func printUsage(w io.Writer) {
 	fmt.Fprintln(
-		w, "usage: llformat [-w] [--wrap-inline-comments] [--col N] "+
-			"[--tab N] [--multiline-exclude FUNCS] "+
-			"[--logcalls-min-tail-len N] [--fixpoint-iters N] "+
-			"[--print-plan] <path>",
+		w, "usage:",
 	)
+	fmt.Fprintln(
+		w, "  llformat [-w] [--wrap-inline-comments] [--col N] "+
+			"[--tab N] [--multiline-exclude FUNCS] "+
+			"[--logcalls-min-tail-len N] "+
+			"[--logcalls-selector-names NAMES] "+
+			"[--logcalls-selector-prefixes PREFIXES] "+
+			"[--fixpoint-iters N] <path>",
+	)
+	fmt.Fprintln(w, "  llformat --print-plan")
+	fmt.Fprintln(w, "  llformat --print-logcalls-patterns")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "flags:")
 	fmt.Fprintln(
@@ -156,12 +186,26 @@ func printUsage(w io.Writer) {
 			"splitting printf/logcall strings (0 => default)",
 	)
 	fmt.Fprintln(
+		w, "  --logcalls-selector-names NAMES comma-separated "+
+			"selector/ident names for printf-style matching "+
+			"(example: \"Infof,Errorf\")",
+	)
+	fmt.Fprintln(
+		w, "  --logcalls-selector-prefixes PREFIXES comma-separated "+
+			"receiver expression prefixes to target (example: "+
+			"\"rpcSLog,zap.L().Sugar()\")",
+	)
+	fmt.Fprintln(
 		w, "  --fixpoint-iters N        repeat full pipeline until "+
 			"stable (0=auto; default 3)",
 	)
 	fmt.Fprintln(
 		w, "  --print-plan              print resolved pipeline "+
 			"plan and exit",
+	)
+	fmt.Fprintln(
+		w, "  --print-logcalls-patterns print log/printf matching "+
+			"patterns and exit",
 	)
 	fmt.Fprintln(
 		w, "  --trace-dsl               trace applied DSL edits to "+
@@ -175,6 +219,8 @@ func printUsage(w io.Writer) {
 
 func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 	excludes := parseCommaList(f.multilineExclude)
+	logCallsNames := parseCommaList(f.logCallsNames)
+	logCallsPrefixes := parseCommaList(f.logCallsPrefixes)
 
 	fixpointIters := f.fixpointIters
 	if fixpointIters < 0 {
@@ -187,14 +233,16 @@ func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 	}
 
 	cfg := formatter.PipelineConfig{
-		ColumnLimit:           f.colLimit,
-		TabStop:               f.tabStop,
-		MoveInlineAbove:       f.moveInline,
-		Excludes:              excludes,
-		LogCallsMinTailLen:    f.logCallsMinTailLen,
-		MaxPipelineIterations: fixpointIters,
-		TraceDSL:              f.traceDSL,
-		TraceDSLReasons:       f.traceDSLReasons,
+		ColumnLimit:              f.colLimit,
+		TabStop:                  f.tabStop,
+		MoveInlineAbove:          f.moveInline,
+		Excludes:                 excludes,
+		LogCallsMinTailLen:       f.logCallsMinTailLen,
+		LogCallsSelectorNames:    logCallsNames,
+		LogCallsSelectorPrefixes: logCallsPrefixes,
+		MaxPipelineIterations:    fixpointIters,
+		TraceDSL:                 f.traceDSL,
+		TraceDSLReasons:          f.traceDSLReasons,
 	}
 
 	if err := formatter.ValidatePipelineConfig(cfg); err != nil {
@@ -202,6 +250,47 @@ func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func runPrintLogCallsPatterns(w io.Writer, cfg formatter.PipelineConfig) int {
+
+	fmt.Fprintln(w, "log/printf call matching patterns:")
+	fmt.Fprintln(w)
+
+	selectorNames := cfg.LogCallsSelectorNames
+	if len(selectorNames) == 0 {
+		selectorNames = dsl.LogPrintfSelectorNames()
+	}
+	fmt.Fprintf(
+		w, "- printf-style selector names (effective): %s\n", strings.Join(
+			selectorNames, ", ",
+		),
+	)
+	fmt.Fprintf(
+		w, "- canonical exact patterns: %s\n",
+		strings.Join(
+			dsl.LogPrintfCanonicalPatterns(), ", ",
+		),
+	)
+	fmt.Fprintf(
+		w, "- non-f string-call names (next): %s\n",
+		strings.Join(
+			dsl.NonFStringLogNames(), ", ",
+		),
+	)
+	if len(cfg.LogCallsSelectorPrefixes) == 0 {
+		fmt.Fprintln(
+			w, "- selector prefix allowlist: (none; next "+
+				"matches any prefix)",
+		)
+	} else {
+		fmt.Fprintf(
+			w, "- selector prefix allowlist: %s\n",
+			strings.Join(cfg.LogCallsSelectorPrefixes, ", "),
+		)
+	}
+
+	return 0
 }
 
 func parseCommaList(s string) []string {

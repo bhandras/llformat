@@ -147,6 +147,14 @@ type StageStyleOptions struct {
 	// line when splitting a long string literal. A value of 0 uses the
 	// profile default.
 	DSLLogCallsMinTailLen int
+	// DSLLogCallsSelectorNames overrides the set of recognized printf-style
+	// selector names for suffix-only matching. When empty, a built-in
+	// default set is used.
+	DSLLogCallsSelectorNames []string
+	// DSLLogCallsSelectorPrefixes restricts log/printf call selection to
+	// calls whose selector receiver expression has one of these prefixes.
+	// When empty, the next profile targets any selector prefix.
+	DSLLogCallsSelectorPrefixes []string
 	// DSLBlankLinesExtraIfErrReturn controls whether native DSL blank line
 	// rules should insert a blank line before `if err != nil { return ...
 	// }` patterns.

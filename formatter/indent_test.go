@@ -86,8 +86,8 @@ func TestIndentContinuation(t *testing.T) {
 	cont := indent.Continuation()
 
 	if cont.Base != "\t\t" {
-		t.Errorf("Continuation().Base = %q, want %q", cont.Base, "	"+
-			"	")
+		t.Errorf("Continuation().Base = %q, want %q", cont.Base,
+			"		")
 	}
 	if cont.Width() != 16 {
 		t.Errorf("Continuation().Width() = %d, want 16", cont.Width())
@@ -119,8 +119,8 @@ func TestIndentWithSpaces(t *testing.T) {
 	spaced := indent.WithSpaces(4)
 
 	if spaced.Base != "    " {
-		t.Errorf("WithSpaces(4).Base = %q, want %q", spaced.Base, "  "+
-			"  ")
+		t.Errorf("WithSpaces(4).Base = %q, want %q", spaced.Base,
+			"    ")
 	}
 	if spaced.Width() != 4 {
 		t.Errorf("WithSpaces(4).Width() = %d, want 4", spaced.Width())

@@ -169,6 +169,11 @@ Goal:
 - Pack arguments greedily within the column limit.
 - Split long format strings safely with a configurable minimum “tail” length
   to avoid ugly 1–2 character remnants.
+  - Selection can be restricted to an allowlist of selector receiver prefixes
+    via `--logcalls-selector-prefixes` (useful when a repo has many `Infof`-like
+    methods that should not be rewritten).
+  - The set of recognized `*f` selector names can be overridden via
+    `--logcalls-selector-names`.
 
 Implementation:
 

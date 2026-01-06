@@ -36,6 +36,8 @@ func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
 	return dsl.LogPrintfRulesWithOptions(
 		dsl.LogPrintfOptions{
 			MatchAnySelectorPrefix: true,
+			SelectorNames:          opts.Style.DSLLogCallsSelectorNames,
+			SelectorPrefixes:       opts.Style.DSLLogCallsSelectorPrefixes,
 			IncludeNonFStringCalls: true,
 		},
 		formatFunc,
@@ -118,7 +120,9 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule,
 	}
 
 	optsCommon := dsl.MultiLineCallOptions{
-		Excludes: opts.Style.Excludes,
+		Excludes:                opts.Style.Excludes,
+		LogCallSelectorNames:    opts.Style.DSLLogCallsSelectorNames,
+		LogCallSelectorPrefixes: opts.Style.DSLLogCallsSelectorPrefixes,
 		DisableBreakBeforeCallOnLongMultiAssignPrefix: true,
 		CheckMaxSpanLineWidth:                         true,
 	}

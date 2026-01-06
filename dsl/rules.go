@@ -1002,6 +1002,15 @@ type LogPrintfOptions struct {
 	// calls. See IsLogOrPrintfCallCond.MatchAnySelectorPrefix for details.
 	MatchAnySelectorPrefix bool
 
+	// SelectorNames overrides the set of recognized printf-style selector
+	// names for suffix-only matching. See
+	// IsLogOrPrintfCallCond.SelectorNames.
+	SelectorNames []string
+
+	// SelectorPrefixes restricts selector-prefix matching for log/printf
+	// calls (allowlist). See IsLogOrPrintfCallCond.SelectorPrefixes.
+	SelectorPrefixes []string
+
 	// IncludeNonFStringCalls enables matching a small subset of non-`*f`
 	// log calls (e.g. `logger.Error("...")`) when the first argument is a
 	// string.
@@ -1040,6 +1049,8 @@ func LogPrintfRulesWithOptions(opts LogPrintfOptions,
 			When: &IsLogOrPrintfCallCond{
 				Target:                 "node",
 				MatchAnySelectorPrefix: opts.MatchAnySelectorPrefix,
+				SelectorNames:          opts.SelectorNames,
+				SelectorPrefixes:       opts.SelectorPrefixes,
 				IncludeNonFStringCalls: opts.IncludeNonFStringCalls,
 			},
 			Priority: 75,
@@ -1067,6 +1078,17 @@ type MultiLineCallOptions struct {
 	// Excludes is a list of function names that should be excluded from
 	// multiline call formatting (matches "foo" or "pkg.Foo").
 	Excludes []string
+
+	// LogCallSelectorNames configures which selector/ident names should be
+	// treated as log/printf-style calls for the purpose of excluding them
+	// from generic multiline call formatting. When empty, a built-in
+	// default set is used.
+	LogCallSelectorNames []string
+
+	// LogCallSelectorPrefixes optionally restricts selector-prefix matching
+	// for log/printf call exclusion (allowlist). See
+	// IsLogOrPrintfCallCond.SelectorPrefixes.
+	LogCallSelectorPrefixes []string
 
 	// MethodChainStyle controls how long method chains are broken.
 	// Supported: ""/"legacy" (existing BreakMethodChainAction) and "layout"
@@ -1146,6 +1168,8 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 			Cond: &IsLogOrPrintfCallCond{
 				Target:                 "node",
 				MatchAnySelectorPrefix: true,
+				SelectorNames:          opts.LogCallSelectorNames,
+				SelectorPrefixes:       opts.LogCallSelectorPrefixes,
 			},
 		},
 		&NotCond{
@@ -1340,6 +1364,8 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions,
 						Cond: &IsLogOrPrintfCallCond{
 							Target:                 "node",
 							MatchAnySelectorPrefix: true,
+							SelectorNames:          opts.LogCallSelectorNames,
+							SelectorPrefixes:       opts.LogCallSelectorPrefixes,
 						},
 					},
 					&NotCond{
@@ -1398,6 +1424,8 @@ func LegacyMultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 						Cond: &IsLogOrPrintfCallCond{
 							Target:                 "node",
 							MatchAnySelectorPrefix: true,
+							SelectorNames:          opts.LogCallSelectorNames,
+							SelectorPrefixes:       opts.LogCallSelectorPrefixes,
 						},
 					},
 					&NotCond{

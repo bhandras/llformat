@@ -33,8 +33,17 @@ type PipelineConfig struct {
 	// in printf/logcall formatting under the "next" profile. When 0, a
 	// profile default is used.
 	LogCallsMinTailLen int
-	TraceDSL           bool // Enable DSL rule tracing (only when UseDSLExpr)
-	TraceDSLReasons    bool // Include "why fired/didn't fire" reasons in DSL tracing
+	// LogCallsSelectorNames overrides the set of recognized printf-style
+	// selector names for suffix-only matching (e.g. "Infof", "Errorf").
+	// When empty, a built-in default set is used.
+	LogCallsSelectorNames []string
+	// LogCallsSelectorPrefixes restricts log/printf call selection (compact
+	// logcall formatting) to selector calls whose receiver expression has
+	// one of these prefixes (e.g. "rpcLog", "zap.L().Sugar()"). When empty,
+	// the next profile matches any selector prefix.
+	LogCallsSelectorPrefixes []string
+	TraceDSL                 bool // Enable DSL rule tracing (only when UseDSLExpr)
+	TraceDSLReasons          bool // Include "why fired/didn't fire" reasons in DSL tracing
 
 	// UseOwnershipRegistry enables pipeline-level stage ownership
 	// boundaries. When enabled, the pipeline will compute owned span sets
@@ -178,6 +187,8 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 				DSLMultiLineStyle:             cfg.DSLMultiLineStyle,
 				DSLSigsStyle:                  cfg.DSLSigsStyle,
 				DSLLogCallsMinTailLen:         cfg.LogCallsMinTailLen,
+				DSLLogCallsSelectorNames:      cfg.LogCallsSelectorNames,
+				DSLLogCallsSelectorPrefixes:   cfg.LogCallsSelectorPrefixes,
 				DSLBlankLinesExtraIfErrReturn: cfg.DSLBlankLinesExtraIfErrReturn,
 				DSLExprLogicalStyle:           cfg.DSLExprLogicalStyle,
 				DSLExprArithmeticStyle:        cfg.DSLExprArithmeticStyle,

@@ -53,8 +53,8 @@ func TestPresetWithCallPatterns(t *testing.T) {
 	// Check the new rule
 	lastRule := newPreset.CallRules[len(newPreset.CallRules)-1]
 	if lastRule.Patterns[0] != "custom.Call(" {
-		t.Errorf("Pattern = %q, want %q", lastRule.Patterns[0], "cust"+
-			"om.Call(")
+		t.Errorf("Pattern = %q, want %q", lastRule.Patterns[0],
+			"custom.Call(")
 	}
 	if lastRule.Priority != 20 {
 		t.Errorf("Priority = %d, want 20", lastRule.Priority)

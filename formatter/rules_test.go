@@ -67,8 +67,8 @@ func TestCallRuleName(t *testing.T) {
 
 	emptyRule := &CallRule{Breaker: NewLeftFlowBreaker()}
 	if emptyRule.Name() != "call:unknown" {
-		t.Errorf("Name() = %q, want %q", emptyRule.Name(), "call:unkn"+
-			"own")
+		t.Errorf("Name() = %q, want %q", emptyRule.Name(),
+			"call:unknown")
 	}
 }
 
@@ -204,8 +204,8 @@ func TestRuleMatcherMatchAt(t *testing.T) {
 		t.Error("Expected match for log.Infof")
 	}
 	if matched.Name() != "call:log.Infof(" {
-		t.Errorf("Name() = %q, want %q", matched.Name(), "call:log.In"+
-			"fof(")
+		t.Errorf("Name() = %q, want %q", matched.Name(),
+			"call:log.Infof(")
 	}
 
 	// Should match rule2
