@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/lightninglabs/llformat/width"
+	"github.com/bhandras/llformat/width"
 )
 
 // QuoteGoString returns s as a double-quoted Go string literal. It preserves

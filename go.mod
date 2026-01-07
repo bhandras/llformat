@@ -1,4 +1,4 @@
-module github.com/lightninglabs/llformat
+module github.com/bhandras/llformat
 
 go 1.24.5
 

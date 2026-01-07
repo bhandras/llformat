@@ -3,7 +3,7 @@ package compat
 import (
 	"sync"
 
-	"github.com/lightninglabs/llformat/width"
+	"github.com/bhandras/llformat/width"
 )
 
 // These globals are retained to preserve behavior of the original legacy

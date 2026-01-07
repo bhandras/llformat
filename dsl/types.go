@@ -4,8 +4,8 @@ import (
 	"go/ast"
 	"go/token"
 
-	llast "github.com/lightninglabs/llformat/ast"
-	"github.com/lightninglabs/llformat/scanner"
+	llast "github.com/bhandras/llformat/ast"
+	"github.com/bhandras/llformat/scanner"
 )
 
 // Rule represents a formatting rule.

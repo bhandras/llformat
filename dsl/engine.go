@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	llast "github.com/lightninglabs/llformat/ast"
+	llast "github.com/bhandras/llformat/ast"
 )
 
 // Engine executes formatting rules.

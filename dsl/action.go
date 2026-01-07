@@ -10,10 +10,10 @@ import (
 	"strings"
 	"unicode"
 
-	llast "github.com/lightninglabs/llformat/ast"
-	"github.com/lightninglabs/llformat/dsl/layout"
-	"github.com/lightninglabs/llformat/scanner"
-	"github.com/lightninglabs/llformat/text"
+	llast "github.com/bhandras/llformat/ast"
+	"github.com/bhandras/llformat/dsl/layout"
+	"github.com/bhandras/llformat/scanner"
+	"github.com/bhandras/llformat/text"
 )
 
 // NoOpAction does nothing (used for keep_together which just marks nodes).

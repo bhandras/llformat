@@ -3,7 +3,7 @@ package formatter
 import (
 	"testing"
 
-	"github.com/lightninglabs/llformat/dsl"
+	"github.com/bhandras/llformat/dsl"
 	"github.com/stretchr/testify/require"
 )
 

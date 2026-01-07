@@ -3,7 +3,7 @@ package formatter
 import (
 	"strings"
 
-	"github.com/lightninglabs/llformat/scanner"
+	"github.com/bhandras/llformat/scanner"
 )
 
 // BreakContext provides context for breaking decisions.

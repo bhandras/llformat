@@ -1,7 +1,7 @@
 // Package formatter provides Go source code formatting utilities.
 package formatter
 
-import "github.com/lightninglabs/llformat/width"
+import "github.com/bhandras/llformat/width"
 
 // DefaultColumnLimit is the default maximum line length.
 const DefaultColumnLimit = 80

@@ -3,7 +3,7 @@ package formatter
 import (
 	"testing"
 
-	"github.com/lightninglabs/llformat/internal/compat"
+	"github.com/bhandras/llformat/internal/compat"
 	"github.com/stretchr/testify/require"
 )
 

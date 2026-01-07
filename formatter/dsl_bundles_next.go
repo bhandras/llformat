@@ -1,8 +1,8 @@
 package formatter
 
 import (
-	"github.com/lightninglabs/llformat/dsl"
-	"github.com/lightninglabs/llformat/internal/compat"
+	"github.com/bhandras/llformat/dsl"
+	"github.com/bhandras/llformat/internal/compat"
 )
 
 // dslRulesForComments returns the DSL rule list for the comment stage.

@@ -1,6 +1,6 @@
 package formatter
 
-import "github.com/lightninglabs/llformat/dsl"
+import "github.com/bhandras/llformat/dsl"
 
 // DSLStageSpec describes how a single stage should run under the DSL engine. It
 // intentionally mirrors DSLExprConfig fields that are policy-driven rather than

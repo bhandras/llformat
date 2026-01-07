@@ -8,7 +8,7 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/lightninglabs/llformat/text"
+	"github.com/bhandras/llformat/text"
 )
 
 func isSelectorChainCallStartOnLine(src []byte, start int) bool {

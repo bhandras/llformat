@@ -1,8 +1,8 @@
 package formatter
 
 import (
-	"github.com/lightninglabs/llformat/text"
-	"github.com/lightninglabs/llformat/width"
+	"github.com/bhandras/llformat/text"
+	"github.com/bhandras/llformat/width"
 )
 
 // Indent tracks indentation for a formatting context.

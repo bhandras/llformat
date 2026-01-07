@@ -5,7 +5,7 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/lightninglabs/llformat/dsl/layout"
+	"github.com/bhandras/llformat/dsl/layout"
 )
 
 type exprDocInfo struct {

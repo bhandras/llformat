@@ -5,8 +5,8 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/lightninglabs/llformat/scanner"
-	"github.com/lightninglabs/llformat/width"
+	"github.com/bhandras/llformat/scanner"
+	"github.com/bhandras/llformat/width"
 )
 
 // FuncSigConfig holds configuration for the function signature formatter.

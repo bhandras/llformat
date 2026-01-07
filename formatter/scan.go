@@ -1,6 +1,6 @@
 package formatter
 
-import "github.com/lightninglabs/llformat/scanner"
+import "github.com/bhandras/llformat/scanner"
 
 // Scanner provides stateful source scanning that skips strings and comments. It
 // wraps the low-level scanner package utilities into a convenient struct.

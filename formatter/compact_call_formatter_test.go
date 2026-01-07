@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	llwidth "github.com/lightninglabs/llformat/width"
+	llwidth "github.com/bhandras/llformat/width"
 	"github.com/stretchr/testify/require"
 )
 

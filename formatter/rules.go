@@ -3,8 +3,8 @@ package formatter
 import (
 	"strings"
 
-	"github.com/lightninglabs/llformat/scanner"
-	"github.com/lightninglabs/llformat/text"
+	"github.com/bhandras/llformat/scanner"
+	"github.com/bhandras/llformat/text"
 )
 
 // Rule defines a formatting rule that can be applied to source.

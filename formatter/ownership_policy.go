@@ -1,7 +1,7 @@
 package formatter
 
 import (
-	llast "github.com/lightninglabs/llformat/ast"
+	llast "github.com/bhandras/llformat/ast"
 )
 
 // OwnershipPolicy describes how a stage should treat pipeline ownership spans.

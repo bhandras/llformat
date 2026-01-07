@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lightninglabs/llformat/formatter"
+	"github.com/bhandras/llformat/formatter"
 )
 
 func main() {

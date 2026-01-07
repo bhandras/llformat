@@ -4,7 +4,7 @@ import (
 	formatstd "go/format"
 	"testing"
 
-	llast "github.com/lightninglabs/llformat/ast"
+	llast "github.com/bhandras/llformat/ast"
 	"github.com/stretchr/testify/require"
 )
 

@@ -3,8 +3,8 @@ package formatter
 import (
 	formatstd "go/format"
 
-	llast "github.com/lightninglabs/llformat/ast"
-	"github.com/lightninglabs/llformat/dsl"
+	llast "github.com/bhandras/llformat/ast"
+	"github.com/bhandras/llformat/dsl"
 )
 
 // DSLExprFormatter uses the DSL engine to format expressions.

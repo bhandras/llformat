@@ -1,7 +1,7 @@
 package formatter
 
 import (
-	llast "github.com/lightninglabs/llformat/ast"
+	llast "github.com/bhandras/llformat/ast"
 )
 
 // OwnedSpanProvider is an optional interface that a stage formatter can

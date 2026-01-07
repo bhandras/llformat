@@ -1,6 +1,6 @@
 package formatter
 
-import "github.com/lightninglabs/llformat/text"
+import "github.com/bhandras/llformat/text"
 
 func isIdentStart(c byte) bool { return text.IsIdentifierStart(c) }
 

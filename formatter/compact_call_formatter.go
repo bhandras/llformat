@@ -11,10 +11,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	llast "github.com/lightninglabs/llformat/ast"
-	"github.com/lightninglabs/llformat/scanner"
-	"github.com/lightninglabs/llformat/text"
-	"github.com/lightninglabs/llformat/width"
+	llast "github.com/bhandras/llformat/ast"
+	"github.com/bhandras/llformat/scanner"
+	"github.com/bhandras/llformat/text"
+	"github.com/bhandras/llformat/width"
 )
 
 // Formatter defines a generic source formatter.

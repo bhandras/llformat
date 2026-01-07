@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lightninglabs/llformat/dsl"
-	"github.com/lightninglabs/llformat/formatter"
+	"github.com/bhandras/llformat/dsl"
+	"github.com/bhandras/llformat/formatter"
 )
 
 func main() {

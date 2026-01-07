@@ -3,7 +3,7 @@ package formatter
 import (
 	"strings"
 
-	"github.com/lightninglabs/llformat/scanner"
+	"github.com/bhandras/llformat/scanner"
 )
 
 // FormatCompositeLiteralArg detects a top-level composite literal in arg and
