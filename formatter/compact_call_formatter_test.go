@@ -123,6 +123,33 @@ func TestFormatCallPackedMultiLineNext_DoesNotOverflowWhenBreakingAddsComma(
 	}
 }
 
+func TestFormatCallPackedMultiLineNext_BreaksBeforeMultilineCallArg(
+	t *testing.T) {
+
+	call := []byte(
+		`outerCall(firstArgumentExtraXX, secondArgumentExtraYY, innerCallWithExtraLongName[
+	TypeOne,
+	TypeTwo,
+](), fourthArgumentName)`,
+	)
+	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
+
+	require.NotContains(
+		t, out,
+		"secondArgumentExtraYY, innerCallWithExtraLongName[",
+	)
+
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		require.LessOrEqual(
+			t, llwidth.VisualLenWithTab(line, 8), 80,
+			"line exceeds configured column limit: %q", line,
+		)
+	}
+}
+
 func TestFormatCallGreedyNext_DoesNotOverflowWhenBreakingAfterExactFitArgAddsComma(
 	t *testing.T) {
 

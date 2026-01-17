@@ -1563,13 +1563,24 @@ func (s *callExprArgNextState) handleCallExprArgNext(a string) bool {
 		return false
 	}
 
+	firstLine := firstLineLen(a)
+	isMultiline := strings.Contains(a, "\n")
 	fits := false
-	if s.first {
+	fitsFresh := false
+	if isMultiline {
+		if s.first {
+			fits = s.contIndentLen+firstLine <= s.lineWidth
+		} else {
+			fits = s.curLen+2+firstLine <= s.lineWidth
+		}
+		fitsFresh = s.contIndentLen+firstLine <= s.lineWidth
+	} else if s.first {
 		fits = advanceCols(s.contIndentLen, a) <= s.lineWidth
+		fitsFresh = fits
 	} else {
 		fits = advanceCols(s.curLen+2, a) <= s.lineWidth
+		fitsFresh = advanceCols(s.contIndentLen, a) <= s.lineWidth
 	}
-	fitsFresh := advanceCols(s.contIndentLen, a) <= s.lineWidth
 	hasAlways := callHasAlwaysMultilineComposite(a)
 	hasNested := llast.HasNestedCall(a)
 
