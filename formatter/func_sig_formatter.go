@@ -311,6 +311,9 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 	formatted = collapseMultilineParenReturnListIfFits(
 		formatted, colLimit, tabStop,
 	)
+	formatted = breakLongTypeArgListsIfNeeded(
+		formatted, colLimit, tabStop,
+	)
 	needsBlank := hasNewlineOutsideBraces(formatted)
 
 	return formatted, needsBlank
@@ -403,6 +406,136 @@ func collapseMultilineParenReturnListIfFits(signature string, colLimit,
 	}
 
 	return signature
+}
+
+func breakLongTypeArgListsIfNeeded(signature string, colLimit,
+	tabStop int) string {
+
+	for {
+		lines := strings.Split(signature, "\n")
+		changed := false
+
+		for i, line := range lines {
+			if width.VisualLenWithTab(line, tabStop) <= colLimit {
+				continue
+			}
+
+			indent := leadingWhitespace(line)
+			rewritten, ok := breakFirstTypeArgListInLine(
+				line, indent,
+			)
+			if !ok {
+				continue
+			}
+
+			newLines := append([]string{}, lines[:i]...)
+			newLines = append(
+				newLines, strings.Split(rewritten, "\n")...,
+			)
+			newLines = append(newLines, lines[i+1:]...)
+
+			signature = strings.Join(newLines, "\n")
+			changed = true
+			break
+		}
+
+		if !changed {
+			return signature
+		}
+	}
+}
+
+func breakFirstTypeArgListInLine(line, indent string) (string, bool) {
+	b := []byte(line)
+
+	for i := 0; i < len(b); {
+		switch {
+		case scanner.IsStringStart(b, i):
+			i = scanner.ScanString(b, i)
+
+		case scanner.IsLineCommentStart(b, i):
+			return line, false
+
+		case scanner.IsBlockCommentStart(b, i):
+			i = scanner.ScanBlockComment(b, i)
+
+		case b[i] == '[':
+			if !isTypeArgListStart(line, i) {
+				i++
+				continue
+			}
+			end := scanner.ScanBalanced(b, i, '[', ']')
+			if end == -1 {
+				return line, false
+			}
+
+			content := strings.TrimSpace(line[i+1 : end])
+			parts := filterNonEmptyTrimmed(
+				scanner.SplitTopLevelAny(content),
+			)
+			if len(parts) <= 1 {
+				i++
+				continue
+			}
+
+			var out strings.Builder
+			out.Grow(len(line) + len(parts)*4)
+			out.WriteString(line[:i+1])
+			out.WriteByte('\n')
+			contIndent := indent + "\t"
+			for _, part := range parts {
+				out.WriteString(contIndent)
+				out.WriteString(strings.TrimSpace(part))
+				out.WriteString(",\n")
+			}
+			out.WriteString(indent)
+			out.WriteByte(']')
+			out.WriteString(line[end+1:])
+
+			return out.String(), true
+
+		default:
+			i++
+		}
+	}
+
+	return line, false
+}
+
+func isTypeArgListStart(line string, idx int) bool {
+	if idx <= 0 || idx >= len(line) || line[idx] != '[' {
+		return false
+	}
+
+	j := idx - 1
+	for j >= 0 && (line[j] == ' ' || line[j] == '\t') {
+		j--
+	}
+	if j < 0 {
+		return false
+	}
+	if line[j] == ']' {
+		return true
+	}
+	if line[j] == '.' {
+		k := j - 1
+		for k >= 0 && isIdentChar(line[k]) {
+			k--
+		}
+
+		return k != j-1
+	}
+	if !isIdentChar(line[j]) {
+		return false
+	}
+
+	k := j
+	for k >= 0 && isIdentChar(line[k]) {
+		k--
+	}
+	ident := line[k+1 : j+1]
+
+	return ident != "map"
 }
 
 func isFuncLitSignature(signature string) bool {
@@ -1558,7 +1691,7 @@ func (f *FuncSigFormatter) findMatchingParen(s string, start int) int {
 // splitParams splits parameter list by commas, respecting nested
 // parens/brackets.
 func (f *FuncSigFormatter) splitParams(params string) []string {
-	return scanner.SplitTopLevel(params)
+	return scanner.SplitTopLevelAny(params)
 }
 
 func (f *FuncSigFormatter) splitFuncParamList(params string) []string {

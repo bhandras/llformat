@@ -293,9 +293,12 @@ func f() int {
 
 							for _, want := range c.wantContains {
 								require.Contains(
-									t, string(
+									t,
+									string(
 										out1,
-									), want, fmt.Sprintf(
+									),
+									want,
+									fmt.Sprintf(
 										"missing required substring %q",
 										want,
 									),

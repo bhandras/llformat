@@ -68,6 +68,9 @@ func formatKeyedCompositeLiteral(before, contIndent string,
 	b.WriteString("{")
 	b.WriteByte('\n')
 	innerIndent := contIndent + "\t"
+	if shouldOutdentCompositeElems(contIndent, innerIndent, elems) {
+		innerIndent = contIndent
+	}
 
 	// Keyed literals (map/struct): one entry per line with trailing comma.
 	for _, e := range elems {
@@ -85,6 +88,52 @@ func formatKeyedCompositeLiteral(before, contIndent string,
 	b.WriteByte('}')
 
 	return b.String()
+}
+
+func shouldOutdentCompositeElems(contIndent, innerIndent string,
+	elems []string) bool {
+
+	if visualLen(contIndent) >= visualLen(innerIndent) {
+		return false
+	}
+	maxInner := 0
+	maxOutdent := 0
+	for _, e := range elems {
+		t := strings.TrimSpace(e)
+		if t == "" {
+			continue
+		}
+		if l := maxLineLenWithIndentAndComma(t, innerIndent); l > maxInner {
+			maxInner = l
+		}
+		if l := maxLineLenWithIndentAndComma(t, contIndent); l > maxOutdent {
+			maxOutdent = l
+		}
+	}
+
+	return maxInner > columnLimit && maxOutdent <= columnLimit
+}
+
+func maxLineLenWithIndentAndComma(elem, indent string) int {
+	lines := strings.Split(elem, "\n")
+	if len(lines) == 0 {
+		return visualLen(indent) + 1
+	}
+	maxLen := 0
+	for i, line := range lines {
+		lineLen := visualLen(line)
+		if i == 0 {
+			lineLen += visualLen(indent)
+		}
+		if i == len(lines)-1 {
+			lineLen++
+		}
+		if lineLen > maxLen {
+			maxLen = lineLen
+		}
+	}
+
+	return maxLen
 }
 
 func formatSliceCompositeLiteral(arg, before, contIndent string,

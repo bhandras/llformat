@@ -262,7 +262,8 @@ func runPrintLogCallsPatterns(w io.Writer, cfg formatter.PipelineConfig) int {
 		selectorNames = dsl.LogPrintfSelectorNames()
 	}
 	fmt.Fprintf(
-		w, "- printf-style selector names (effective): %s\n", strings.Join(
+		w, "- printf-style selector names (effective): %s\n",
+		strings.Join(
 			selectorNames, ", ",
 		),
 	)

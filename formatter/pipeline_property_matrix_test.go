@@ -223,7 +223,8 @@ func f() {
 							// AST-based printing.
 							if snippetIndex == 6 {
 								require.Contains(
-									t, string(
+									t,
+									string(
 										out1,
 									), "k"+
 										"eep me",

@@ -135,8 +135,7 @@ func TestFormatCallPackedMultiLineNext_BreaksBeforeMultilineCallArg(
 	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
 
 	require.NotContains(
-		t, out,
-		"secondArgumentExtraYY, innerCallWithExtraLongName[",
+		t, out, "secondArgumentExtraYY, innerCallWithExtraLongName[",
 	)
 
 	for _, line := range strings.Split(out, "\n") {
@@ -144,8 +143,8 @@ func TestFormatCallPackedMultiLineNext_BreaksBeforeMultilineCallArg(
 			continue
 		}
 		require.LessOrEqual(
-			t, llwidth.VisualLenWithTab(line, 8), 80,
-			"line exceeds configured column limit: %q", line,
+			t, llwidth.VisualLenWithTab(line, 8), 80, "line "+
+				"exceeds configured column limit: %q", line,
 		)
 	}
 }
