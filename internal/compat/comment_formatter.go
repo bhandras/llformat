@@ -691,8 +691,8 @@ func consumeStringCharCompat(c byte, inStr *byte, esc *bool) bool {
 // processLineCommentBlock handles a contiguous block of line comments starting
 // at index i. Returns the updated output slice, new index, and whether a block
 // was processed.
-func processLineCommentBlock(lines []string, i int, out []string) ([]string, int,
-	bool) {
+func processLineCommentBlock(lines []string, i int, out []string) ([]string,
+	int, bool) {
 
 	line := lines[i]
 	if !isStandaloneLineComment(line) || isDirectiveLineComment(line) {

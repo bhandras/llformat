@@ -203,6 +203,10 @@ func FormatFuncSigsInSource(src []byte, colLimit, tabStop int) ([]byte, bool) {
 func FormatFuncSignatureLegacy(signature, indent string, colLimit,
 	tabStop int) (string, bool) {
 
+	if spanHasCommentOutsideStrings([]byte(signature)) {
+		return indent + signature, false
+	}
+
 	f := NewFuncSigFormatter(
 		FuncSigConfig{
 			ColumnLimit: colLimit,
@@ -240,6 +244,10 @@ func FormatFuncSignatureLegacy(signature, indent string, colLimit,
 func FormatFuncSignatureNext(signature, indent string, colLimit,
 	tabStop int) (string, bool) {
 
+	if spanHasCommentOutsideStrings([]byte(signature)) {
+		return indent + signature, false
+	}
+
 	f := NewFuncSigFormatter(FuncSigConfig{
 		ColumnLimit: colLimit,
 		TabStop:     tabStop,
@@ -263,6 +271,12 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 	// collapsing those tends to erase readability-driven formatting (and
 	// gofmt will expand struct types again anyway).
 	if strings.Contains(signature, "\n") {
+		if multilineSimpleReturnCloseLineAlreadyFits(
+			signature, indent, colLimit, tabStop,
+		) {
+
+			return indent + signature, true
+		}
 		if !strings.Contains(signature, "struct") &&
 			!hasInlineStructWithSemicolons(signature) {
 
@@ -406,6 +420,35 @@ func collapseMultilineParenReturnListIfFits(signature string, colLimit,
 	}
 
 	return signature
+}
+
+func multilineSimpleReturnCloseLineAlreadyFits(signature, indent string,
+	colLimit, tabStop int) bool {
+
+	lines := strings.Split(signature, "\n")
+	if len(lines) < 2 {
+		return false
+	}
+
+	foundCloseReturnLine := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, ") ") &&
+			!strings.HasPrefix(trimmed, ") (") {
+
+			afterClose := strings.TrimSpace(
+				strings.TrimPrefix(trimmed, ")"),
+			)
+			if afterClose != "" && afterClose != "{" {
+				foundCloseReturnLine = true
+			}
+		}
+		if width.VisualLenWithTab(indent+line, tabStop) > colLimit {
+			return false
+		}
+	}
+
+	return foundCloseReturnLine
 }
 
 func breakLongTypeArgListsIfNeeded(signature string, colLimit,
@@ -862,10 +905,14 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int,
 	parenDepth := 0
 	inString := false
 	escaped := false
+	hasSignatureComment := false
 
 	for idx := startIdx; idx < len(lines); idx++ {
 		line := string(lines[idx])
 		linesConsumed++
+		if spanHasCommentOutsideStrings([]byte(line)) {
+			hasSignatureComment = true
+		}
 
 		for i := 0; i < len(line); i++ {
 			c := line[i]
@@ -938,16 +985,13 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int,
 
 	sig := sigBuilder.String()
 	if !braceFound {
-		// Not a complete signature, return as-is
-		var result strings.Builder
-		for j := 0; j < linesConsumed; j++ {
-			result.Write(lines[startIdx+j])
-			if startIdx+j < len(lines)-1 {
-				result.WriteByte('\n')
-			}
-		}
+		return originalSignatureLines(lines, startIdx, linesConsumed),
+			linesConsumed
+	}
 
-		return result.String(), linesConsumed
+	if hasSignatureComment {
+		return originalSignatureLines(lines, startIdx, linesConsumed),
+			linesConsumed
 	}
 
 	// Now format the signature
@@ -972,6 +1016,20 @@ func (f *FuncSigFormatter) formatSignature(lines [][]byte, startIdx int,
 	}
 
 	return formatted, linesConsumed
+}
+
+func originalSignatureLines(lines [][]byte, startIdx,
+	linesConsumed int) string {
+
+	var result strings.Builder
+	for j := 0; j < linesConsumed; j++ {
+		result.Write(lines[startIdx+j])
+		if startIdx+j < len(lines)-1 {
+			result.WriteByte('\n')
+		}
+	}
+
+	return result.String()
 }
 
 // breakSignature breaks a function signature to fit within column limit.
@@ -1069,6 +1127,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 		f:                     f,
 		result:                &result,
 		contIndent:            contIndent,
+		closingIndent:         indent,
 		trailingMinimal:       trailingMinimal,
 		forceParamListNewline: forceParamListNewline,
 		currentLine:           currentLine,
@@ -1097,6 +1156,7 @@ type paramFormatContext struct {
 	f                     *FuncSigFormatter
 	result                *strings.Builder
 	contIndent            string
+	closingIndent         string
 	trailingMinimal       string
 	forceParamListNewline bool
 	currentLine           string
@@ -1152,7 +1212,7 @@ func (ctx *paramFormatContext) formatParam(i int, param string,
 	}
 
 	if needsBreak {
-		return ctx.writeParamOnNewLine(i, paramToWrite)
+		return ctx.writeParamOnNewLine(i, paramToWrite, isLast)
 	}
 
 	return ctx.writeParamInline(i, paramToWrite, testLine)
@@ -1174,7 +1234,9 @@ func (ctx *paramFormatContext) computeLineToCheck(testLine string,
 }
 
 // writeParamOnNewLine writes a param on a new line.
-func (ctx *paramFormatContext) writeParamOnNewLine(i int, param string) string {
+func (ctx *paramFormatContext) writeParamOnNewLine(i int, param string,
+	isLast bool) string {
+
 	if i > 0 {
 		ctx.result.WriteByte(',')
 	}
@@ -1182,7 +1244,29 @@ func (ctx *paramFormatContext) writeParamOnNewLine(i int, param string) string {
 	ctx.result.WriteString(ctx.contIndent)
 	ctx.result.WriteString(param)
 
-	return lastLineOrFallback(param, ctx.contIndent+param)
+	currentLine := lastLineOrFallback(param, ctx.contIndent+param)
+	if !isLast {
+		return currentLine
+	}
+	if !strings.HasPrefix(
+		strings.TrimSpace(ctx.trailingMinimal),
+		") func(",
+	) {
+
+		return currentLine
+	}
+	if width.VisualLenWithTab(
+		currentLine+ctx.trailingMinimal, ctx.f.cfg.TabStop,
+	) <= ctx.f.cfg.ColumnLimit {
+
+		return currentLine
+	}
+
+	ctx.result.WriteByte(',')
+	ctx.result.WriteByte('\n')
+	ctx.result.WriteString(ctx.closingIndent)
+
+	return ctx.closingIndent
 }
 
 // writeParamInline writes a param on the current line.
@@ -1243,13 +1327,14 @@ func (f *FuncSigFormatter) formatReturns(result *strings.Builder, returns,
 	retList = filterNonEmptyTrimmed(retList)
 
 	ctx := &returnFormatContext{
-		result:     result,
-		retList:    retList,
-		contIndent: contIndent,
-		indent:     indent,
-		hasBrace:   hasBrace,
-		tabStop:    f.cfg.TabStop,
-		colLimit:   f.cfg.ColumnLimit,
+		result:               result,
+		retList:              retList,
+		contIndent:           contIndent,
+		indent:               indent,
+		hasBrace:             hasBrace,
+		tabStop:              f.cfg.TabStop,
+		colLimit:             f.cfg.ColumnLimit,
+		reserveTrailingComma: f.cfg.ReserveTrailingComma,
 	}
 
 	if f.cfg.CanonicalMultilineSigLists {
@@ -1261,13 +1346,14 @@ func (f *FuncSigFormatter) formatReturns(result *strings.Builder, returns,
 
 // returnFormatContext holds state for formatting return type lists.
 type returnFormatContext struct {
-	result     *strings.Builder
-	retList    []string
-	contIndent string
-	indent     string
-	hasBrace   bool
-	tabStop    int
-	colLimit   int
+	result               *strings.Builder
+	retList              []string
+	contIndent           string
+	indent               string
+	hasBrace             bool
+	tabStop              int
+	colLimit             int
+	reserveTrailingComma bool
 }
 
 // parseSigParts parses a function signature into its component parts. Returns
@@ -1441,6 +1527,8 @@ func (ctx *returnFormatContext) leftFlowPackReturns(currentLine string) string {
 			if ctx.hasBrace {
 				testCheck += " {"
 			}
+		} else if ctx.reserveTrailingComma {
+			testCheck += ","
 		}
 
 		if width.VisualLenWithTab(testCheck, ctx.tabStop) > ctx.colLimit {
@@ -1563,7 +1651,8 @@ func (f *FuncSigFormatter) writeBreakSigFuncParam(result *strings.Builder,
 	// keep `}, handler func(` on the same line after gofmt).
 	isMultiline := strings.Contains(paramToWrite, "\n")
 	endsWithBrace := strings.HasSuffix(
-		strings.TrimSpace(currentLine), "}",
+		strings.TrimSpace(currentLine),
+		"}",
 	)
 	if i > 0 && isMultiline && !endsWithBrace {
 		result.WriteByte(',')

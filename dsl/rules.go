@@ -964,11 +964,15 @@ func BlankLineRulesWithOptions(opts BlankLineOptions) []Rule {
 	if opts.ExtraIfErrReturn {
 		rules = append(
 			rules, Rule{
-				Name:     "blank_before_if_err_return",
-				Pattern:  &NodePattern{Type: "IfStmt"},
-				When:     &IsIfErrReturnNeedingBlankCond{Target: "node"},
+				Name:    "blank_before_if_err_return",
+				Pattern: &NodePattern{Type: "IfStmt"},
+				When: &IsIfErrReturnNeedingBlankCond{
+					Target: "node",
+				},
 				Priority: 9,
-				Action:   &InsertBlankBeforeAction{Target: "node"},
+				Action: &InsertBlankBeforeAction{
+					Target: "node",
+				},
 			},
 		)
 	}
@@ -1217,7 +1221,9 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 	if opts.CallArgsStyle == "layout" || opts.MethodChainStyle == "layout" {
 		longCallConds = append(
 			longCallConds, &NotCond{
-				Cond: &IsChainedCallReceiverCond{Target: "node"},
+				Cond: &IsChainedCallReceiverCond{
+					Target: "node",
+				},
 			},
 		)
 	}

@@ -778,9 +778,10 @@ func (e *Engine) traceSkipRule(iter int, ctx *Context, rule Rule, n ast.Node,
 	line, col := offsetToLineCol(ctx.Source, start)
 	fmt.Fprintf(
 		os.Stderr, "dsl: stage=%s iter=%d skip rule=%s prio=%d "+
-			"node=%T nodeSpan=[%d:%d] @%d:%d reason=%s snippet=%q\n",
-		e.StageName, iter, rule.Name, rule.Priority, n, start, end,
-		line, col, reason, snippetForRange(ctx.Source, start, end),
+			"node=%T nodeSpan=[%d:%d] @%d:%d reason=%s "+
+			"snippet=%q\n", e.StageName, iter, rule.Name,
+		rule.Priority, n, start, end, line, col, reason,
+		snippetForRange(ctx.Source, start, end),
 	)
 }
 

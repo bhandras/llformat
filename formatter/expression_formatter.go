@@ -15,8 +15,9 @@ import (
 func FormatCompositeLiteralArg(arg, contIndent string,
 	forceExpand ...bool) (string, bool) {
 
-	// forceExpand is reserved for future use to force-expand keyed maps.
-	// Currently keyed maps/structs are always expanded, so this is a no-op.
+	// Keep the public force flag reserved for keyed composite behavior.
+	// Slice literals stay inline when they fit unless a keyed field value
+	// is being repaired internally.
 	_ = forceExpand
 	// We rely on brace scan and a simple guard to avoid function literals.
 	open, close := findTopLevelBraces(arg)
@@ -46,7 +47,9 @@ func FormatCompositeLiteralArg(arg, contIndent string,
 		return formatKeyedCompositeLiteral(before, contIndent, elems), true
 	}
 
-	return formatSliceCompositeLiteral(arg, before, contIndent, elems)
+	return formatSliceCompositeLiteral(
+		arg, before, contIndent, elems, false,
+	)
 }
 
 func isKeyedCompositeLiteral(elems []string) bool {
@@ -68,7 +71,11 @@ func formatKeyedCompositeLiteral(before, contIndent string,
 	b.WriteString("{")
 	b.WriteByte('\n')
 	innerIndent := contIndent + "\t"
-	if shouldOutdentCompositeElems(contIndent, innerIndent, elems) {
+	alignKeyLen := maxTopLevelKeyLen(elems)
+	if shouldOutdentCompositeElems(
+		contIndent, innerIndent, elems, alignKeyLen,
+	) {
+
 		innerIndent = contIndent
 	}
 
@@ -78,6 +85,7 @@ func formatKeyedCompositeLiteral(before, contIndent string,
 		if t == "" {
 			continue
 		}
+		t = formatKeyedCompositeElem(t, innerIndent, alignKeyLen)
 		b.WriteString(innerIndent)
 		b.WriteString(t)
 		b.WriteByte(',')
@@ -90,8 +98,144 @@ func formatKeyedCompositeLiteral(before, contIndent string,
 	return b.String()
 }
 
-func shouldOutdentCompositeElems(contIndent, innerIndent string,
-	elems []string) bool {
+func formatKeyedCompositeElem(elem, elemIndent string, alignKeyLen int) string {
+	elemWidth := keyedCompositeElemWidthWithAlign(
+		elem, elemIndent, alignKeyLen,
+	)
+	if elemWidth <= columnLimit {
+		return elem
+	}
+
+	key, value, ok := splitTopLevelKeyValue(elem)
+	if !ok || value == "" {
+		return elem
+	}
+	formatted, ok := formatCompositeLiteralValue(value, elemIndent)
+	if !ok {
+		return elem
+	}
+	candidate := key + " " + formatted
+	if maxLineLenWithIndentAndComma(candidate, elemIndent) >= elemWidth {
+
+		return elem
+	}
+
+	return candidate
+}
+
+func maxTopLevelKeyLen(elems []string) int {
+	maxLen := 0
+	for _, elem := range elems {
+		key, _, ok := splitTopLevelKeyValue(strings.TrimSpace(elem))
+		if !ok {
+			continue
+		}
+		if keyLen := visualLen(key); keyLen > maxLen {
+			maxLen = keyLen
+		}
+	}
+
+	return maxLen
+}
+
+func keyedCompositeElemWidthWithAlign(elem, elemIndent string,
+	alignKeyLen int) int {
+
+	key, value, ok := splitTopLevelKeyValue(elem)
+	if !ok || value == "" || strings.Contains(elem, "\n") {
+		return maxLineLenWithIndentAndComma(elem, elemIndent)
+	}
+
+	keyLen := visualLen(key)
+	prefixLen := keyLen + 1
+	if alignKeyLen > keyLen {
+		prefixLen = alignKeyLen + 1
+	}
+
+	return visualLen(elemIndent) + prefixLen + firstLineLen(value) + 1
+}
+
+func formatCompositeLiteralValue(value, elemIndent string) (string, bool) {
+	open, close := findTopLevelBraces(value)
+	if open < 0 || close <= open {
+		return "", false
+	}
+	before := strings.TrimSpace(value[:open])
+	inside := value[open+1 : close]
+	after := strings.TrimSpace(value[close+1:])
+	if after != "" || strings.Contains(before, "func") {
+		return "", false
+	}
+
+	elems := scanner.SplitTopLevelAny(inside)
+	if isKeyedCompositeLiteral(elems) {
+		return formatKeyedCompositeLiteral(before, elemIndent, elems), true
+	}
+
+	return formatSliceCompositeLiteral(
+		value, before, elemIndent, elems, true,
+	)
+}
+
+func splitTopLevelKeyValue(elem string) (string, string, bool) {
+	inStr := byte(0)
+	esc := false
+	paren := 0
+	bracket := 0
+	brace := 0
+	for i := 0; i < len(elem); i++ {
+		c := elem[i]
+		if inStr != 0 {
+			inStr, esc = updateStringState(c, inStr, esc)
+			continue
+		}
+		if next, ok := skipComment(elem, i); ok {
+			i = next - 1
+			continue
+		}
+		switch c {
+		case '"', '`':
+			inStr = c
+
+		case '(':
+			paren++
+
+		case ')':
+			if paren > 0 {
+				paren--
+			}
+
+		case '[':
+			bracket++
+
+		case ']':
+			if bracket > 0 {
+				bracket--
+			}
+
+		case '{':
+			brace++
+
+		case '}':
+			if brace > 0 {
+				brace--
+			}
+
+		case ':':
+			if paren == 0 && bracket == 0 && brace == 0 {
+				key := strings.TrimSpace(elem[:i+1])
+				value := strings.TrimSpace(elem[i+1:])
+
+				return key, value, key != ""
+			}
+		}
+	}
+
+	return "", "", false
+}
+
+func shouldOutdentCompositeElems(contIndent, innerIndent string, elems []string,
+	alignKeyLen int) bool {
 
 	if visualLen(contIndent) >= visualLen(innerIndent) {
 		return false
@@ -103,7 +247,13 @@ func shouldOutdentCompositeElems(contIndent, innerIndent string,
 		if t == "" {
 			continue
 		}
-		if l := maxLineLenWithIndentAndComma(t, innerIndent); l > maxInner {
+		innerElem := formatKeyedCompositeElem(
+			t, innerIndent, alignKeyLen,
+		)
+		if l := maxLineLenWithIndentAndComma(
+			innerElem, innerIndent,
+		); l > maxInner {
+
 			maxInner = l
 		}
 		if l := maxLineLenWithIndentAndComma(t, contIndent); l > maxOutdent {
@@ -136,15 +286,17 @@ func maxLineLenWithIndentAndComma(elem, indent string) int {
 	return maxLen
 }
 
-func formatSliceCompositeLiteral(arg, before, contIndent string,
-	elems []string) (string, bool) {
+func formatSliceCompositeLiteral(arg, before, contIndent string, elems []string,
+	forceExpand bool) (string, bool) {
 
 	// Slices/arrays: keep inline if they fit; otherwise pack greedily.
-	// Note: Unlike keyed maps/structs, we don't force-expand slices even
-	// when the containing call has multiline elements - slices stay inline
-	// if they fit.
+	// Note: Unlike keyed maps/structs, slices stay inline if they fit
+	// unless the caller already proved an enclosing keyed element needs the
+	// value broken out to stay within the column limit.
 	inline := strings.TrimSpace(arg)
-	if visualLen(inline)+visualLen(contIndent) <= columnLimit {
+	if !forceExpand &&
+		visualLen(inline)+visualLen(contIndent) <= columnLimit {
+
 		return "", false
 	}
 

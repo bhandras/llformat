@@ -59,9 +59,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			"comments above for wrapping",
 	)
 	fs.StringVar(
-		&f.multilineExclude, "multiline-exclude", "", "comma-separate"+
-			"d list of function names to exclude from multiline "+
-			"formatting",
+		&f.multilineExclude, "multiline-exclude", "", "comma-separat"+
+			"ed list of function names to exclude from "+
+			"multiline formatting",
 	)
 	fs.IntVar(
 		&f.logCallsMinTailLen, "logcalls-min-tail-len", 0, "minimum "+
@@ -69,14 +69,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 			"in next profile (0 => default)",
 	)
 	fs.StringVar(
-		&f.logCallsNames, "logcalls-selector-names", "", "comma-separ"+
-			"ated list of selector/ident names to treat as "+
-			"printf-style calls for suffix-only matching (empty "+
-			"=> built-in default)",
+		&f.logCallsNames, "logcalls-selector-names", "", "comma-sepa"+
+			"rated list of selector/ident names to treat as "+
+			"printf-style calls for suffix-only matching "+
+			"(empty => built-in default)",
 	)
 	fs.StringVar(
-		&f.logCallsPrefixes, "logcalls-selector-prefixes", "", "comma"+
-			"-separated list of selector receiver expression "+
+		&f.logCallsPrefixes, "logcalls-selector-prefixes", "", "comm"+
+			"a-separated list of selector receiver expression "+
 			"prefixes to target for log/printf call formatting "+
 			"(empty => match any selector prefix in next profile)",
 	)
@@ -166,8 +166,8 @@ func printUsage(w io.Writer) {
 			"file instead of stdout",
 	)
 	fmt.Fprintln(
-		w, "  --col N                   column limit for formatting "+
-			"(default 80)",
+		w, "  --col N                   column limit for "+
+			"formatting (default 80)",
 	)
 	fmt.Fprintln(
 		w, "  --tab N                   tab stop width for column "+
@@ -191,9 +191,9 @@ func printUsage(w io.Writer) {
 			"(example: \"Infof,Errorf\")",
 	)
 	fmt.Fprintln(
-		w, "  --logcalls-selector-prefixes PREFIXES comma-separated "+
-			"receiver expression prefixes to target (example: "+
-			"\"rpcSLog,zap.L().Sugar()\")",
+		w, "  --logcalls-selector-prefixes PREFIXES "+
+			"comma-separated receiver expression prefixes to "+
+			"target (example: \"rpcSLog,zap.L().Sugar()\")",
 	)
 	fmt.Fprintln(
 		w, "  --fixpoint-iters N        repeat full pipeline until "+
@@ -270,13 +270,15 @@ func runPrintLogCallsPatterns(w io.Writer, cfg formatter.PipelineConfig) int {
 	fmt.Fprintf(
 		w, "- canonical exact patterns: %s\n",
 		strings.Join(
-			dsl.LogPrintfCanonicalPatterns(), ", ",
+			dsl.LogPrintfCanonicalPatterns(),
+			", ",
 		),
 	)
 	fmt.Fprintf(
 		w, "- non-f string-call names (next): %s\n",
 		strings.Join(
-			dsl.NonFStringLogNames(), ", ",
+			dsl.NonFStringLogNames(),
+			", ",
 		),
 	)
 	if len(cfg.LogCallsSelectorPrefixes) == 0 {

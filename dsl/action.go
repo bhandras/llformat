@@ -1760,6 +1760,9 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if len(call.Args) == 0 {
 		return nil, false
 	}
+	if callIsCompositeKeyValue(call, ctx) {
+		return nil, false
+	}
 
 	// Note: We don't check LineWidth here because the legacy formatter
 	// always reformats targeted calls to normalize them. The comparison
@@ -1816,6 +1819,15 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	return out, true
+}
+
+func callIsCompositeKeyValue(call *ast.CallExpr, ctx *Context) bool {
+	if call == nil || ctx == nil {
+		return false
+	}
+	kv, ok := ctx.Parent(call).(*ast.KeyValueExpr)
+
+	return ok && kv.Value == call
 }
 
 // normalizeCallWithGofmt wraps a call expression in a minimal Go file, runs
@@ -2214,6 +2226,9 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 
 	wsIndent := ctx.IndentAt(call)
 	callText := string(original)
+	if callAlreadyAcceptableWithMultilineLiteralArg(ctx, call, start, end) {
+		return nil, false
+	}
 	if callFitsSingleLineWithinLimit(ctx, start, end, callText) {
 		return nil, false
 	}
@@ -2263,6 +2278,123 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	return out, true
+}
+
+func callAlreadyAcceptableWithMultilineLiteralArg(ctx *Context,
+	call *ast.CallExpr, start, end int) bool {
+
+	if ctx == nil || call == nil {
+		return false
+	}
+	if callHasOverlongKeyedCompositeValueLine(ctx, call) {
+		return false
+	}
+	if !callHasDirectMultilineLiteralArg(ctx, call) {
+
+		return false
+	}
+
+	openingEnd := lineEnd(ctx.Source, start)
+	openingStart := lineStart(ctx.Source, start)
+	if openingEnd < openingStart {
+		return false
+	}
+	openingWidth := visualLen(
+		string(ctx.Source[openingStart:openingEnd]), ctx.TabStop,
+	)
+
+	return openingWidth <= ctx.ColumnLimit
+}
+
+func callHasDirectMultilineLiteralArg(ctx *Context, call *ast.CallExpr) bool {
+	for _, arg := range call.Args {
+		if arg == nil {
+			continue
+		}
+		if !isDirectLiteralArg(arg) {
+			continue
+		}
+		start := ctx.Fset.Position(arg.Pos()).Offset
+		end := ctx.Fset.Position(arg.End()).Offset
+		if start < 0 || end > len(ctx.Source) || start >= end {
+			continue
+		}
+		if bytes.Contains(ctx.Source[start:end], []byte("\n")) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isDirectLiteralArg(arg ast.Expr) bool {
+	switch a := arg.(type) {
+	case *ast.CompositeLit, *ast.FuncLit:
+		return true
+
+	case *ast.UnaryExpr:
+		_, ok := a.X.(*ast.CompositeLit)
+
+		return ok
+
+	default:
+		return false
+	}
+}
+
+func callHasOverlongKeyedCompositeValueLine(ctx *Context,
+	call *ast.CallExpr) bool {
+
+	for _, arg := range call.Args {
+		lit := directCompositeLitArg(arg)
+		if lit == nil || !isMultilineCompositeLit(lit, ctx) {
+			continue
+		}
+		for _, elt := range lit.Elts {
+			kv, ok := elt.(*ast.KeyValueExpr)
+			if !ok || kv.Value == nil {
+				continue
+			}
+			if ctx.LineWidth(kv) <= ctx.ColumnLimit {
+				continue
+			}
+			if exprContainsCompositeLit(kv.Value) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func directCompositeLitArg(arg ast.Expr) *ast.CompositeLit {
+	switch a := arg.(type) {
+	case *ast.CompositeLit:
+		return a
+
+	case *ast.UnaryExpr:
+		lit, _ := a.X.(*ast.CompositeLit)
+
+		return lit
+
+	default:
+		return nil
+	}
+}
+
+func exprContainsCompositeLit(expr ast.Expr) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if _, ok := n.(*ast.CompositeLit); ok {
+			found = true
+
+			return false
+		}
+
+		return !found
+	})
+
+	return found
 }
 
 func callSpanOffsets(ctx *Context, call *ast.CallExpr) (start, end int,

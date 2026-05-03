@@ -1244,8 +1244,8 @@ type stringLitArgNextConfig struct {
 // multiline call formatting for "next" style. It returns whether the argument
 // was handled and the updated curLen and first values.
 func formatPackedStringLitArgNext(b *strings.Builder, arg string, curLen int,
-	first, forcedBreak, hasMore bool, cfg stringLitArgNextConfig) (bool, int,
-	bool) {
+	first, forcedBreak, hasMore bool, cfg stringLitArgNextConfig) (bool,
+	int, bool) {
 
 	e, err := parser.ParseExpr(arg)
 	if err != nil {
@@ -1284,8 +1284,9 @@ func formatPackedStringLitArgNext(b *strings.Builder, arg string, curLen int,
 func emitStringLitOnFreshLineNext(b *strings.Builder, text string, forcedBreak,
 	hasMore bool, cfg stringLitArgNextConfig) (curLen int, first bool) {
 
+	width := stringLitArgNextWidth(cfg, hasMore)
 	split := buildSplitQuotedForCallArg(
-		text, cfg.contIndentLen, cfg.contIndent, cfg.width, hasMore,
+		text, cfg.contIndentLen, cfg.contIndent, width, hasMore,
 	)
 	if forcedBreak {
 		b.WriteByte(',')
@@ -1304,9 +1305,20 @@ func emitStringLitOnFreshLineNext(b *strings.Builder, text string, forcedBreak,
 func emitStringLitOverflowNext(b *strings.Builder, text, plain string,
 	curLen int, hasMore bool, cfg stringLitArgNextConfig) (int, bool) {
 
+	width := stringLitArgNextWidth(cfg, hasMore)
 	// If this is the last argument and fits whole on next line, place it
 	// there.
-	if !hasMore && advanceCols(cfg.contIndentLen, plain) <= cfg.width {
+	if !hasMore && advanceCols(cfg.contIndentLen, plain) <= width {
+		b.WriteByte(',')
+		b.WriteByte('\n')
+		b.WriteString(cfg.contIndent)
+		b.WriteString(plain)
+
+		return cfg.contIndentLen + firstLineLen(plain), false
+	}
+	if hasMore && !strings.Contains(text, " ") &&
+		advanceCols(cfg.contIndentLen, plain) <= width {
+
 		b.WriteByte(',')
 		b.WriteByte('\n')
 		b.WriteString(cfg.contIndent)
@@ -1317,10 +1329,10 @@ func emitStringLitOverflowNext(b *strings.Builder, text, plain string,
 
 	// Try to split starting on the current line.
 	tentative := buildSplitQuotedForCallArg(
-		text, curLen+2, cfg.contIndent, cfg.width, hasMore,
+		text, curLen+2, cfg.contIndent, width, hasMore,
 	)
 	need := 2 + firstLineLen(tentative)
-	if curLen+need <= cfg.width {
+	if curLen+need <= width {
 		b.WriteString(", ")
 		b.WriteString(tentative)
 		if strings.Contains(tentative, "\n") {
@@ -1335,11 +1347,15 @@ func emitStringLitOverflowNext(b *strings.Builder, text, plain string,
 	b.WriteByte('\n')
 	b.WriteString(cfg.contIndent)
 	split := buildSplitQuotedForCallArg(
-		text, cfg.contIndentLen, cfg.contIndent, cfg.width, hasMore,
+		text, cfg.contIndentLen, cfg.contIndent, width, hasMore,
 	)
 	b.WriteString(split)
 
 	return cfg.curLenAfterWrite(split), false
+}
+
+func stringLitArgNextWidth(cfg stringLitArgNextConfig, hasMore bool) int {
+	return cfg.lineWidth
 }
 
 // formatCallPackedMultiLineNext is an opt-in variant of
@@ -1392,6 +1408,10 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 		return contIndentLen + firstLineLen(s)
 	}
 
+	if formattedHead, ok := formatGenericCallHeadNext(head, wsIndent); ok {
+		head = formattedHead
+	}
+
 	var b strings.Builder
 	b.WriteString(head)
 	b.WriteByte('(')
@@ -1401,6 +1421,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	first := true
 	seenMultilineCall := false
 	seenMultilineComposite := false
+	prevArgWasCall := false
 
 	// When a call consists only of function literal arguments (e.g.
 	// `handle(func() error { ... }, func() error { ... })`), prefer
@@ -1460,12 +1481,15 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 			width:            width,
 			curLenAfterWrite: curLenAfterWrite,
 		}
+		forceStringBreak := forcedBreak || (!first && prevArgWasCall)
 		if handled, newLen, newFirst := formatPackedStringLitArgNext(
-			&b, a, curLen, first, forcedBreak, hasMore, stringCfg,
+			&b, a, curLen, first, forceStringBreak, hasMore,
+			stringCfg,
 		); handled {
 
 			curLen = newLen
 			first = newFirst
+			prevArgWasCall = false
 			continue
 		}
 
@@ -1492,8 +1516,11 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 			curLen = callState.curLen
 			first = callState.first
 			seenMultilineCall = callState.seenMultilineCall
+			prevArgWasCall = true
 			continue
 		}
+
+		a = formatBinaryArgIfOverflowsNext(a, contIndent, lineWidth)
 
 		if first {
 			b.WriteString(contIndent)
@@ -1503,6 +1530,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 			if strings.Contains(a, "\n") {
 				seenMultilineComposite = true
 			}
+			prevArgWasCall = llast.IsCallExpr(a)
 			continue
 		}
 
@@ -1530,6 +1558,7 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 		if argIsMultiline {
 			seenMultilineComposite = true
 		}
+		prevArgWasCall = llast.IsCallExpr(a)
 	}
 
 	if trailingComma {
@@ -1541,6 +1570,222 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+func formatGenericCallHeadNext(head, wsIndent string) (string, bool) {
+	if visualLen(wsIndent+head+"(") <= columnLimit {
+		return "", false
+	}
+	if spanHasCommentOutsideStrings([]byte(head)) {
+		return "", false
+	}
+
+	fset := token.NewFileSet()
+	expr, err := parser.ParseExprFrom(fset, "", head, parser.AllErrors)
+	if err != nil {
+		return "", false
+	}
+	idx, ok := expr.(*ast.IndexListExpr)
+	if ok {
+		return formatGenericIndexListHeadNext(head, wsIndent, fset, idx)
+	}
+
+	outerIdx, ok := expr.(*ast.IndexExpr)
+	if !ok {
+		return "", false
+	}
+	nestedIdx, ok := outerIdx.Index.(*ast.IndexListExpr)
+	if !ok {
+		return "", false
+	}
+
+	return formatNestedGenericHeadNext(head, wsIndent, fset, nestedIdx)
+}
+
+func formatGenericIndexListHeadNext(head, wsIndent string, fset *token.FileSet,
+	idx *ast.IndexListExpr) (string, bool) {
+
+	if idx.Lbrack == token.NoPos || idx.Rbrack == token.NoPos {
+		return "", false
+	}
+	open := fset.Position(idx.Lbrack).Offset
+	close := fset.Position(idx.Rbrack).Offset
+	if open <= 0 || close <= open || close >= len(head) {
+		return "", false
+	}
+	if strings.TrimSpace(head[close+1:]) != "" {
+		return "", false
+	}
+
+	typeArgs := scanner.SplitTopLevelAny(head[open+1 : close])
+	if len(typeArgs) < 2 {
+		return "", false
+	}
+
+	typeIndent := wsIndent + "\t"
+	var b strings.Builder
+	b.WriteString(head[:open])
+	b.WriteString("[\n")
+	for _, raw := range typeArgs {
+		arg := strings.TrimSpace(raw)
+		if arg == "" {
+			continue
+		}
+		b.WriteString(typeIndent)
+		b.WriteString(arg)
+		b.WriteString(",\n")
+	}
+	b.WriteString(wsIndent)
+	b.WriteByte(']')
+
+	formatted := b.String()
+	if formatted == head {
+		return "", false
+	}
+
+	return formatted, true
+}
+
+func formatNestedGenericHeadNext(head, wsIndent string, fset *token.FileSet,
+	idx *ast.IndexListExpr) (string, bool) {
+
+	if idx.Lbrack == token.NoPos || idx.Rbrack == token.NoPos {
+		return "", false
+	}
+	open := fset.Position(idx.Lbrack).Offset
+	close := fset.Position(idx.Rbrack).Offset
+	if open <= 0 || close <= open || close >= len(head) {
+		return "", false
+	}
+
+	typeArgs := scanner.SplitTopLevelAny(head[open+1 : close])
+	if len(typeArgs) < 2 {
+		return "", false
+	}
+
+	typeIndent := wsIndent + "\t"
+	var b strings.Builder
+	b.WriteString(head[:open])
+	b.WriteString("[\n")
+	for _, raw := range typeArgs {
+		arg := strings.TrimSpace(raw)
+		if arg == "" {
+			continue
+		}
+		b.WriteString(typeIndent)
+		b.WriteString(arg)
+		b.WriteString(",\n")
+	}
+	b.WriteString(wsIndent)
+	b.WriteString(head[close:])
+
+	formatted := b.String()
+	if formatted == head {
+		return "", false
+	}
+
+	return formatted, true
+}
+
+func formatBinaryArgIfOverflowsNext(arg, contIndent string,
+	lineWidth int) string {
+
+	if maxLineLenWithIndentAndComma(arg, contIndent) <= lineWidth {
+		return arg
+	}
+
+	fset := token.NewFileSet()
+	expr, err := parser.ParseExprFrom(fset, "", arg, parser.AllErrors)
+	if err != nil {
+		return arg
+	}
+	bin, ok := expr.(*ast.BinaryExpr)
+	if !ok || !isBreakableCallArgBinaryOp(bin.Op) {
+		return arg
+	}
+
+	left := formatExprForPackedArg(fset, bin.X)
+	right := formatExprForPackedArg(fset, bin.Y)
+	if left == "" || right == "" || strings.Contains(left, "\n") ||
+		strings.Contains(right, "\n") {
+
+		return arg
+	}
+
+	candidate := left + " " + bin.Op.String() + "\n" +
+		contIndent + right
+	if maxLineLenWithIndentAndComma(candidate, contIndent) >
+		lineWidth {
+
+		candidate = formatBinaryArgLinesNext(fset, bin, contIndent)
+		if candidate == "" ||
+			maxLineLenWithIndentAndComma(candidate, contIndent) >
+				lineWidth {
+
+			return arg
+		}
+	}
+	if maxLineLenWithIndentAndComma(candidate, contIndent) >=
+		maxLineLenWithIndentAndComma(arg, contIndent) {
+
+		return arg
+	}
+
+	return candidate
+}
+
+func formatBinaryArgLinesNext(fset *token.FileSet, bin *ast.BinaryExpr,
+	contIndent string) string {
+
+	lines := binaryArgLines(fset, bin)
+	if len(lines) < 2 {
+		return ""
+	}
+
+	return strings.Join(lines, "\n"+contIndent)
+}
+
+func binaryArgLines(fset *token.FileSet, expr ast.Expr) []string {
+	bin, ok := expr.(*ast.BinaryExpr)
+	if !ok || !isBreakableCallArgBinaryOp(bin.Op) {
+		text := formatExprForPackedArg(fset, expr)
+		if text == "" || strings.Contains(text, "\n") {
+			return nil
+		}
+
+		return []string{text}
+	}
+
+	left := binaryArgLines(fset, bin.X)
+	right := binaryArgLines(fset, bin.Y)
+	if len(left) == 0 || len(right) == 0 {
+		return nil
+	}
+	left[len(left)-1] += " " + bin.Op.String()
+
+	return append(left, right...)
+}
+
+func isBreakableCallArgBinaryOp(op token.Token) bool {
+	switch op {
+	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
+		return true
+
+	default:
+		return false
+	}
+}
+
+func formatExprForPackedArg(fset *token.FileSet, expr ast.Expr) string {
+	if expr == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, fset, expr); err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(buf.String())
 }
 
 // callExprArgNextState holds state for processing call expression arguments.
@@ -2250,6 +2495,26 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			}
 
 			if cut <= 0 {
+				q := quoteGoString(rest)
+				if curLen != contStart {
+					if tryMoveStringToCont(
+						&b, q, contIndent, &curLen,
+						contStart, width,
+						preferredReserve,
+					) {
+
+						rest = ""
+						break
+					}
+					if tryMoveStringToCont(
+						&b, q, contIndent, &curLen,
+						contStart, width, commaReserve,
+					) {
+
+						rest = ""
+						break
+					}
+				}
 				// No space within capacity. Check if we should
 				// wrap to continuation line for the upcoming
 				// word.
@@ -2725,9 +2990,73 @@ func writeExprArg(b *strings.Builder, expr, wsIndent string, curLen int,
 
 		return lastLineLen(formatted)
 	}
+	if formatted := formatGreedyBinaryArgIfOverflows(
+		expr, wsIndent+"\t", curLen, columnLimit,
+	); formatted != expr {
+
+		b.WriteString(formatted)
+
+		return lastLineLen(formatted)
+	}
 	b.WriteString(expr)
 
 	return advanceCols(curLen, expr)
+}
+
+func formatGreedyBinaryArgIfOverflows(expr, contIndent string, curLen,
+	width int) string {
+
+	if advanceCols(curLen, expr) <= width {
+		return expr
+	}
+
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseExprFrom(fset, "", expr, parser.AllErrors)
+	if err != nil {
+		return expr
+	}
+	bin, ok := parsed.(*ast.BinaryExpr)
+	if !ok || !isBreakableCallArgBinaryOp(bin.Op) {
+		return expr
+	}
+
+	left := formatExprForPackedArg(fset, bin.X)
+	right := formatExprForPackedArg(fset, bin.Y)
+	if left == "" || right == "" || strings.Contains(left, "\n") ||
+		strings.Contains(right, "\n") {
+
+		return expr
+	}
+
+	first := left + " " + bin.Op.String()
+	candidate := first + "\n" + contIndent + right
+	if advanceCols(curLen, first) > width ||
+		maxLineLenWithIndentAndComma(right, contIndent) > width {
+
+		candidate = formatBinaryArgLinesNext(fset, bin, contIndent)
+		if candidate == "" ||
+			advanceCols(curLen, firstLineText(candidate)) > width ||
+			maxLineLenWithIndentAndComma(candidate, contIndent) >
+				width {
+
+			return expr
+		}
+	}
+	if maxLineLenWithIndentAndComma(candidate, contIndent) >=
+		advanceCols(curLen, expr) {
+
+		return expr
+	}
+
+	return candidate
+}
+
+func firstLineText(s string) string {
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		return s[:idx]
+	}
+
+	return s
 }
 
 // computePreferredReserve calculates how much space to reserve for trailing

@@ -219,9 +219,11 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 
 		rules = append(
 			rules, dsl.Rule{
-				Name:     "multiline_func_decl",
-				Pattern:  &dsl.NodePattern{Type: "FuncDecl"},
-				When:     &dsl.HasMultilineFuncSignatureCond{Target: "node"},
+				Name:    "multiline_func_decl",
+				Pattern: &dsl.NodePattern{Type: "FuncDecl"},
+				When: &dsl.HasMultilineFuncSignatureCond{
+					Target: "node",
+				},
 				Priority: 89,
 				Action:   funcAction,
 			},
@@ -229,8 +231,10 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 		if methodAction != nil {
 			rules = append(
 				rules, dsl.Rule{
-					Name:    "multiline_interface_method",
-					Pattern: &dsl.NodePattern{Type: "Field"},
+					Name: "multiline_interface_method",
+					Pattern: &dsl.NodePattern{
+						Type: "Field",
+					},
 					When: &dsl.AndCond{
 						Conds: []dsl.Condition{
 							&dsl.IsInterfaceMethodCond{Target: "node"},
@@ -309,19 +313,29 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 			Pattern:  &dsl.NodePattern{Type: "IfStmt"},
 			When:     &dsl.HasMultilineIfHeaderCond{Target: "node"},
 			Priority: 9,
-			Action:   &dsl.InsertBlankBeforeFirstStmtInBlockAction{Target: "node"},
+			Action: &dsl.InsertBlankBeforeFirstStmtInBlockAction{
+				Target: "node",
+			},
 		}, dsl.Rule{
-			Name:     "blank_after_multiline_for_header",
-			Pattern:  &dsl.NodePattern{Type: "ForStmt"},
-			When:     &dsl.HasMultilineForHeaderCond{Target: "node"},
+			Name:    "blank_after_multiline_for_header",
+			Pattern: &dsl.NodePattern{Type: "ForStmt"},
+			When: &dsl.HasMultilineForHeaderCond{
+				Target: "node",
+			},
 			Priority: 9,
-			Action:   &dsl.InsertBlankBeforeFirstStmtInBlockAction{Target: "node"},
+			Action: &dsl.InsertBlankBeforeFirstStmtInBlockAction{
+				Target: "node",
+			},
 		}, dsl.Rule{
-			Name:     "blank_after_multiline_case_header",
-			Pattern:  &dsl.NodePattern{Type: "CaseClause"},
-			When:     &dsl.HasMultilineCaseHeaderCond{Target: "node"},
+			Name:    "blank_after_multiline_case_header",
+			Pattern: &dsl.NodePattern{Type: "CaseClause"},
+			When: &dsl.HasMultilineCaseHeaderCond{
+				Target: "node",
+			},
 			Priority: 9,
-			Action:   &dsl.InsertBlankBeforeFirstStmtInBlockAction{Target: "node"},
+			Action: &dsl.InsertBlankBeforeFirstStmtInBlockAction{
+				Target: "node",
+			},
 		},
 	)
 
