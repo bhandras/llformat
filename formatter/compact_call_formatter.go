@@ -1419,6 +1419,11 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 		lineWidth--
 	}
 	contIndent := wsIndent + "\t"
+	if strings.Contains(head, "\n") {
+		lastHeadLine := head[strings.LastIndexByte(head, '\n')+1:]
+		closingIndent = leadingWhitespace(lastHeadLine)
+		contIndent = closingIndent + "\t"
+	}
 	contIndentLen := visualLen(contIndent)
 	curLenAfterWrite := func(s string) int {
 		if strings.Contains(s, "\n") {

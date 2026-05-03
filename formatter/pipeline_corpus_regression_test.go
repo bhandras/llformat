@@ -629,6 +629,47 @@ func (s *Service[InputEventWithLongName, OutputEventWithLongName, Env]) apply(
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksDeepCallArgPairWhenPairOverflows(
+	t *testing.T) {
+
+	const in = `package p
+
+func example(items []Item, privKey, operatorKey Key) {
+	for i := range items {
+		items[i] = Item{
+			Value: 1,
+			Build: func() []byte {
+				result, err := module.
+					EncodeStandardRecordTemplate(
+						privKey.PubKey(),
+						operatorKey.PubKey(), 144,
+					)
+				_ = err
+				return result
+			}(),
+		}
+	}
+}
+
+type Item struct { Value int; Build []byte }
+type Key struct{}
+func (Key) PubKey() any { return nil }
+var module M
+type M struct{}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "privKey.PubKey(),"+
+			"\n"+
+			"						ope"+
+			"ratorKey.PubKey(), 144,",
+	)
+	require.NotContains(t, out, "privKey.PubKey(), operatorKey.PubKey()")
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
