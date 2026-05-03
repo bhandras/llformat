@@ -118,7 +118,9 @@ func TestFindOverflowsSkipsLLNolint(t *testing.T) {
 				"package p",
 				"var a = \"this line is intentionally long\" //nolint:ll",
 				"var b = \"this line is intentionally long too\" //nolint:gofmt,ll",
-				"var c = \"this line is still too long\"",
+				"//nolint:ll",
+				"var c = \"this line is intentionally long too\"",
+				"var d = \"this line is still too long\"",
 				"",
 			}, "\n",
 		),
@@ -128,8 +130,8 @@ func TestFindOverflowsSkipsLLNolint(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("got %d overflows, want 1: %#v", len(got), got)
 	}
-	if got[0].Line != 4 {
-		t.Fatalf("got line %d, want 4", got[0].Line)
+	if got[0].Line != 6 {
+		t.Fatalf("got line %d, want 6", got[0].Line)
 	}
 }
 

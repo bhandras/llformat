@@ -803,9 +803,11 @@ func splitLines(src []byte) []string {
 
 func findOverflows(src []byte, colLimit, tabStop int) []overflowLine {
 	var out []overflowLine
+	var prevLine string
 	for idx, line := range splitLines(src) {
 		line = strings.TrimSuffix(line, "\n")
-		if hasLLNolint(line) {
+		if hasLLNolint(line) || hasStandaloneLLNolint(prevLine) {
+			prevLine = line
 			continue
 		}
 		w := width.VisualLenWithTab(line, tabStop)
@@ -818,9 +820,16 @@ func findOverflows(src []byte, colLimit, tabStop int) []overflowLine {
 				},
 			)
 		}
+		prevLine = line
 	}
 
 	return out
+}
+
+func hasStandaloneLLNolint(line string) bool {
+	trimmed := strings.TrimSpace(line)
+
+	return strings.HasPrefix(trimmed, "//") && hasLLNolint(trimmed)
 }
 
 func hasLLNolint(line string) bool {
