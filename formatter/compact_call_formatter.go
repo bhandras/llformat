@@ -385,17 +385,37 @@ func formatTargetCall(out *bytes.Buffer, src []byte, callStart int,
 	indentBytes := src[lineStart:callStart]
 	// wsIndent is only the leading whitespace of the line.
 	wsIndent := text.LeadingWhitespace(src, lineStart)
+	baseLen := visualLen(string(indentBytes))
+	trimmedPrefix := strings.TrimSpace(string(indentBytes))
+	if trimmedPrefix == "return" ||
+		strings.HasPrefix(trimmedPrefix, "return ") {
+
+		baseLen += trailingSameLineWidth(src, endIdx+1)
+	}
 
 	// Build formatted call.
 	formatted := formatCallGreedy(
-		src[callStart:endIdx+1], string(wsIndent),
-		visualLen(
-			string(indentBytes),
-		),
+		src[callStart:endIdx+1], string(wsIndent), baseLen,
 	)
 	out.WriteString(formatted)
 
 	return endIdx + 1, true
+}
+
+func trailingSameLineWidth(src []byte, start int) int {
+	lineEnd := start
+	for lineEnd < len(src) && src[lineEnd] != '\n' {
+		lineEnd++
+	}
+	if lineEnd <= start {
+		return 0
+	}
+	suffix := string(src[start:lineEnd])
+	if !strings.HasPrefix(strings.TrimSpace(suffix), ",") {
+		return 0
+	}
+
+	return visualLen(suffix)
 }
 
 func copyNonCodeSpan(out *bytes.Buffer, src []byte,

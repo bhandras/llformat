@@ -1736,6 +1736,32 @@ func renderNode(n ast.Node, fset *token.FileSet) string {
 	return buf.String()
 }
 
+func trailingCommaSuffixWidth(src []byte, start, tabStop int) int {
+	lineEnd := start
+	for lineEnd < len(src) && src[lineEnd] != '\n' {
+		lineEnd++
+	}
+	if lineEnd <= start {
+		return 0
+	}
+	suffix := string(src[start:lineEnd])
+	if !strings.HasPrefix(strings.TrimSpace(suffix), ",") {
+		return 0
+	}
+
+	return visualLen(suffix, tabStop)
+}
+
+func callHasReturnPrefix(src []byte, start int) bool {
+	lineStart := start
+	for lineStart > 0 && src[lineStart-1] != '\n' {
+		lineStart--
+	}
+	prefix := strings.TrimSpace(string(src[lineStart:start]))
+
+	return prefix == "return" || strings.HasPrefix(prefix, "return ")
+}
+
 // LeftFlowCallAction formats log/printf calls using left-flow packing with
 // string splitting. This action delegates to the legacy formatter to ensure
 // identical output behavior.
@@ -1781,6 +1807,11 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	// Find the base length (visual width from line start to call start).
 	baseLen := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	if callHasReturnPrefix(ctx.Source, start) {
+		baseLen += trailingCommaSuffixWidth(
+			ctx.Source, end, ctx.TabStop,
+		)
+	}
 
 	var formatted string
 	if a.FormatFunc != nil {
@@ -2922,14 +2953,26 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 		)
 	}
 
-	// Reattach the original prefix (e.g. `x := `) to the first line.
-	if nl := strings.IndexByte(formatted, '\n'); nl >= 0 {
-		first := formatted[:nl]
-		rest := formatted[nl:]
-		first = prefix + strings.TrimPrefix(first, wsIndent)
-		formatted = first + rest
+	if shouldBreakFuncLitCallArgPrefix(
+		prefix, formatted, wsIndent, ctx.ColumnLimit, ctx.TabStop,
+	) {
+
+		formatted = strings.TrimRight(prefix, " \t") + "\n" +
+			indentFuncLitCallArgSignature(
+				formatted, wsIndent, wsIndent+"\t",
+			)
 	} else {
-		formatted = prefix + strings.TrimPrefix(formatted, wsIndent)
+		// Reattach the original prefix (e.g. `x := `) to the first
+		// line.
+		if nl := strings.IndexByte(formatted, '\n'); nl >= 0 {
+			first := formatted[:nl]
+			rest := formatted[nl:]
+			first = prefix + strings.TrimPrefix(first, wsIndent)
+			formatted = first + rest
+		} else {
+			formatted = prefix +
+				strings.TrimPrefix(formatted, wsIndent)
+		}
 	}
 
 	// For function literals, treat "signature is multiline" as requiring
@@ -2994,6 +3037,37 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	return out, true
+}
+
+func shouldBreakFuncLitCallArgPrefix(prefix, formatted, wsIndent string,
+	colLimit, tabStop int) bool {
+
+	trimmedPrefix := strings.TrimRight(prefix, " \t")
+	if !strings.HasSuffix(trimmedPrefix, ",") {
+		return false
+	}
+	if visualLen(trimmedPrefix, tabStop) > colLimit {
+		return false
+	}
+
+	first := formatted
+	if nl := strings.IndexByte(first, '\n'); nl >= 0 {
+		first = first[:nl]
+	}
+	reattachedFirst := prefix + strings.TrimPrefix(first, wsIndent)
+
+	return visualLen(reattachedFirst, tabStop) > colLimit
+}
+
+func indentFuncLitCallArgSignature(formatted, fromIndent,
+	toIndent string) string {
+
+	lines := strings.Split(formatted, "\n")
+	for i, line := range lines {
+		lines[i] = toIndent + strings.TrimPrefix(line, fromIndent)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func stripLeadingNonWhitespaceUpToFuncKeyword(formatted,

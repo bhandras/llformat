@@ -50,6 +50,34 @@ func TestTerms(t *testing.T) {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksFuncLitArgAfterLongString(t *testing.T) {
+	const in = `package p
+
+import "testing"
+
+func TestEncoding(t *testing.T) {
+	t.Run("works without registration since encoder only needs type tag", func(
+		t *testing.T) {
+
+		t.Parallel()
+	})
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.NotContains(
+		t, out,
+		`t.Run("works without registration since encoder only needs type tag", func(`,
+	)
+	require.Contains(
+		t, out, "t.Run(\n		\"works without "+
+			"registration since encoder only needs type "+
+			"tag\",\n		func",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestPipelineNext_Corpus_DoesNotIndentConfigLiteralConstructorCall(
 	t *testing.T) {
 
@@ -227,6 +255,31 @@ func f(i int) Event {
 	require.NotContains(t, out, `"batch-fo"+`)
 	require.Contains(t, out, "\"batch-for-%d\"")
 	require.Equal(t, out, out2)
+}
+
+func TestPipelineNext_Corpus_ReservesReturnTupleSuffixForTargetCall(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+func f(i int) (string, bool) {
+	return fmt.Sprintf("record[%d] expected encoded output missing", i), false
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.NotContains(
+		t, out,
+		`return fmt.Sprintf("record[%d] expected encoded output missing", i), false`,
+	)
+	require.Contains(
+		t, out, "return fmt.Sprintf(\"record[%d] expected encoded "+
+			"output missing\",\n		i), false",
+	)
+	requireNoLineLongerThan(t, out, 80)
 }
 
 func TestPipelineNext_Corpus_ReservesCommaAfterPackedStringArg(t *testing.T) {
