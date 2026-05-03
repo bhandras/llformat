@@ -2349,7 +2349,7 @@ func callHasDirectMultilineLiteralArg(ctx *Context, call *ast.CallExpr) bool {
 		if arg == nil {
 			continue
 		}
-		if !isDirectLiteralArg(arg) {
+		if !isDirectLiteralArg(arg) && !hasRawStringLit(arg) {
 			continue
 		}
 		start := ctx.Fset.Position(arg.Pos()).Offset

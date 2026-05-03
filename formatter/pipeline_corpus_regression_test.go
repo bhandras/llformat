@@ -841,6 +841,33 @@ func f(out Writer, key string) {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_DoesNotIndentRawStringCallArg(t *testing.T) {
+	const in = `package p
+
+type Writer interface{ Write([]byte) (int, error) }
+
+func f(w Writer) error {
+	_, err := w.Write([]byte(
+		` + "`" + `{"result":"operation failed",` + "`" + ` +
+			` + "`" + `"details":{` + "`" + ` +
+			` + "`" + `"child":{` + "`" + ` +
+			` + "`" + `"id":"childid",` + "`" + ` +
+			` + "`" + `"error":"missing-input"},` + "`" + ` +
+			` + "`" + `"parent":{` + "`" + ` +
+			` + "`" + `"id":"parentid",` + "`" + ` +
+			` + "`" + `"error":"key-already-known"}}}` + "`" + `,
+	))
+	return err
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(t, out, "_, err := w.Write([]byte(")
+	require.NotContains(t, out, "w.Write(\n")
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
