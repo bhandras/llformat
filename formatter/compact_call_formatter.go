@@ -1527,6 +1527,9 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 
 			a = fa
 		}
+		a = formatGenericCompositeArgIfOverflowsNext(
+			a, contIndent, lineWidth,
+		)
 
 		// Handle call expression arguments with potential nesting.
 		callState := &callExprArgNextState{
@@ -1765,6 +1768,64 @@ func formatBinaryArgIfOverflowsNext(arg, contIndent string,
 	}
 
 	return candidate
+}
+
+func formatGenericCompositeArgIfOverflowsNext(arg, contIndent string,
+	lineWidth int) string {
+
+	if maxLineLenWithIndentAndComma(arg, contIndent) <= lineWidth {
+		return arg
+	}
+	if spanHasCommentOutsideStrings([]byte(arg)) {
+		return arg
+	}
+
+	fset := token.NewFileSet()
+	expr, err := parser.ParseExprFrom(fset, "", arg, parser.AllErrors)
+	if err != nil {
+		return arg
+	}
+	lit, ok := expr.(*ast.CompositeLit)
+	if !ok || len(lit.Elts) != 0 {
+		return arg
+	}
+
+	idx, ok := lit.Type.(*ast.IndexListExpr)
+	if !ok || idx.Lbrack == token.NoPos || idx.Rbrack == token.NoPos {
+		return arg
+	}
+	open := fset.Position(idx.Lbrack).Offset
+	close := fset.Position(idx.Rbrack).Offset
+	if open <= 0 || close <= open || close >= len(arg) {
+		return arg
+	}
+
+	typeArgs := filterNonEmptyTrimmed(
+		scanner.SplitTopLevelAny(arg[open+1 : close]),
+	)
+	if len(typeArgs) < 2 {
+		return arg
+	}
+
+	var b strings.Builder
+	b.WriteString(arg[:open])
+	b.WriteString("[\n")
+	typeIndent := contIndent + "\t"
+	for _, typeArg := range typeArgs {
+		b.WriteString(typeIndent)
+		b.WriteString(typeArg)
+		b.WriteString(",\n")
+	}
+	b.WriteString(contIndent)
+	b.WriteByte(']')
+	b.WriteString(arg[close+1:])
+
+	formatted := b.String()
+	if formatted == arg {
+		return arg
+	}
+
+	return formatted
 }
 
 func formatBinaryArgLinesNext(fset *token.FileSet, bin *ast.BinaryExpr,

@@ -702,6 +702,48 @@ type Receiver[T any] struct{}
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksGenericCompositeCallArgType(t *testing.T) {
+
+	const in = `package p
+
+func handle(err error) Result {
+	if err != nil {
+		for i := 0; i < 1; i++ {
+			if i == 0 {
+				return NewResult(
+					ActorResponse[InternalEvent, OutboxEvent, Env]{},
+					err,
+				)
+			}
+		}
+	}
+	return Result{}
+}
+
+type Result struct{}
+type ActorResponse[A, B, C any] struct{}
+type InternalEvent struct{}
+type OutboxEvent struct{}
+type Env struct{}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "ActorResponse["+
+			"\n"+
+			"						Int"+
+			"ernalEvent,"+
+			"\n"+
+			"						Out"+
+			"boxEvent,"+
+			"\n"+
+			"						Env"+
+			",\n					]{},",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
