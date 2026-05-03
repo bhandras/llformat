@@ -1970,12 +1970,29 @@ func expandFuncLitArgBodyNext(arg string, argIndent string) (string, bool) {
 // arguments contain a map/struct composite literal that should be block
 // formatted when inside a multiline call.
 func callHasAlwaysMultilineComposite(s string) bool {
-	// Find the first '(' and matching ')', then split args and check each
-	// for a top-level brace.
+	expr, err := parser.ParseExpr(s)
+	if err == nil {
+		call, ok := callExprFromParsedFormatter(expr)
+		if !ok {
+			return false
+		}
+		for _, arg := range call.Args {
+			if isDirectCompositeLiteralExpr(arg) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	// Fall back to the old syntactic scan only when the expression cannot
+	// be parsed. Keep this conservative so function literal bodies do not
+	// masquerade as composite literal arguments.
 	open := strings.IndexByte(s, '(')
 	if open < 0 || s[len(s)-1] != ')' {
 		return false
 	}
+
 	// We need to find the matching close; reuse the byte scanner.
 	end := scanner.ScanBalancedParen([]byte(s), open)
 	if end <= open {
@@ -1996,6 +2013,40 @@ func callHasAlwaysMultilineComposite(s string) bool {
 	}
 
 	return false
+}
+
+func callExprFromParsedFormatter(expr ast.Expr) (*ast.CallExpr, bool) {
+	if expr == nil {
+		return nil, false
+	}
+	if call, ok := expr.(*ast.CallExpr); ok {
+		return call, true
+	}
+	if paren, ok := expr.(*ast.ParenExpr); ok {
+		call, ok := paren.X.(*ast.CallExpr)
+
+		return call, ok
+	}
+
+	return nil, false
+}
+
+func isDirectCompositeLiteralExpr(expr ast.Expr) bool {
+	switch e := expr.(type) {
+	case *ast.CompositeLit:
+		return true
+
+	case *ast.UnaryExpr:
+		_, ok := e.X.(*ast.CompositeLit)
+
+		return ok
+
+	case *ast.ParenExpr:
+		return isDirectCompositeLiteralExpr(e.X)
+
+	default:
+		return false
+	}
 }
 
 // buildSplitQuoted splits text into quoted segments so they fit within the

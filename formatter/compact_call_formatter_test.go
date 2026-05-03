@@ -373,3 +373,30 @@ func TestFormatCallGreedyNext_BreaksOverflowingBinaryStringArg(t *testing.T) {
 		require.LessOrEqual(t, visualLen(line), 80, line)
 	}
 }
+
+func TestFormatCallPackedMultiLineNext_DoesNotReflowFuncLitBodyCalls(
+	t *testing.T) {
+
+	call := []byte(
+		"openServer(handler.Wrap(func(w Writer, r Request) {\n	_, " +
+			"err := " +
+			"w.Write([]byte(" +
+			"\n		`{\"message\":\"operation " +
+			"failed\",` +\n			`\"details\":{` " +
+			"+" +
+			"\n" +
+			"			`\"code\":\"not-ready\"}}}`," +
+			"\n	))\n	check(err)\n}))",
+	)
+
+	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
+
+	require.Contains(
+		t, out,
+		"handler.Wrap(func(w Writer, r Request) {",
+	)
+	require.NotContains(t, out, "handler.Wrap(\n")
+	for _, line := range strings.Split(out, "\n") {
+		require.LessOrEqual(t, visualLen(line), 80, line)
+	}
+}

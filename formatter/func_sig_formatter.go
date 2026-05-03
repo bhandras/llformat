@@ -271,6 +271,11 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 	// collapsing those tends to erase readability-driven formatting (and
 	// gofmt will expand struct types again anyway).
 	if strings.Contains(signature, "\n") {
+		if hasMultilineGenericTypeArgList(signature) &&
+			signatureLinesFit(signature, indent, colLimit, tabStop) {
+
+			return indent + signature, true
+		}
 		if multilineSimpleReturnCloseLineAlreadyFits(
 			signature, indent, colLimit, tabStop,
 		) {
@@ -331,6 +336,20 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 	needsBlank := hasNewlineOutsideBraces(formatted)
 
 	return formatted, needsBlank
+}
+
+func hasMultilineGenericTypeArgList(signature string) bool {
+	return strings.Contains(signature, "[\n")
+}
+
+func signatureLinesFit(signature, indent string, colLimit, tabStop int) bool {
+	for _, line := range strings.Split(signature, "\n") {
+		if width.VisualLenWithTab(indent+line, tabStop) > colLimit {
+			return false
+		}
+	}
+
+	return true
 }
 
 func collapseMultilineParenReturnListIfFits(signature string, colLimit,
@@ -1130,7 +1149,9 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 		closingIndent:         indent,
 		trailingMinimal:       trailingMinimal,
 		forceParamListNewline: forceParamListNewline,
-		currentLine:           currentLine,
+		allowLastParamTrailingBreak: isFuncLitSignature(sig) &&
+			len(paramList) == 1,
+		currentLine: currentLine,
 	}
 	for i, param := range paramList {
 		pctx.currentLine = pctx.formatParam(i, param, len(paramList))
@@ -1153,13 +1174,14 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 
 // paramFormatContext holds state for formatting function parameters.
 type paramFormatContext struct {
-	f                     *FuncSigFormatter
-	result                *strings.Builder
-	contIndent            string
-	closingIndent         string
-	trailingMinimal       string
-	forceParamListNewline bool
-	currentLine           string
+	f                           *FuncSigFormatter
+	result                      *strings.Builder
+	contIndent                  string
+	closingIndent               string
+	trailingMinimal             string
+	forceParamListNewline       bool
+	allowLastParamTrailingBreak bool
+	currentLine                 string
 }
 
 // formatParam formats a single parameter and updates currentLine. Returns the
@@ -1251,7 +1273,7 @@ func (ctx *paramFormatContext) writeParamOnNewLine(i int, param string,
 	if !strings.HasPrefix(
 		strings.TrimSpace(ctx.trailingMinimal),
 		") func(",
-	) {
+	) && !ctx.allowLastParamTrailingBreak {
 
 		return currentLine
 	}

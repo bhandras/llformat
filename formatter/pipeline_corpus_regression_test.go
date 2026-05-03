@@ -472,6 +472,77 @@ func f(task Task) error {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksFuncLitParamBeforeReturn(t *testing.T) {
+	const in = `package p
+
+type InputEventWithExtraLongName struct{}
+type HandlerResultWithExtraLongName struct{}
+
+func NewMappedRef(any, func(InputEventWithExtraLongName) HandlerResultWithExtraLongName) any {
+	return nil
+}
+
+func f(ref any) any {
+	return NewMappedRef(
+		ref,
+		func(evt InputEventWithExtraLongName) HandlerResultWithExtraLongName {
+			return HandlerResultWithExtraLongName{}
+		},
+	)
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "func(\n			evt "+
+			"InputEventWithExtraLongName,\n		) "+
+			"HandlerResultWithExtraLongName {",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
+func TestPipelineNext_Corpus_PreservesMultilineGenericParamTypeArgs(
+	t *testing.T) {
+
+	const in = `package p
+
+type Service struct{}
+type Ref[A, B any] struct{}
+type TellOnlyRef[A any] struct{}
+type InputMessage struct{}
+type OutputMessage struct{}
+type WorkMessage struct{}
+type WorkResult struct{}
+type TimeoutMessage struct{}
+type ManagerMessage struct{}
+type Worker struct{}
+
+func (s *Service) start(ctx context.Context,
+	sourceRef Ref[
+		InputMessage, OutputMessage,
+	],
+	workerRef Ref[
+		WorkMessage, WorkResult,
+	],
+	timeoutRef TellOnlyRef[TimeoutMessage],
+	manager TellOnlyRef[ManagerMessage]) (
+	*Worker, error) {
+
+	return nil, nil
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "sourceRef Ref[\n		InputMessage, "+
+			"OutputMessage,\n	],\n	workerRef Ref[",
+	)
+	require.NotContains(t, out, "OutputMessage], workerRef")
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
