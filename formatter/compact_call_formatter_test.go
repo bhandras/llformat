@@ -400,3 +400,17 @@ func TestFormatCallPackedMultiLineNext_DoesNotReflowFuncLitBodyCalls(
 		require.LessOrEqual(t, visualLen(line), 80, line)
 	}
 }
+
+func TestFormatCallPackedMultiLineNext_BreaksOverflowingSelectorCallArg(
+	t *testing.T) {
+
+	call := []byte(`Attr("key", resource.Handle.KeyString())`)
+
+	out := FormatCallPackedMultiLineNext(call, "\t\t\t\t\t\t\t", 80, 8)
+
+	require.Contains(
+		t, out, "resource.Handle.\n"+
+			strings.Repeat("\t", 8)+"KeyString()",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}

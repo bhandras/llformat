@@ -1862,6 +1862,14 @@ func (s *callExprArgNextState) handleCallExprArgNext(a string) bool {
 		// Let the caller's generic placement logic handle it.
 		return false
 	}
+	if formatted, ok := formatSelectorCallArgIfOverflowsNext(
+		a, s.contIndent, s.lineWidth,
+	); ok {
+
+		s.writeNestedCall(formatted)
+
+		return true
+	}
 
 	// Need to recursively format the nested call.
 	nested := formatCallPackedMultiLineNext(
@@ -1893,6 +1901,40 @@ func (s *callExprArgNextState) writeArgSimple(a string) {
 	}
 	s.b.WriteString(a)
 	s.curLen = advanceCols(s.curLen+2, a)
+}
+
+func formatSelectorCallArgIfOverflowsNext(arg, contIndent string,
+	lineWidth int) (string, bool) {
+
+	if maxLineLenWithIndentAndComma(arg, contIndent) <= lineWidth {
+		return "", false
+	}
+
+	fset := token.NewFileSet()
+	expr, err := parser.ParseExprFrom(fset, "", arg, parser.AllErrors)
+	if err != nil {
+		return "", false
+	}
+	call, ok := expr.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 {
+		return "", false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel == nil {
+		return "", false
+	}
+
+	receiver := formatExprForPackedArg(fset, sel.X)
+	if receiver == "" || strings.Contains(receiver, "\n") {
+		return "", false
+	}
+
+	candidate := receiver + ".\n" + contIndent + sel.Sel.Name + "()"
+	if maxLineLenWithIndentAndComma(candidate, contIndent) > lineWidth+1 {
+		return "", false
+	}
+
+	return candidate, true
 }
 
 // writeNestedCall writes a recursively formatted nested call.
