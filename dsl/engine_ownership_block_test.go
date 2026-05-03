@@ -79,7 +79,9 @@ func TestEngine_BlocksEditsOverlappingForbiddenSpans(t *testing.T) {
 	t.Run(
 		"budget_rejects_large_growth",
 		func(t *testing.T) {
-			engine.Budget = RewriteBudget{MaxOutputBytes: len(src) - 1}
+			engine.Budget = RewriteBudget{
+				MaxOutputBytes: len(src) - 1,
+			}
 			outBudget := engine.FormatFile(src)
 			require.Equal(t, string(src), string(outBudget))
 		},

@@ -365,6 +365,48 @@ func f(client ClientAPI) Response {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_ExpandsCompositeInCallArgFuncBody(t *testing.T) {
+
+	const in = `package p
+
+type T struct{}
+type Payload struct{ Value any }
+type Envelope[T any] struct {
+	ID      string
+	Message T
+	Retry   int
+}
+type RecType struct{}
+
+func check(fn func(*T)) {}
+
+func f() {
+	check(func(t *T) {
+		envelope := &Envelope[*Payload]{
+			ID:      "id",
+			Message: &Payload{Value: rec.NewPrimitiveRecord[RecType](uint64(42))},
+			Retry:   3,
+		}
+		_ = envelope
+	})
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "Message: "+
+			"&Payload{\n				Value: "+
+			"rec.NewPrimitiveRecord[RecType]("+
+			"\n"+
+			"					uint64(42),"+
+			"\n"+
+			"				),"+
+			"\n			},",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestPipelineNext_Corpus_ReservesCommaAfterFinalStringArg(t *testing.T) {
 	const in = `package p
 

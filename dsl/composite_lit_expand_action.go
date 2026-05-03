@@ -125,6 +125,9 @@ func hasVarOrConstParent(lit *ast.CompositeLit, ctx *Context) bool {
 func isCallArgNested(lit *ast.CompositeLit, ctx *Context) bool {
 	for cur := ast.Node(lit); cur != nil; {
 		parent := ctx.Parent(cur)
+		if fn, ok := parent.(*ast.FuncLit); ok && fn.Body == cur {
+			return false
+		}
 		call, ok := parent.(*ast.CallExpr)
 		if ok && isCallArg(call, cur) {
 			return true

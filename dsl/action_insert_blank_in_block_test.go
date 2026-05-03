@@ -45,7 +45,9 @@ func f(a, b bool) {
 			require.NotNil(t, ifStmt)
 
 			ctx := NewContext(fset, []byte(src), 80, 8)
-			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{Target: "node"}).Execute(Captures{"node": ifStmt},
+			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{
+				Target: "node",
+			}).Execute(Captures{"node": ifStmt},
 				ctx,
 			)
 			require.True(t, changed)
@@ -91,7 +93,9 @@ func f(items []int, stop bool) {
 			require.NotNil(t, forStmt)
 
 			ctx := NewContext(fset, []byte(src), 80, 8)
-			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{Target: "node"}).Execute(Captures{"node": forStmt},
+			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{
+				Target: "node",
+			}).Execute(Captures{"node": forStmt},
 				ctx,
 			)
 			require.True(t, changed)
@@ -135,7 +139,9 @@ func f(v int) {
 			require.NotNil(t, cc)
 
 			ctx := NewContext(fset, []byte(src), 80, 8)
-			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{Target: "node"}).Execute(Captures{"node": cc},
+			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{
+				Target: "node",
+			}).Execute(Captures{"node": cc},
 				ctx,
 			)
 			require.True(t, changed)

@@ -213,7 +213,10 @@ func TestOpIsCond(t *testing.T) {
 				require.NoError(t, err)
 
 				caps := Captures{"node": expr}
-				cond := &OpIsCond{Target: "node", Operators: tt.ops}
+				cond := &OpIsCond{
+					Target:    "node",
+					Operators: tt.ops,
+				}
 				ctx := &Context{Fset: fset}
 
 				got := cond.Eval(caps, ctx)

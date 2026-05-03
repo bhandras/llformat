@@ -1269,10 +1269,14 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 				Action: func() Action {
 					switch opts.MethodChainStyle {
 					case "layout":
-						return &BreakMethodChainLayoutAction{Target: "node"}
+						return &BreakMethodChainLayoutAction{
+							Target: "node",
+						}
 
 					default:
-						return &BreakMethodChainAction{Target: "node"}
+						return &BreakMethodChainAction{
+							Target: "node",
+						}
 					}
 				}(),
 			},
