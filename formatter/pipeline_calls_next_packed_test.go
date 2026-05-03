@@ -123,9 +123,9 @@ func f(l *logger) {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, `l.Infof("a=%v b=%v c=%v d=%v", a, b, c, d)`, "expect"+
-			"ed printf-style calls to be excluded from generic "+
-			"call reflow",
+		t, out, `l.Infof("a=%v b=%v c=%v d=%v", a, b, c, d)`, "expec"+
+			"ted printf-style calls to be excluded from "+
+			"generic call reflow",
 	)
 	require.NotContains(
 		t, out, "l.Infof(\n",

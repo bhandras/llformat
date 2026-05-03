@@ -87,6 +87,7 @@ func f() {}
 	// re-indenting can break cgo parsing.
 	require.Contains(
 		t, out, "/*\n#cgo CFLAGS: -I./include\n#include "+
-			"<stdint.h>\n#include \"my header with spaces.h\"\n*/\n",
+			"<stdint.h>\n#include \"my header with "+
+			"spaces.h\"\n*/\n",
 	)
 }

@@ -90,15 +90,15 @@ func f(graph graphT) {
 	// wrap the return list instead of breaking a simple single-arg param
 	// list.
 	require.Contains(
-		t, out, "FetchChannelCapacity: func(chanID uint64) (", "expec"+
-			"ted single-arg closure params to stay on the same "+
-			"line as `func(`",
+		t, out, "FetchChannelCapacity: func(chanID uint64) (", "expe"+
+			"cted single-arg closure params to stay on the "+
+			"same line as `func(`",
 	)
 	require.Contains(
 		t, out, "FetchChannelCapacity: func(chanID uint64) "+
-			"(btcutilAmount,\n			error) {", "e"+
-			"xpected the return list to wrap under prefix "+
-			"pressure (keeping params compact)",
+			"(btcutilAmount,\n			error) {",
+		"expected the return list to wrap under prefix pressure "+
+			"(keeping params compact)",
 	)
 	require.Contains(
 		t, out, "FetchChannelEndpoints: func(chanID uint64) (int, "+
@@ -169,8 +169,8 @@ func f() {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "FetchChannelCapacityWithVeryLongFieldNameThatForcesB"+
-			"reakingBecauseOfPrefix: func(chanID uint64) "+
+		t, out, "FetchChannelCapacityWithVeryLongFieldNameThatForces"+
+			"BreakingBecauseOfPrefix: func(chanID uint64) "+
 			"(btcutilAmount, error) {", "expected to avoid "+
 			"over-breaking the signature when the prefix alone "+
 			"already overflows the limit",

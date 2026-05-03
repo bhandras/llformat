@@ -40,8 +40,8 @@ func (r *rpcServer) getChainSyncInfo() (
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "getChainSyncInfo() (*chainSyncInfo, error) {", "expe"+
-			"cted the multiline return list to be collapsed "+
+		t, out, "getChainSyncInfo() (*chainSyncInfo, error) {", "exp"+
+			"ected the multiline return list to be collapsed "+
 			"when it fits under the column limit",
 	)
 	require.NotContains(
@@ -84,10 +84,10 @@ func alreadyFormatted(
 
 	require.Contains(
 		t, out, "func alreadyFormatted(\n	first "+
-			"SomeRidiculouslyLongParameterTypeNameThatForcesLineB"+
-			"reakUnder80Columns,\n	second "+
-			"AnotherRidiculouslyLongParameterTypeNameThatAlsoForc"+
-			"esLineBreak) {",
+			"SomeRidiculouslyLongParameterTypeNameThatForcesLine"+
+			"BreakUnder80Columns,\n	second "+
+			"AnotherRidiculouslyLongParameterTypeNameThatAlsoFor"+
+			"cesLineBreak) {",
 		"expected the already-multiline signature to remain multiline",
 	)
 	require.Contains(

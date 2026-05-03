@@ -44,8 +44,8 @@ func TestEngine_NodeOrderAffectsWhichNestedNodeIsRewrittenFirst(t *testing.T) {
 	// land in different places depending on whether we select outer-first
 	// or deepest-first.
 	src := []byte(
-		"package p\n\nfunc f(a, b, c bool) bool { return a && (b && " +
-			"c) }\n",
+		"package p\n\nfunc f(a, b, c bool) bool { return a && (b " +
+			"&& c) }\n",
 	)
 
 	rules := []Rule{

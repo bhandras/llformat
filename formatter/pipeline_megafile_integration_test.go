@@ -121,7 +121,9 @@ func outerFunctionNameThatIsVeryLong(args ...any) any {
 					ColumnLimit:          60,
 					TabStop:              8,
 					UseOwnershipRegistry: true,
-					Excludes:             []string{"outerFunctionNameThatIsVeryLong"},
+					Excludes: []string{
+						"outerFunctionNameThatIsVeryLong",
+					},
 				},
 			)
 		},

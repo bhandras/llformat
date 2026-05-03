@@ -84,7 +84,8 @@ func f() {
 	).Format(in)
 	require.NotEqual(t, string(in), string(outNoRegistry))
 	require.Contains(
-		t, string(outNoRegistry), "firstConditionThatIsVeryLong &&\n",
+		t, string(outNoRegistry),
+		"firstConditionThatIsVeryLong &&\n",
 	)
 
 	// With ownership registry, the expr stage should not rewrite inside

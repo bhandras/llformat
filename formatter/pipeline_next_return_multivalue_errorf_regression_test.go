@@ -45,8 +45,8 @@ func f(reqTimeLockDelta, minTimeLockDelta int) (any, error) {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "return nil, fmt.Errorf(", "should keep the call on "+
-			"the same line as the multi-value return",
+		t, out, "return nil, fmt.Errorf(", "should keep the call "+
+			"on the same line as the multi-value return",
 	)
 	require.NotContains(
 		t, out, "return nil,\n	fmt.Errorf(",

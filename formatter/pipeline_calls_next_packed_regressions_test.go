@@ -43,8 +43,8 @@ func f(cond bool) (any, error) {
 		t, out, "		return nil, "+
 			"someVeryLongCalleeNameForTestingPurposes("+
 			"\n			", "expected packed "+
-			"multiline call formatting under switch/case with a "+
-			"return list",
+			"multiline call formatting under switch/case with "+
+			"a return list",
 	)
 	require.Contains(
 		t, out, "\n		)\n",

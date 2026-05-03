@@ -45,7 +45,7 @@ type I interface {
 	)
 	require.NotContains(
 		t, out, "([]Invoice,\n		error)", "should not "+
-			"partially break short parenthesized return list in "+
-			"next profile",
+			"partially break short parenthesized return list "+
+			"in next profile",
 	)
 }

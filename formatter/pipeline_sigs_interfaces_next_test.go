@@ -38,15 +38,15 @@ type I interface {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "getChainSyncInfo() (*chainSyncInfo, error)", "expect"+
-			"ed the multiline return list in an interface "+
+		t, out, "getChainSyncInfo() (*chainSyncInfo, error)", "expec"+
+			"ted the multiline return list in an interface "+
 			"method to be collapsed when it fits under the "+
 			"column limit",
 	)
 	require.NotContains(
 		t, out, "getChainSyncInfo() (\n", "must not keep the split "+
-			"return list for a short interface method signature "+
-			"in next profile",
+			"return list for a short interface method "+
+			"signature in next profile",
 	)
 }
 
@@ -197,8 +197,8 @@ type I interface {
 
 	// Don't partially break inside the return list.
 	require.NotContains(
-		t, out, "(map[lntypes.Hash]Invoice,\n		error)", "nex"+
-			"t profile should not partially break inside a "+
+		t, out, "(map[lntypes.Hash]Invoice,\n		error)", "ne"+
+			"xt profile should not partially break inside a "+
 			"parenthesized return list",
 	)
 

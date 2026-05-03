@@ -50,7 +50,8 @@ func f(a, b bool) {
 			)
 			require.True(t, changed)
 			require.Contains(
-				t, string(out), "{\n\n		// leading "+
+				t, string(out),
+				"{\n\n		// leading "+
 					"comment\n		x()\n",
 			)
 		},
@@ -139,7 +140,8 @@ func f(v int) {
 			)
 			require.True(t, changed)
 			require.Contains(
-				t, string(out), "4:\n\n		// leading "+
+				t, string(out),
+				"4:\n\n		// leading "+
 					"comment\n		x()\n",
 			)
 		},

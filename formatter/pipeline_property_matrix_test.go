@@ -189,8 +189,9 @@ func f() {
 
 					for snippetIndex, in := range snippets {
 						in := in
-						t.Run(fmt.Sprintf("snippet_%0"+
-							"2d", snippetIndex), func(
+						t.Run(fmt.Sprintf(
+							"snippet_%02d",
+							snippetIndex), func(
 							t *testing.T) {
 
 							out1 := p.Format(
@@ -207,7 +208,10 @@ func f() {
 							require.Equal(
 								t, string(out1),
 								string(out2),
-								"not idempotent",
+								"not "+
+									"ide"+
+									"mpo"+
+									"tent",
 							)
 							requireASTEquivalent(
 								t, []byte(in),
@@ -226,8 +230,9 @@ func f() {
 									t,
 									string(
 										out1,
-									), "k"+
-										"eep me",
+									),
+									"kee"+
+										"p me",
 								)
 							}
 						})

@@ -24,8 +24,8 @@ func TestDSLSigsStyleDSLAutoIterationsFormatsManySignatures(t *testing.T) {
 	for i := 0; i < n; i++ {
 		fmt.Fprintf(
 			&b, "func f%03d(alpha int, beta int, gamma int, "+
-				"delta int, epsilon int, zeta int) int {\n}\n\n",
-			i,
+				"delta int, epsilon int, zeta int) int "+
+				"{\n}\n\n", i,
 		)
 	}
 

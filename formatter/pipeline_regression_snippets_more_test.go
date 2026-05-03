@@ -239,7 +239,10 @@ func f() int {
 							require.Equal(
 								t, string(out1),
 								string(out2),
-								"not idempotent",
+								"not "+
+									"ide"+
+									"mpo"+
+									"tent",
 							)
 
 							fset := token.NewFileSet()
@@ -249,16 +252,19 @@ func f() int {
 								parser.AllErrors|parser.ParseComments,
 							)
 							require.NoError(
-								t, err, "form"+
-									"atte"+
-									"d "+
-									"outp"+
-									"ut "+
-									"was "+
-									"not "+
-									"pars"+
-									"eabl"+
-									"e:\n%s",
+								t, err, "for"+
+									"mat"+
+									"ted"+
+									" ou"+
+									"tpu"+
+									"t "+
+									"was"+
+									" no"+
+									"t "+
+									"par"+
+									"sea"+
+									"ble"+
+									":\n%s",
 								string(out1),
 							)
 							_, err = parser.ParseFile(
@@ -267,16 +273,20 @@ func f() int {
 								parser.AllErrors|parser.ParseComments,
 							)
 							require.NoError(
-								t, err, "seco"+
-									"nd "+
-									"pass"+
-									" out"+
-									"put "+
-									"was "+
-									"not "+
-									"pars"+
-									"eabl"+
-									"e:\n%s",
+								t, err, "sec"+
+									"ond"+
+									" pa"+
+									"ss "+
+									"out"+
+									"put"+
+									" wa"+
+									"s "+
+									"not"+
+									" pa"+
+									"rse"+
+									"abl"+
+									"e:"+
+									"\n%s",
 								string(out2),
 							)
 

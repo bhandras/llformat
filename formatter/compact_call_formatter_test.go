@@ -48,8 +48,8 @@ func TestBuildSplitQuoted_UsesGofmtCompatibleSpacingAroundPlus(t *testing.T) {
 		"hard_split_no_spaces",
 		func(t *testing.T) {
 			out := buildSplitQuoted(
-				"this_is_a_very_long_string_with_no_spaces_so"+
-					"_it_must_hard_split", 0, "	", 36,
+				"this_is_a_very_long_string_with_no_spaces_s"+
+					"o_it_must_hard_split", 0, "	", 36,
 			)
 			require.Contains(t, out, "\" +\n\t\t\"")
 			require.NotContains(
@@ -146,6 +146,113 @@ func TestFormatCallPackedMultiLineNext_BreaksBeforeMultilineCallArg(
 			t, llwidth.VisualLenWithTab(line, 8), 80, "line "+
 				"exceeds configured column limit: %q", line,
 		)
+	}
+}
+
+func TestFormatCallPackedMultiLineNext_BreaksKeyedCompositeValueAfterAlign(
+	t *testing.T) {
+
+	call := []byte(
+		`client.Receive(
+	context.Background(), &SendItemsRequest{
+		Recipients: []MessageRecipient{testMessageRecipient(400000)},
+		ServiceFee: 1000,
+		DustLimit: 546,
+		RoutingKey: testRoutingKey(),
+		RetryDelay: 144,
+	},
+)`,
+	)
+
+	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
+	require.Contains(
+		t, out, "Recipients: "+
+			"[]MessageRecipient{"+
+			"\n"+
+			"				testMessageRecipien"+
+			"t(400000),\n			},",
+	)
+}
+
+func TestFormatCallPackedMultiLineNext_BreaksOverflowingBinaryArg(
+	t *testing.T) {
+
+	call := []byte(`uint64(senderID*msgsPerSender + j)`)
+
+	out := FormatCallPackedMultiLineNext(call, "\t\t\t\t\t\t\t", 80, 8)
+	require.Contains(
+		t, out, "senderID "+
+			"*"+
+			"\n"+
+			"						"+
+			"		msgsPerSender "+
+			"+"+
+			"\n"+
+			"						"+
+			"		j,",
+	)
+	for _, line := range strings.Split(out, "\n") {
+		require.LessOrEqual(t, visualLen(line), 80, line)
+	}
+}
+
+func TestFormatCallPackedMultiLineNext_BreaksBeforeCallArgWhenPairOverflows(
+	t *testing.T) {
+
+	call := []byte(
+		`EncodeStandardMessageTemplate(clientKey.PubKey(), serviceKey.PubKey(), 144)`,
+	)
+
+	out := FormatCallPackedMultiLineNext(call, "\t\t\t\t\t", 80, 8)
+	require.Contains(
+		t, out, "clientKey.PubKey(),"+
+			"\n"+
+			"						ser"+
+			"viceKey.PubKey(),",
+	)
+	for _, line := range strings.Split(out, "\n") {
+		require.LessOrEqual(t, visualLen(line), 80, line)
+	}
+}
+
+func TestFormatCallPackedMultiLineNext_BreaksGenericCalleeTypeArgs(
+	t *testing.T) {
+
+	call := []byte(
+		`actor.NewServiceKey[ActorMessage[InternalEvent], ActorResponse[InternalEvent, OutboxEvent, Env]]("name")`,
+	)
+
+	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
+	require.Contains(
+		t, out, "actor.NewServiceKey["+
+			"\n"+
+			"		ActorMessage[InternalEvent],"+
+			"\n		ActorResponse[InternalEvent, "+
+			"OutboxEvent, Env],\n	](\n",
+	)
+	for _, line := range strings.Split(out, "\n") {
+		require.LessOrEqual(t, visualLen(line), 80, line)
+	}
+}
+
+func TestFormatCallPackedMultiLineNext_BreaksNestedGenericCalleeTypeArgs(
+	t *testing.T) {
+
+	call := []byte(
+		`receiver.NewSubscriberWithLongName[State[InputEvent, OutputEvent, RuntimeEnv]]("name")`,
+	)
+
+	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
+	require.Contains(
+		t, out, "receiver.NewSubscriberWithLongName[State["+
+			"\n"+
+			"		InputEvent,"+
+			"\n"+
+			"		OutputEvent,"+
+			"\n		RuntimeEnv,\n	]](\n",
+	)
+	for _, line := range strings.Split(out, "\n") {
+		require.LessOrEqual(t, visualLen(line), 80, line)
 	}
 }
 
@@ -246,4 +353,23 @@ func TestFormatCallGreedyNext_JoinAwareSplit_PreservesSpaceBeforePlus(
 		t, out, "\"peer\"+\n	\"alias",
 		"must not drop the trailing space at the split point",
 	)
+}
+
+func TestFormatCallGreedyNext_BreaksOverflowingBinaryStringArg(t *testing.T) {
+	call := []byte(
+		`errors.New("operation could not be delivered: " + task.MessageType())`,
+	)
+
+	out := FormatCallGreedyNext(call, "\t\t\t\t", 40, 80, 8)
+
+	require.Contains(
+		t, out, "\"operation could not be delivered: \" "+
+			"+"+
+			"\n"+
+			"					task.Messag"+
+			"eType()",
+	)
+	for _, line := range strings.Split(out, "\n") {
+		require.LessOrEqual(t, visualLen(line), 80, line)
+	}
 }

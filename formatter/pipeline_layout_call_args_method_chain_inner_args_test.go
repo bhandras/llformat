@@ -37,14 +37,14 @@ func f() {
 	require.Contains(
 		t, outStr, "MethodA("+
 			"\n"+
-			"				firstConditionThatIs"+
-			"VeryLong &&",
+			"				firstConditionThatI"+
+			"sVeryLong &&",
 	)
 	require.Contains(
 		t, outStr, "&&"+
 			"\n"+
-			"					secondCondit"+
-			"ionThatIsVeryLong",
+			"					secondCondi"+
+			"tionThatIsVeryLong",
 	)
 	require.Contains(t, outStr, ").\n\t\t\tMethodB()")
 

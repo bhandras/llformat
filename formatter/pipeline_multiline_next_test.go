@@ -31,8 +31,9 @@ func f(chanBackupsProtos struct{ ChanBackups []int }) {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "packedBackupsFromProtoSource := make(\n", "expected "+
-			"the multiline make() call to break right after `make(`",
+		t, out, "packedBackupsFromProtoSource := make(\n", "expected"+
+			" the multiline make() call to break right after "+
+			"`make(`",
 	)
 	require.Contains(
 		t, out, "		[][]byte, 0,", "expected packed "+
@@ -46,7 +47,7 @@ func f(chanBackupsProtos struct{ ChanBackups []int }) {
 	)
 	require.Contains(
 		t, out, "len(chanBackupsProtos.ChanBackups)", "must not "+
-			"explode nested len(...) into a multiline call when "+
-			"it can remain flat",
+			"explode nested len(...) into a multiline call "+
+			"when it can remain flat",
 	)
 }

@@ -135,8 +135,11 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 			"someSliceNameThatIsVeryLong[:"+idx.expr+"]",
 		)
 		add(
-			"slice_full_"+idx.name,
-			"someSliceNameThatIsVeryLong["+comparison+":"+idx.expr+"]",
+			"slice_full_"+idx.name, "someSliceNameThatIsVeryLong["+
+				comparison+
+				":"+
+				idx.expr+
+				"]",
 		)
 	}
 
@@ -159,31 +162,40 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 	// break.
 	add(
 		"struct_kv_logical",
-		"SomeStructTypeNameThatIsVeryLong{FieldNameThatIsVeryLong: "+logicalAnd+", OtherFieldName: "+nestedCall+"}",
+		"SomeStructTypeNameThatIsVeryLong{FieldNameThatIsVeryLong: "+
+			logicalAnd+
+			", OtherFieldName: "+
+			nestedCall+
+			"}",
 	)
 	add(
 		"struct_kv_comparison",
-		"SomeStructTypeNameThatIsVeryLong{FieldNameThatIsVeryLong: "+comparison+", OtherFieldName: "+methodChain+"}",
+		"SomeStructTypeNameThatIsVeryLong{FieldNameThatIsVeryLong: "+
+			comparison+
+			", OtherFieldName: "+
+			methodChain+
+			"}",
 	)
 	add(
 		"map_kv_nested_call",
-		`map[string]int{"firstVeryLongKeyName": `+nestedCall+`, "secondVeryLongKeyName": 7}`,
+		`map[string]int{"firstVeryLongKeyName": `+nestedCall+
+			`, "secondVeryLongKeyName": 7}`,
 	)
 	add("slice_lit_nested_call", `[]int{1, 2, `+nestedCall+`, 4, 5}`)
 
 	// Type assertions, including generic types and interface types.
 	add(
-		"type_assert_simple", "someInterfaceValueNameThatIsVeryLong.("+
-			"SomeConcreteTypeNameThatIsVeryLong)",
+		"type_assert_simple", "someInterfaceValueNameThatIsVeryLong."+
+			"(SomeConcreteTypeNameThatIsVeryLong)",
 	)
 	add(
-		"type_assert_generic", "someInterfaceValueNameThatIsVeryLong."+
-			"(SomeGenericTypeNameThatIsVeryLong[VeryLongTypeNameT"+
-			"hatIsVeryLong, AnotherVeryLongTypeName])",
+		"type_assert_generic", "someInterfaceValueNameThatIsVeryLong"+
+			".(SomeGenericTypeNameThatIsVeryLong[VeryLongTypeNam"+
+			"eThatIsVeryLong, AnotherVeryLongTypeName])",
 	)
 	add(
-		"type_assert_interface", "someInterfaceValueNameThatIsVeryLon"+
-			"g.(interface{ MethodNameThatIsVeryLong(arg "+
+		"type_assert_interface", "someInterfaceValueNameThatIsVeryLo"+
+			"ng.(interface{ MethodNameThatIsVeryLong(arg "+
 			"SomeTypeNameThatIsVeryLong) error })",
 	)
 	add(
@@ -193,8 +205,12 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 
 	// Mixed chains that historically cause “tightness” problems.
 	add(
-		"mixed_index_then_call",
-		indexBase+"["+logicalAnd+"].SomeMethodNameThatIsVeryLong("+comparison+")",
+		"mixed_index_then_call", indexBase+
+			"["+
+			logicalAnd+
+			"].SomeMethodNameThatIsVeryLong("+
+			comparison+
+			")",
 	)
 	add(
 		"mixed_call_then_index",
@@ -231,7 +247,8 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 	)
 	add(
 		"string_concat_with_call",
-		`"prefix: " + innerFunctionNameThatIsVeryLong(`+logicalAnd+`, 7) + ": suffix"`,
+		`"prefix: " + innerFunctionNameThatIsVeryLong(`+logicalAnd+
+			`, 7) + ": suffix"`,
 	)
 
 	// Parenthesized callees (semicolon insertion hazards if mishandled).
@@ -245,20 +262,27 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 	)
 	add(
 		"call_returning_func_then_call",
-		"functionThatReturnsFuncNameThatIsVeryLong("+logicalAnd+")(anotherVeryLongIdentifierNameThatIsVeryLong)",
+		"functionThatReturnsFuncNameThatIsVeryLong("+logicalAnd+
+			")(anotherVeryLongIdentifierNameThatIsVeryLong)",
 	)
 
 	// Type assertion to a function type, immediately called.
 	add(
-		"type_assert_func_then_call", "someInterfaceValueNameThatIsVe"+
-			"ryLong.(func(int, int) int)(1, 2)",
+		"type_assert_func_then_call", "someInterfaceValueNameThatIsV"+
+			"eryLong.(func(int, int) int)(1, 2)",
 	)
 
 	// Three-index slices with long indices (parseable even if not
 	// type-checkable).
 	add(
 		"slice_three_index_logical_comparison_arith",
-		"someSliceNameThatIsVeryLong["+logicalAnd+":"+comparison+":"+arithmetic+"]",
+		"someSliceNameThatIsVeryLong["+
+			logicalAnd+
+			":"+
+			comparison+
+			":"+
+			arithmetic+
+			"]",
 	)
 
 	// Func literals used as args (exercise block/comment/string skipping
@@ -301,7 +325,11 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 		)
 		add(
 			"wrap_outer_call2_"+name,
-			"outerFunctionNameThatIsVeryLong("+expr+", "+nestedCall+")",
+			"outerFunctionNameThatIsVeryLong("+
+				expr+
+				", "+
+				nestedCall+
+				")",
 		)
 	}
 	for name, expr := range baseExprs {
@@ -322,8 +350,11 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 			"SomeConcreteTypeNameThatIsVeryLong("+expr+")",
 		)
 		add(
-			"paren_"+name+"_then_call",
-			"("+expr+").SomeMethodNameThatIsVeryLong("+logicalAnd+")",
+			"paren_"+name+"_then_call", "("+
+				expr+
+				").SomeMethodNameThatIsVeryLong("+
+				logicalAnd+
+				")",
 		)
 		add("addr_of_"+name, "&("+expr+")")
 	}

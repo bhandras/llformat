@@ -41,8 +41,8 @@ func doSomething() {}
 
 	out := string(first)
 	require.Contains(
-		t, out, "doSomething()\n\n	// keep comment attached to "+
-			"if\n	if err != nil",
+		t, out, "doSomething()\n\n	// keep comment attached "+
+			"to if\n	if err != nil",
 	)
 	require.NotContains(
 		t, out, "// keep comment attached to if\n\n	if err != nil",

@@ -44,8 +44,8 @@ func f(err error) {
 
 	// ...but other loggers should be left as-is.
 	require.Contains(
-		t, out,
-		"otherLog.Errorf(\"unable to lookup peer alias more: %v\", err)",
+		t, out, "otherLog.Errorf(\"unable to lookup peer alias "+
+			"more: %v\", err)",
 	)
 	require.NotContains(
 		t, out, "otherLog.Errorf(\"unable to lookup peer "+

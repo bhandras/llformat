@@ -81,7 +81,8 @@ func f() {
 					)
 					require.NoError(
 						t, err, "formatted output "+
-							"was not parseable:\n%s",
+							"was not "+
+							"parseable:\n%s",
 						string(out),
 					)
 
@@ -99,7 +100,8 @@ func f() {
 					)
 					require.NoError(
 						t, err, "second pass output "+
-							"was not parseable:\n%s",
+							"was not "+
+							"parseable:\n%s",
 						string(out2),
 					)
 					requireASTEquivalent(

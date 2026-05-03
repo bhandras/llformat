@@ -41,8 +41,8 @@ func f(err error) {
 		"must match any selector prefix in next profile",
 	)
 	require.Contains(
-		t, out, "\"lookup peer \"+\n		\"alias ", "expected "+
-			"a space-preserving split at the `peer ` boundary "+
+		t, out, "\"lookup peer \"+\n		\"alias ", "expected"+
+			" a space-preserving split at the `peer ` boundary "+
 			"in next formatter",
 	)
 	require.NotContains(
@@ -124,8 +124,8 @@ func f() (any, error) {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "errors.New(", "must treat errors.New as a targeted "+
-			"string call in next profile",
+		t, out, "errors.New(", "must treat errors.New as a "+
+			"targeted string call in next profile",
 	)
 	require.NotContains(
 		t, out, "errors.New(\n",
@@ -177,8 +177,8 @@ func f() {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "rpcSLog.Error(", "must treat non-`*f` logger calls "+
-			"as targeted string calls in next profile",
+		t, out, "rpcSLog.Error(", "must treat non-`*f` logger "+
+			"calls as targeted string calls in next profile",
 	)
 	require.NotContains(
 		t, out, "rpcSLog.Error(\n", "must not produce a "+
@@ -186,8 +186,8 @@ func f() {
 	)
 	require.Contains(
 		t, out, "\"unable to fetch \" +\n		\"channel "+
-			"edges by \" +\n		\"channel ID", "expec"+
-			"ted next-style string splitting (word-boundary "+
+			"edges by \" +\n		\"channel ID", "expe"+
+			"cted next-style string splitting (word-boundary "+
 			"aware) for non-`*f` logger calls",
 	)
 }
@@ -278,8 +278,8 @@ func f(numDeletedPayments int, failedHTLCsOnly bool) {
 		"must preserve the full format string contents",
 	)
 	require.NotContains(
-		t, out, "deleted, \"+\n", "must not split the format string "+
-			"when it would fit on a continuation line",
+		t, out, "deleted, \"+\n", "must not split the format "+
+			"string when it would fit on a continuation line",
 	)
 	require.NotContains(
 		t, out, "failed_htlcs_only=%v\"+",
@@ -371,16 +371,16 @@ func f(req reqT, minTimeLockDelta int) error {
 	require.Contains(
 		t, out, "\"supported is %v\", "+
 			"req.TimeLockDelta,"+
-			"\n			minTimeLockDelta)", "expected"+
-			" greedy arg packing: keep first arg on the string "+
-			"tail line and break only before the last arg",
+			"\n			minTimeLockDelta)", "expecte"+
+			"d greedy arg packing: keep first arg on the "+
+			"string tail line and break only before the last arg",
 	)
 	require.NotContains(
 		t, out, "\"supported is "+
 			"%v\",\n			req.TimeLockDelta, "+
-			"minTimeLockDelta)", "must not force a break before "+
-			"the first arg and then pack args together on the "+
-			"next line",
+			"minTimeLockDelta)", "must not force a break "+
+			"before the first arg and then pack args together "+
+			"on the next line",
 	)
 }
 
@@ -467,8 +467,8 @@ func f(err error) (any, error) {
 			"the call signature when a split segment can fit",
 	)
 	require.Contains(
-		t, out, "\"unable to \"+\n", "expected splitting the string "+
-			"to avoid the hanging-paren layout",
+		t, out, "\"unable to \"+\n", "expected splitting the "+
+			"string to avoid the hanging-paren layout",
 	)
 }
 

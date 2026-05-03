@@ -51,18 +51,18 @@ func f(r *rpcServer) {
 	require.Contains(
 		t, out, "rp := func(req *OpenChannelRequest) "+
 			"(*InitFundingMsg, error) {", "expected the "+
-			"multiline closure return list to be collapsed when "+
-			"it fits under the column limit",
+			"multiline closure return list to be collapsed "+
+			"when it fits under the column limit",
 	)
 	require.NotContains(
 		t, out, "rp := func(req *OpenChannelRequest) (\n", "must "+
-			"not keep the split return list for a short closure "+
-			"signature in next profile",
+			"not keep the split return list for a short "+
+			"closure signature in next profile",
 	)
 	require.NotContains(
 		t, out, "rp := func(req *OpenChannelRequest) "+
-			"(*InitFundingMsg, error) {\n\n		_ = req", "mu"+
-			"st not add a blank line after the opening brace "+
+			"(*InitFundingMsg, error) {\n\n		_ = req", "m"+
+			"ust not add a blank line after the opening brace "+
 			"when the closure signature is single-line",
 	)
 }
@@ -104,15 +104,15 @@ func f() {
 	require.Contains(
 		t, out, "	requestParserForFundingInit := func(req "+
 			"*OpenChannelRequest) "+
-			"(\n		*InitFundingMsg, error) {", "expected"+
-			" the closure signature to break when the "+
+			"(\n		*InitFundingMsg, error) {", "expecte"+
+			"d the closure signature to break when the "+
 			"assignment prefix makes it exceed the column limit",
 	)
 	require.NotContains(
 		t, out, "	requestParserForFundingInit := func(req "+
-			"*OpenChannelRequest) (*InitFundingMsg, error) {", "m"+
-			"ust not keep the closure signature on a single "+
-			"line when it overflows due to its prefix",
+			"*OpenChannelRequest) (*InitFundingMsg, error) {",
+		"must not keep the closure signature on a single line when "+
+			"it overflows due to its prefix",
 	)
 	require.Contains(
 		t, out, "	requestParserForFundingInit := func(req "+
@@ -169,10 +169,10 @@ func f() {
 	require.Contains(
 		t, out, "	alreadyFormatted := "+
 			"func(\n		first "+
-			"SomeRidiculouslyLongParameterTypeNameThatForcesLineB"+
-			"reakUnder80Columns,\n		second "+
-			"AnotherRidiculouslyLongParameterTypeNameThatAlsoForc"+
-			"esLineBreak) {", "expected the already-multiline "+
+			"SomeRidiculouslyLongParameterTypeNameThatForcesLine"+
+			"BreakUnder80Columns,\n		second "+
+			"AnotherRidiculouslyLongParameterTypeNameThatAlsoFor"+
+			"cesLineBreak) {", "expected the already-multiline "+
 			"closure signature to remain multiline",
 	)
 	require.Contains(

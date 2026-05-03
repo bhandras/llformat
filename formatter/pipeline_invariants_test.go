@@ -108,12 +108,14 @@ func f(xs []int, i, j int) int {
 								t, string(out1),
 								string(out2),
 								"not "+
-									"idem"+
-									"pote"+
-									"nt "+
-									"for "+
-									"conf"+
-									"ig=%s",
+									"ide"+
+									"mpo"+
+									"ten"+
+									"t "+
+									"for"+
+									" co"+
+									"nfi"+
+									"g=%s",
 								cfg.name,
 							)
 							requireASTEquivalent(

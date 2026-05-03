@@ -53,8 +53,8 @@ func f(invoiceSlice InvoiceSlice) {
 	)
 	require.Contains(
 		t, out, "		[]*Invoice, len(invoiceSlice.Inv),\n",
-		"expected packed args to stay on the same continuation line "+
-			"when they fit",
+		"expected packed args to stay on the same continuation "+
+			"line when they fit",
 	)
 	require.NotContains(
 		t, out, "Invoices: make([]*Invoice,\n",

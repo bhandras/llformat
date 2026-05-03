@@ -39,8 +39,8 @@ func f(abcdefghijklm int, b int) {}
 	out := string(f.FormatFile([]byte(in)))
 
 	require.Contains(
-		t, out, "func f(\n	abcdefghijklm int,\n	b int)", "exp"+
-			"ected formatter to break before later comma "+
+		t, out, "func f(\n	abcdefghijklm int,\n	b int)", "ex"+
+			"pected formatter to break before later comma "+
 			"insertion would overflow",
 	)
 

@@ -63,13 +63,13 @@ func f(wallet walletT, outputs []int, feePerKw, minConfs int, coinSelectionStrat
 		"expected multiline call formatting to kick in",
 	)
 	require.NotContains(
-		t, out, "tx, err =\n		wallet.CreateSimpleTx(", "mus"+
-			"t not detach the call from the assignment with a "+
+		t, out, "tx, err =\n		wallet.CreateSimpleTx(", "mu"+
+			"st not detach the call from the assignment with a "+
 			"break-before-call rewrite",
 	)
 	require.NotContains(
-		t, out, "feePerKw, minConfs, coinSelectionStrategy,", "expect"+
-			"ed the formatter to break before the long "+
+		t, out, "feePerKw, minConfs, coinSelectionStrategy,", "expec"+
+			"ted the formatter to break before the long "+
 			"`coinSelectionStrategy` argument to avoid overflow",
 	)
 }
@@ -137,10 +137,10 @@ func f(wallet walletT, outputs []int, feePerKw, minConfs int, coinSelectionStrat
 		"expected multiline call formatting to run",
 	)
 	require.NotContains(
-		t, out, "feePerKw, minConfs, coinSelectionStrategy,", "expect"+
-			"ed the formatter to break before the long "+
-			"`coinSelectionStrategy` argument when it overflows "+
-			"a continuation line",
+		t, out, "feePerKw, minConfs, coinSelectionStrategy,", "expec"+
+			"ted the formatter to break before the long "+
+			"`coinSelectionStrategy` argument when it "+
+			"overflows a continuation line",
 	)
 }
 
@@ -184,7 +184,7 @@ func f(w wT, outputs []int, feePerKw, minConfs int, strategy int, coinSelectionS
 	)
 	require.Contains(
 		t, out, "\n		coinSelectionStrategy,", "expected "+
-			"the formatter to re-pack the call and break before "+
-			"the long `coinSelectionStrategy` argument",
+			"the formatter to re-pack the call and break "+
+			"before the long `coinSelectionStrategy` argument",
 	)
 }
