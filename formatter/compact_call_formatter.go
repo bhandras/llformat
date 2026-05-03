@@ -3322,6 +3322,9 @@ func lastQuotedSpaceBeforeAvoidingTails(startCol int, s string, boundary int,
 			continue
 		}
 		piece := s[:i+1]
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
 		used := advanceCols(startCol, quoteGoString(piece)) +
 			2 // account for " +"
 		if used <= boundary {
@@ -3350,6 +3353,9 @@ func lastQuotedSpaceBeforeWithJoinAvoidingTails(startCol int, s string,
 			continue
 		}
 		piece := s[:i+1]
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
 		joinCols := 2
 		if hasTrailingArgs && len(piece) > 0 &&
 			piece[len(piece)-1] == ' ' {
@@ -3469,6 +3475,9 @@ func lastQuotedSpaceBefore(startCol int, s string, boundary int) int {
 			continue
 		}
 		piece := s[:i+1]
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
 		used := advanceCols(startCol, quoteGoString(piece)) +
 			2 // account for " +"
 		if used <= boundary {
@@ -3494,6 +3503,9 @@ func lastQuotedSpaceBeforeWithJoin(startCol int, s string, boundary int,
 			continue
 		}
 		piece := s[:i+1]
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
 		joinCols := 2
 		if hasTrailingArgs && len(piece) > 0 &&
 			piece[len(piece)-1] == ' ' {
@@ -3520,6 +3532,9 @@ func lastQuotedSpaceBeforeStrictWithJoin(startCol int, s string, boundary int,
 			continue
 		}
 		piece := s[:i+1]
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
 		joinCols := 2
 		if hasTrailingArgs && len(piece) > 0 &&
 			piece[len(piece)-1] == ' ' {

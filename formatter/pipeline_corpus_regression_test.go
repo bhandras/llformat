@@ -817,6 +817,30 @@ func validate(expectedRecordSummaries []int, actualRecordSummaries []int) (
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_DoesNotSplitIndentedShellFlagPrefix(t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+type Writer interface{ Write([]byte) (int, error) }
+
+func f(out Writer, key string) {
+	fmt.Fprintf(out, "    --credentialpath=\"$APP_%s_LONG_TOKEN_PATH\" \\\n", key)
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "out, \"    "+
+			"--credentialpath=\\\"$APP_%s_LONG_TOKEN_PATH\\\" "+
+			"\\\\\\n\",\n		key,",
+	)
+	require.NotContains(t, out, "\"    \"+")
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
