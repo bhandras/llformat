@@ -1064,9 +1064,10 @@ func LogPrintfRulesWithOptions(opts LogPrintfOptions,
 }
 
 // PackedMultiLineFormatFunc is the signature for the packed multiline
-// formatter. Unlike LeftFlowFormatFunc, it doesn't need baseLen since it always
-// puts opening paren on its own line.
-type PackedMultiLineFormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
+// formatter. The fullPrefix argument is the current line text before the call
+// expression and lets formatters account for assignment prefixes when deciding
+// whether the call head itself overflows.
+type PackedMultiLineFormatFunc func(call []byte, wsIndent, fullPrefix string, colLimit, tabStop int) string
 
 // MultiLineCallRules returns rules for multiline call formatting. Use this for
 // isolated testing of generic call reflow. The optional formatFunc parameter

@@ -109,7 +109,7 @@ func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule,
 		style = "packed-chain-layout"
 	}
 
-	packedFallback := FormatCallPackedMultiLineNext
+	packedFallback := FormatCallPackedMultiLineNextWithPrefix
 
 	nodeOrder = dsl.NodeOrderPreorder
 	switch style {

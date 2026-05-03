@@ -670,6 +670,38 @@ type M struct{}
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksGenericCallHeadWithAssignPrefix(
+	t *testing.T) {
+
+	const in = `package p
+
+func RegisterEvents() Subscriber[InternalEvent, OutboxEvent, Env] {
+	subscriber := fn.NewEventReceiver[State[InternalEvent, OutboxEvent, Env]](10)
+	return subscriber
+}
+
+type Subscriber[A, B, C any] *Receiver[State[A, B, C]]
+type State[A, B, C any] struct{}
+type InternalEvent struct{}
+type OutboxEvent struct{}
+type Env struct{}
+type receiverFactory struct{}
+var fn receiverFactory
+type Receiver[T any] struct{}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "subscriber := "+
+			"fn.NewEventReceiver[State["+
+			"\n"+
+			"		InternalEvent,"+
+			"\n		OutboxEvent,\n		Env,\n	]](",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 

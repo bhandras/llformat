@@ -1433,7 +1433,10 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 		return contIndentLen + firstLineLen(s)
 	}
 
-	if formattedHead, ok := formatGenericCallHeadNext(head, wsIndent); ok {
+	if formattedHead, ok := formatGenericCallHeadNext(
+		head, wsIndent, fullPrefix,
+	); ok {
+
 		head = formattedHead
 	}
 
@@ -1597,8 +1600,13 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	return b.String()
 }
 
-func formatGenericCallHeadNext(head, wsIndent string) (string, bool) {
-	if visualLen(wsIndent+head+"(") <= columnLimit {
+func formatGenericCallHeadNext(head, wsIndent,
+	fullPrefix string) (string, bool) {
+
+	if fullPrefix == "" {
+		fullPrefix = wsIndent
+	}
+	if visualLen(fullPrefix+head+"(") <= columnLimit {
 		return "", false
 	}
 	if spanHasCommentOutsideStrings([]byte(head)) {
@@ -3763,6 +3771,17 @@ func FormatCallPackedMultiLine(call []byte, wsIndent string, colLimit,
 func FormatCallPackedMultiLineNext(call []byte, wsIndent string, colLimit,
 	ts int) string {
 
+	return FormatCallPackedMultiLineNextWithPrefix(
+		call, wsIndent, wsIndent, colLimit, ts,
+	)
+}
+
+// FormatCallPackedMultiLineNextWithPrefix is the prefix-aware form used by the
+// DSL engine when the call expression starts after an assignment or other
+// same-line prefix.
+func FormatCallPackedMultiLineNextWithPrefix(call []byte, wsIndent,
+	fullPrefix string, colLimit, ts int) string {
+
 	formatGlobalsMu.Lock()
 	defer formatGlobalsMu.Unlock()
 
@@ -3772,7 +3791,9 @@ func FormatCallPackedMultiLineNext(call []byte, wsIndent string, colLimit,
 	columnLimit = colLimit
 	tabStop = ts
 
-	result := formatCallPackedMultiLineNext(call, wsIndent, wsIndent, true)
+	result := formatCallPackedMultiLineNext(
+		call, wsIndent, fullPrefix, true,
+	)
 
 	columnLimit = oldColumnLimit
 	tabStop = oldTabStop

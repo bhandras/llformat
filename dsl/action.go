@@ -1915,7 +1915,7 @@ type PackedMultiLineCallAction struct {
 
 	// FormatFunc is an optional function that formats the call using legacy
 	// logic. If nil, a simplified fallback is used.
-	FormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
+	FormatFunc PackedMultiLineFormatFunc
 
 	// DisableBreakBeforeCallOnLongMultiAssignPrefix disables a readability
 	// heuristic that prefers breaking before a call (keeping it
@@ -1944,7 +1944,7 @@ type LegacyOnePerLineCallAction struct {
 
 	// FormatFunc is an optional function that formats the call using legacy
 	// logic. If nil, a simplified fallback is used.
-	FormatFunc func(call []byte, wsIndent string, colLimit, tabStop int) string
+	FormatFunc PackedMultiLineFormatFunc
 }
 
 // LegacyMultiLineScanFunc applies a single legacy multiline-call formatting
@@ -2124,8 +2124,10 @@ func (a *LegacyOnePerLineCallAction) Execute(caps Captures, ctx *Context) (
 
 	var formatted string
 	if a.FormatFunc != nil {
+		fullPrefix := string(ctx.Source[ls:start])
 		formatted = a.FormatFunc(
-			original, wsIndent, ctx.ColumnLimit, ctx.TabStop,
+			original, wsIndent, fullPrefix, ctx.ColumnLimit,
+			ctx.TabStop,
 		)
 	} else {
 		formatted = legacyFormatCallOnePerLine(original, wsIndent)
@@ -2281,8 +2283,9 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 		}
 	}
 
+	fullPrefix := string(ctx.Source[lineStart(ctx.Source, start):start])
 	formatted := formatPackedCall(
-		original, wsIndent, ctx, call, a.FormatFunc,
+		original, wsIndent, fullPrefix, ctx, call, a.FormatFunc,
 	)
 	if formatted == callText {
 		return nil, false
@@ -2538,13 +2541,14 @@ func maybeBreakBeforeCallForLongMultiAssignPrefix(ctx *Context, start, end int,
 	return out, changed, true
 }
 
-func formatPackedCall(original []byte, wsIndent string, ctx *Context,
-	call *ast.CallExpr,
-	legacyFormatFunc func(original []byte, wsIndent string, colLimit int, tabStop int) string) string {
+func formatPackedCall(original []byte, wsIndent, fullPrefix string,
+	ctx *Context, call *ast.CallExpr,
+	legacyFormatFunc PackedMultiLineFormatFunc) string {
 
 	if legacyFormatFunc != nil {
 		return legacyFormatFunc(
-			original, wsIndent, ctx.ColumnLimit, ctx.TabStop,
+			original, wsIndent, fullPrefix, ctx.ColumnLimit,
+			ctx.TabStop,
 		)
 	}
 
