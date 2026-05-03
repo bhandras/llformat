@@ -76,8 +76,8 @@ func main() {
 		)
 		chgCtx = flag.Int(
 			"changed-context", 0, "When --only-changed is set, "+
-				"also include overflows within N lines of a "+
-				"changed line",
+				"also include overflows within N lines of "+
+				"a changed line",
 		)
 		minExc = flag.Int(
 			"min-excess", 1, "Only report lines that exceed "+
@@ -160,14 +160,10 @@ func main() {
 
 	var report bytes.Buffer
 	report.WriteString("# Formatting Overflow Report\n\n")
-	report.WriteString(
-		fmt.Sprintf(
-			"Generated: `%s`\n", now.Format(time.RFC3339),
-		),
-	)
-	report.WriteString(fmt.Sprintf("Root: `%s`\n", absRoot))
-	report.WriteString(fmt.Sprintf("Column limit: `%d`\n", *col))
-	report.WriteString(fmt.Sprintf("Tab stop: `%d`\n\n", *tabStop))
+	fmt.Fprintf(&report, "Generated: `%s`\n", now.Format(time.RFC3339))
+	fmt.Fprintf(&report, "Root: `%s`\n", absRoot)
+	fmt.Fprintf(&report, "Column limit: `%d`\n", *col)
+	fmt.Fprintf(&report, "Tab stop: `%d`\n\n", *tabStop)
 
 	type bugIndexItem struct {
 		RelPath string
@@ -179,12 +175,9 @@ func main() {
 		original, err := os.ReadFile(path)
 		if err != nil {
 			if !perBug {
-				report.WriteString(
-					fmt.Sprintf("## %s\n\n", path),
-				)
-				report.WriteString(
-					fmt.Sprintf("- read error: `%v`\n\n",
-						err),
+				fmt.Fprintf(&report, "## %s\n\n", path)
+				fmt.Fprintf(
+					&report, "- read error: `%v`\n\n", err,
 				)
 			}
 			continue
@@ -193,12 +186,10 @@ func main() {
 		formatted, err := runLLFormat(*llfmt, *col, *tabStop, path)
 		if err != nil {
 			if !perBug {
-				report.WriteString(
-					fmt.Sprintf("## %s\n\n", path),
-				)
-				report.WriteString(
-					fmt.Sprintf("- llformat "+
-						"error: `%v`\n\n", err),
+				fmt.Fprintf(&report, "## %s\n\n", path)
+				fmt.Fprintf(
+					&report, "- llformat error: `%v`\n\n",
+					err,
 				)
 			}
 			continue
@@ -240,12 +231,12 @@ func main() {
 			path, formatted, overflows, *llfmt, *col, *tabStop,
 		)
 		if !perBug {
-			report.WriteString(fmt.Sprintf("## %s\n\n", path))
+			fmt.Fprintf(&report, "## %s\n\n", path)
 			if parseErr != nil {
-				report.WriteString(
-					fmt.Sprintf("- parse error (report "+
+				fmt.Fprintf(
+					&report, "- parse error (report "+
 						"still includes raw "+
-						"context): `%v`\n\n", parseErr),
+						"context): `%v`\n\n", parseErr,
 				)
 			}
 		}
@@ -278,8 +269,10 @@ func main() {
 						OverflowDisplay: displayLine,
 						FormattedLines:  lines,
 						Context:         *context,
-						Snippet:         safeIndex(snips, idx),
-						ParseErr:        parseErrStr,
+						Snippet: safeIndex(
+							snips, idx,
+						),
+						ParseErr: parseErrStr,
 					},
 				)
 				if err == nil {
@@ -310,10 +303,10 @@ func main() {
 				continue
 			}
 
-			report.WriteString(
-				fmt.Sprintf("- Line %d (visual width %d, "+
-					"bytes %d, tabs %d):\n\n", ov.Line,
-					ov.Width, rawBytes, rawTabs),
+			fmt.Fprintf(
+				&report, "- Line %d (visual width %d, bytes "+
+					"%d, tabs %d):\n\n", ov.Line, ov.Width,
+				rawBytes, rawTabs,
 			)
 			report.WriteString("```go\n")
 			report.WriteString(displayLine)
@@ -350,10 +343,10 @@ func main() {
 			if idx < len(snips) && snips[idx].Text != "" {
 				s := snips[idx]
 				report.WriteString("<details>\n")
-				report.WriteString(
-					fmt.Sprintf("<summary>Enclosing %s "+
+				fmt.Fprintf(
+					&report, "<summary>Enclosing %s "+
 						"(lines %d-%d)</summary>\n\n",
-						s.Kind, s.StartLine, s.EndLine),
+					s.Kind, s.StartLine, s.EndLine,
 				)
 				report.WriteString("```go\n")
 				report.WriteString(s.Text)
@@ -366,8 +359,8 @@ func main() {
 					report.WriteString(
 						"<details>" +
 							"\n" +
-							"<summary>Standalone " +
-							"repro</summary>" +
+							"<summary>Standalone" +
+							" repro</summary>" +
 							"\n\n```go\n",
 					)
 					report.WriteString(s.ReproText)
@@ -394,10 +387,9 @@ func main() {
 						)
 					}
 					if s.ReproWhy != "" {
-						report.WriteString(
-							fmt.Sprintf(
-								"Note: %s\n\n",
-								s.ReproWhy),
+						fmt.Fprintf(
+							&report, "Note: %s\n\n",
+							s.ReproWhy,
 						)
 					}
 					report.WriteString("</details>\n\n")
@@ -414,24 +406,19 @@ func main() {
 
 		var index bytes.Buffer
 		index.WriteString("# llformat overflow bug reports\n\n")
-		index.WriteString(
-			fmt.Sprintf(
-				"Generated: `%s`\n", now.Format(time.RFC3339),
-			),
+		fmt.Fprintf(
+			&index, "Generated: `%s`\n", now.Format(time.RFC3339),
 		)
-		index.WriteString(fmt.Sprintf("Root: `%s`\n", absRoot))
-		index.WriteString(fmt.Sprintf("Column limit: `%d`\n", *col))
-		index.WriteString(fmt.Sprintf("Tab stop: `%d`\n", *tabStop))
-		index.WriteString(fmt.Sprintf("Min excess: `%d`\n", *minExc))
-		index.WriteString(fmt.Sprintf("Only changed: `%t`\n", *onlyChg))
-		index.WriteString(
-			fmt.Sprintf("Changed context: `%d`\n\n", *chgCtx),
-		)
+		fmt.Fprintf(&index, "Root: `%s`\n", absRoot)
+		fmt.Fprintf(&index, "Column limit: `%d`\n", *col)
+		fmt.Fprintf(&index, "Tab stop: `%d`\n", *tabStop)
+		fmt.Fprintf(&index, "Min excess: `%d`\n", *minExc)
+		fmt.Fprintf(&index, "Only changed: `%t`\n", *onlyChg)
+		fmt.Fprintf(&index, "Changed context: `%d`\n\n", *chgCtx)
 
 		for _, it := range indexItems {
-			index.WriteString(
-				fmt.Sprintf("- [%s](%s)\n", it.Summary,
-					it.RelPath),
+			fmt.Fprintf(
+				&index, "- [%s](%s)\n", it.Summary, it.RelPath,
 			)
 		}
 
@@ -496,29 +483,21 @@ func renderBugReport(p renderBugParams) (relName string, markdown string,
 
 	var b bytes.Buffer
 	b.WriteString("# llformat overflow bug\n\n")
-	b.WriteString(
-		fmt.Sprintf(
-			"Generated: `%s`\n", p.GeneratedAt.Format(time.RFC3339),
-		),
-	)
-	b.WriteString(fmt.Sprintf("Root: `%s`\n", p.RootDir))
-	b.WriteString(fmt.Sprintf("File: `%s`\n", p.FilePath))
-	b.WriteString(fmt.Sprintf("Line: `%d`\n", p.Overflow.Line))
-	b.WriteString(fmt.Sprintf("Visual width: `%d`\n", p.Overflow.Width))
-	b.WriteString(fmt.Sprintf("Bytes: `%d`\n", p.OverflowBytes))
-	b.WriteString(fmt.Sprintf("Tabs: `%d`\n", p.OverflowTabs))
-	b.WriteString(fmt.Sprintf("Column limit: `%d`\n", p.ColLimit))
-	b.WriteString(fmt.Sprintf("Tab stop: `%d`\n", p.TabStop))
-	b.WriteString(fmt.Sprintf("Min excess: `%d`\n", p.MinExcess))
-	b.WriteString(fmt.Sprintf("Only changed: `%t`\n", p.OnlyChanged))
-	b.WriteString(
-		fmt.Sprintf("Changed context: `%d`\n\n", p.ChangedContext),
-	)
+	fmt.Fprintf(&b, "Generated: `%s`\n", p.GeneratedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "Root: `%s`\n", p.RootDir)
+	fmt.Fprintf(&b, "File: `%s`\n", p.FilePath)
+	fmt.Fprintf(&b, "Line: `%d`\n", p.Overflow.Line)
+	fmt.Fprintf(&b, "Visual width: `%d`\n", p.Overflow.Width)
+	fmt.Fprintf(&b, "Bytes: `%d`\n", p.OverflowBytes)
+	fmt.Fprintf(&b, "Tabs: `%d`\n", p.OverflowTabs)
+	fmt.Fprintf(&b, "Column limit: `%d`\n", p.ColLimit)
+	fmt.Fprintf(&b, "Tab stop: `%d`\n", p.TabStop)
+	fmt.Fprintf(&b, "Min excess: `%d`\n", p.MinExcess)
+	fmt.Fprintf(&b, "Only changed: `%t`\n", p.OnlyChanged)
+	fmt.Fprintf(&b, "Changed context: `%d`\n\n", p.ChangedContext)
 
 	if p.ParseErr != "" {
-		b.WriteString(
-			fmt.Sprintf("Parse warning: `%s`\n\n", p.ParseErr),
-		)
+		fmt.Fprintf(&b, "Parse warning: `%s`\n\n", p.ParseErr)
 	}
 
 	b.WriteString("## Overflow line\n\n```go\n")
@@ -545,10 +524,9 @@ func renderBugReport(p renderBugParams) (relName string, markdown string,
 	}
 
 	if p.Snippet.Text != "" {
-		b.WriteString(
-			fmt.Sprintf("## Enclosing %s (lines %d-%d)\n\n```go\n",
-				p.Snippet.Kind, p.Snippet.StartLine,
-				p.Snippet.EndLine),
+		fmt.Fprintf(
+			&b, "## Enclosing %s (lines %d-%d)\n\n```go\n",
+			p.Snippet.Kind, p.Snippet.StartLine, p.Snippet.EndLine,
 		)
 		b.WriteString(p.Snippet.Text)
 		if !strings.HasSuffix(p.Snippet.Text, "\n") {
@@ -577,9 +555,7 @@ func renderBugReport(p renderBugParams) (relName string, markdown string,
 			)
 		}
 		if p.Snippet.ReproWhy != "" {
-			b.WriteString(
-				fmt.Sprintf("Note: %s\n\n", p.Snippet.ReproWhy),
-			)
+			fmt.Fprintf(&b, "Note: %s\n\n", p.Snippet.ReproWhy)
 		}
 	}
 
@@ -712,8 +688,8 @@ func runLLFormat(llformatBin string, col, tabStop int,
 	path string) ([]byte, error) {
 
 	cmd := exec.Command(
-		llformatBin, "--col", strconv.Itoa(col), "--tab",
-		strconv.Itoa(tabStop), path,
+		llformatBin, "--col", strconv.Itoa(col),
+		"--tab", strconv.Itoa(tabStop), path,
 	)
 	out, err := cmd.Output()
 	if err == nil {

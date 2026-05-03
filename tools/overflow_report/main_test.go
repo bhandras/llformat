@@ -36,7 +36,8 @@ func TestGoFilesUnder_ExcludeDir(t *testing.T) {
 	mustWriteFile(t, filepath.Join(root, "keep.go"), "package p\n")
 	mustMkdirAll(t, filepath.Join(root, "vendor"))
 	mustWriteFile(
-		t, filepath.Join(root, "vendor", "skip.go"), "package p\n",
+		t, filepath.Join(root, "vendor", "skip.go"),
+		"package p\n",
 	)
 
 	got, err := goFilesUnder(root, stringSliceFlag{"vendor"})

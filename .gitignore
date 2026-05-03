@@ -1,6 +1,7 @@
 # Build outputs
 bin/
 .next_goldens/
+.corpus_reports/
 
 # Go build/test artifacts
 *.test

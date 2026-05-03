@@ -67,8 +67,8 @@ func main() {
 		"hoist trailing inline comments above for wrapping",
 	)
 	flag.StringVar(
-		&multilineExclude, "multiline-exclude", "", "comma-separated "+
-			"list of function names to exclude from multiline "+
+		&multilineExclude, "multiline-exclude", "", "comma-separated"+
+			" list of function names to exclude from multiline "+
 			"formatting",
 	)
 	flag.IntVar(
