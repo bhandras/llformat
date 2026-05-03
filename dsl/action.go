@@ -1807,17 +1807,21 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	// Find the base length (visual width from line start to call start).
 	baseLen := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+	effectiveLimit := ctx.ColumnLimit
 	if callHasReturnPrefix(ctx.Source, start) {
-		baseLen += trailingCommaSuffixWidth(
+		suffixWidth := trailingCommaSuffixWidth(
 			ctx.Source, end, ctx.TabStop,
 		)
+		if suffixWidth > 0 && effectiveLimit > suffixWidth {
+			effectiveLimit -= suffixWidth
+		}
 	}
 
 	var formatted string
 	if a.FormatFunc != nil {
 		// Use the provided formatter (legacy formatter)
 		formatted = a.FormatFunc(
-			original, wsIndent, baseLen, ctx.ColumnLimit,
+			original, wsIndent, baseLen, effectiveLimit,
 			ctx.TabStop,
 		)
 	} else {

@@ -744,6 +744,37 @@ type Env struct{}
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_ReservesReturnSuffixForSplitFormatString(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+func validate(expectedRecordSummaries []int, actualRecordSummaries []int) (
+	string, bool) {
+
+	if len(expectedRecordSummaries) != len(actualRecordSummaries) {
+		return fmt.Sprintf("quote entries %d != expected "+
+			"items %d", len(expectedRecordSummaries), len(actualRecordSummaries)), false
+	}
+	return "", true
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "return fmt.Sprintf(\"quote entries %d != expected "+
+			"\"+\n			\"items %d\", "+
+			"len(expectedRecordSummaries),"+
+			"\n"+
+			"			len(actualRecordSummaries))"+
+			", false",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
