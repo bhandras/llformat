@@ -596,6 +596,39 @@ func (s *Service) start(ctx context.Context,
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksPartiallyMultilineGenericParamType(
+	t *testing.T) {
+
+	const in = `package p
+
+type Service[A, B, C any] struct{}
+type State[A, B, C any] struct{}
+type InputEventWithLongName struct{}
+type OutputEventWithLongName struct{}
+type Env struct{}
+
+func (s *Service[InputEventWithLongName, OutputEventWithLongName, Env]) apply(
+	ctx context.Context, currentState State[InputEventWithLongName, OutputEventWithLongName,
+		Env], event InputEventWithLongName) (State[InputEventWithLongName, OutputEventWithLongName, Env], []OutputEventWithLongName, error) {
+
+	panic("not implemented")
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "currentState "+
+			"State["+
+			"\n"+
+			"		InputEventWithLongName,"+
+			"\n"+
+			"		OutputEventWithLongName,"+
+			"\n		Env,\n	]",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 

@@ -330,6 +330,7 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 	formatted = collapseMultilineParenReturnListIfFits(
 		formatted, colLimit, tabStop,
 	)
+	formatted = breakMultilineTypeArgLists(formatted)
 	formatted = breakLongTypeArgListsIfNeeded(
 		formatted, colLimit, tabStop,
 	)
@@ -505,6 +506,103 @@ func breakLongTypeArgListsIfNeeded(signature string, colLimit,
 			return signature
 		}
 	}
+}
+
+func breakMultilineTypeArgLists(signature string) string {
+	for {
+		rewritten, changed := breakFirstMultilineTypeArgList(signature)
+		if !changed {
+			return signature
+		}
+		signature = rewritten
+	}
+}
+
+func breakFirstMultilineTypeArgList(signature string) (string, bool) {
+	b := []byte(signature)
+
+	for i := 0; i < len(b); {
+		switch {
+		case scanner.IsStringStart(b, i):
+			i = scanner.ScanString(b, i)
+
+		case scanner.IsLineCommentStart(b, i):
+			i = scanner.ScanLineComment(b, i)
+
+		case scanner.IsBlockCommentStart(b, i):
+			i = scanner.ScanBlockComment(b, i)
+
+		case b[i] == '[':
+			if !isTypeArgListStart(signature, i) {
+				i++
+				continue
+			}
+			end := scanner.ScanBalanced(b, i, '[', ']')
+			if end == -1 {
+				return signature, false
+			}
+
+			content := strings.TrimSpace(signature[i+1 : end])
+			if !strings.Contains(content, "\n") {
+				i = end + 1
+				continue
+			}
+			parts := filterNonEmptyTrimmed(
+				scanner.SplitTopLevelAny(content),
+			)
+			if len(parts) <= 1 {
+				i = end + 1
+				continue
+			}
+
+			indent := leadingWhitespace(
+				signature[lineStartIndex(signature, i):i],
+			)
+			rewritten := renderBrokenTypeArgList(
+				signature[:i+1], signature[end+1:], indent,
+				parts,
+			)
+			if rewritten == signature {
+				i = end + 1
+				continue
+			}
+
+			return rewritten, true
+
+		default:
+			i++
+		}
+	}
+
+	return signature, false
+}
+
+func lineStartIndex(s string, idx int) int {
+	for idx > 0 && s[idx-1] != '\n' {
+		idx--
+	}
+
+	return idx
+}
+
+func renderBrokenTypeArgList(prefix, suffix, indent string,
+	parts []string) string {
+
+	var out strings.Builder
+	out.Grow(len(prefix) + len(suffix) + len(parts)*4)
+	out.WriteString(prefix)
+	out.WriteByte('\n')
+	contIndent := indent + "\t"
+	for _, part := range parts {
+		out.WriteString(contIndent)
+		out.WriteString(strings.TrimSpace(part))
+		out.WriteString(",\n")
+	}
+	out.WriteString(indent)
+	out.WriteByte(']')
+	out.WriteString(suffix)
+
+	return out.String()
 }
 
 func breakFirstTypeArgListInLine(line, indent string) (string, bool) {
