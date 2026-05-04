@@ -393,6 +393,12 @@ func casesForFile(root string, analysis fileAnalysis,
 
 	ctx := astContextsByLine(analysis.formatted)
 	repoName := filepath.Base(root)
+	originalOverflowTexts := make(
+		map[string]int, len(analysis.originalOverflows),
+	)
+	for _, ov := range analysis.originalOverflows {
+		originalOverflowTexts[ov.Text]++
+	}
 	for _, ov := range analysis.formattedOverflows {
 		origWidth := originalSameLineWidth(
 			analysis.original, ov.Line, cfg.TabStop,
@@ -400,6 +406,7 @@ func casesForFile(root string, analysis fileAnalysis,
 		changed := analysis.changedLines[ov.Line]
 		kind := classifyCase(
 			ov.Width, origWidth, changed, cfg.ColumnLimit,
+			originalOverflowTexts[ov.Text] > 0,
 		)
 		if kind == "unchanged_overflow" {
 			continue
@@ -462,7 +469,9 @@ func casesForFile(root string, analysis fileAnalysis,
 	return cases
 }
 
-func classifyCase(width, originalWidth int, changed bool, col int) string {
+func classifyCase(width, originalWidth int, changed bool, col int,
+	existingOverflowText bool) string {
+
 	if changed && originalWidth <= col {
 		return "new_overflow"
 	}
@@ -470,6 +479,10 @@ func classifyCase(width, originalWidth int, changed bool, col int) string {
 		return "touched_overflow"
 	}
 	if originalWidth <= col && width > col {
+		if existingOverflowText {
+			return "moved_existing_overflow"
+		}
+
 		return "shifted_overflow"
 	}
 
@@ -540,6 +553,9 @@ func caseRank(c caseRecord) int {
 
 	case "shifted_overflow":
 		score += 250
+
+	case "moved_existing_overflow":
+		score += 50
 	}
 	if !c.ParseOKAfter || !c.ASTEquivalent || !c.Idempotent {
 		score += 2000

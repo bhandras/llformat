@@ -15,6 +15,7 @@ func TestClassifyCase(t *testing.T) {
 		width         int
 		originalWidth int
 		changed       bool
+		existingText  bool
 		want          string
 	}{
 		{
@@ -39,6 +40,14 @@ func TestClassifyCase(t *testing.T) {
 			want:          "shifted_overflow",
 		},
 		{
+			name:          "moved existing overflow",
+			width:         88,
+			originalWidth: 79,
+			changed:       false,
+			existingText:  true,
+			want:          "moved_existing_overflow",
+		},
+		{
 			name:          "unchanged overflow",
 			width:         88,
 			originalWidth: 86,
@@ -56,7 +65,7 @@ func TestClassifyCase(t *testing.T) {
 
 				got := classifyCase(
 					test.width, test.originalWidth,
-					test.changed, 80,
+					test.changed, 80, test.existingText,
 				)
 				if got != test.want {
 					t.Fatalf(
