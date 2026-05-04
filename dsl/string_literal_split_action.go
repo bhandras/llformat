@@ -96,7 +96,10 @@ func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
 		return nil, false
 	}
 

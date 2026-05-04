@@ -495,7 +495,10 @@ func methodChainSegmentDoc(seg segment, ctx *Context,
 		// break their argument list independently from the chain
 		// breaking at dots.
 		var argDoc layout.Doc
-		if info, ok := exprDocWithKind(arg, ctx, exprDocKindCallArg); ok {
+		if info, ok := exprDocWithKind(
+			arg, ctx, exprDocKindCallArg,
+		); ok {
+
 			argDoc = indentExprDocIfNeeded(info)
 		} else {
 			if strings.Contains(argText, "\n") {

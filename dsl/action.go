@@ -160,7 +160,10 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	// caller can fall back to a safer formatter (e.g. packed/legacy
 	// multiline).
 	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
 		return nil, false
 	}
 
@@ -1197,7 +1200,10 @@ func isWideCallExpr(caps Captures, ctx *Context, target string) bool {
 func callFunDoc(fun ast.Expr, ctx *Context) layout.Doc {
 	doc := layout.T(renderNode(fun, ctx.Fset))
 	if fun != nil {
-		if info, ok := exprDocWithKind(fun, ctx, exprDocKindCallArg); ok {
+		if info, ok := exprDocWithKind(
+			fun, ctx, exprDocKindCallArg,
+		); ok {
+
 			doc = info.Doc
 		}
 	}
@@ -2263,10 +2269,17 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 
 	wsIndent := ctx.IndentAt(call)
 	callText := string(original)
+	if a.OnlyIfSingleLine && strings.Contains(callText, "\n") {
+		return nil, false
+	}
 	if callAlreadyAcceptableWithMultilineLiteralArg(ctx, call, start, end) {
 		return nil, false
 	}
-	if callFitsSingleLineWithinLimit(ctx, start, end, callText) {
+	if callFitsSingleLineWithinLimit(ctx, start, end, callText) &&
+		!controlHeaderInitCallSuffixOverflows(
+			ctx, call, start, end, callText,
+		) {
+
 		return nil, false
 	}
 
@@ -2485,6 +2498,87 @@ func callFitsSingleLineWithinLimit(ctx *Context, start, end int,
 	)
 
 	return currentLineLen <= ctx.ColumnLimit
+}
+
+func controlHeaderInitCallSuffixOverflows(ctx *Context, call *ast.CallExpr,
+	start, end int, callText string) bool {
+
+	if ctx == nil || call == nil || strings.Contains(callText, "\n") {
+		return false
+	}
+	if !callIsDirectControlInitRHS(ctx, call) {
+		return false
+	}
+
+	lineEndIdx := lineEnd(ctx.Source, end)
+	if lineEndIdx <= end {
+		return false
+	}
+	suffixStart := skipHorizontalWhitespace(ctx.Source, end)
+	if suffixStart >= lineEndIdx || ctx.Source[suffixStart] != ';' {
+		return false
+	}
+
+	callLineLen := collapsedLineLenAt(
+		ctx.Source, start, callText, ctx.TabStop,
+	)
+	suffixLen := visualLen(string(ctx.Source[end:lineEndIdx]), ctx.TabStop)
+
+	return callLineLen+suffixLen > ctx.ColumnLimit
+}
+
+func callIsDirectControlInitRHS(ctx *Context, call *ast.CallExpr) bool {
+	parent := ctx.Parent(call)
+	switch p := parent.(type) {
+	case *ast.AssignStmt:
+		if !assignStmtHasDirectRHSCall(p, call) {
+			return false
+		}
+
+		return stmtIsControlHeaderInit(ctx, p)
+
+	case *ast.ExprStmt:
+		if p.X != call {
+			return false
+		}
+
+		return stmtIsControlHeaderInit(ctx, p)
+
+	default:
+		return false
+	}
+}
+
+func assignStmtHasDirectRHSCall(assign *ast.AssignStmt,
+	call *ast.CallExpr) bool {
+
+	for _, rhs := range assign.Rhs {
+		if rhs == call {
+			return true
+		}
+	}
+
+	return false
+}
+
+func stmtIsControlHeaderInit(ctx *Context, stmt ast.Stmt) bool {
+	parent := ctx.Parent(stmt)
+	switch p := parent.(type) {
+	case *ast.IfStmt:
+		return p.Init == stmt
+
+	case *ast.ForStmt:
+		return p.Init == stmt
+
+	case *ast.SwitchStmt:
+		return p.Init == stmt
+
+	case *ast.TypeSwitchStmt:
+		return p.Init == stmt
+
+	default:
+		return false
+	}
 }
 
 func maybeBreakBeforeCallForLongMultiAssignPrefix(ctx *Context, start, end int,
@@ -2862,7 +2956,10 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	}
 
 	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
 		return nil, false, err
 	}
 
@@ -3040,7 +3137,10 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
 		return nil, false
 	}
 

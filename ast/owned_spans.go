@@ -36,7 +36,10 @@ func OwnedSpansFromAST(file *ast.File, fset *token.FileSet, src []byte,
 
 	var spans []OffsetSpan
 	addSpan := func(startPos, endPos token.Pos) {
-		if start, end, ok := spanOffsets(fset, src, startPos, endPos); ok {
+		if start, end, ok := spanOffsets(
+			fset, src, startPos, endPos,
+		); ok {
+
 			spans = append(
 				spans, OffsetSpan{
 					Start: start,

@@ -166,7 +166,10 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 		return nil, false
 	}
 	fset := token.NewFileSet()
-	if _, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors); err != nil {
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
 		return nil, false
 	}
 

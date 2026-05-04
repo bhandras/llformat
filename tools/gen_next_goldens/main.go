@@ -56,7 +56,10 @@ func main() {
 		outPath := filepath.Join(
 			*outDir, "testdata", dirName, "output_next.go",
 		)
-		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		if err := os.MkdirAll(
+			filepath.Dir(outPath), 0o755,
+		); err != nil {
+
 			fmt.Fprintf(
 				os.Stderr, "mkdir %s: %v\n",
 				filepath.Dir(outPath), err,

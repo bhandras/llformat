@@ -953,6 +953,39 @@ func f(w Writer) error {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksControlInitCallWhenSuffixOverflows(
+	t *testing.T) {
+
+	const in = `package p
+
+import "context"
+
+type service struct{}
+type RetryPolicy struct{}
+
+func (s service) PerformStep(context.Context, string, string, RetryPolicy) error {
+	return nil
+}
+
+func f(ctx context.Context, requestID string, payloadHash string, retry RetryPolicy) error {
+	worker := service{}
+	if err := worker.PerformStep(ctx, requestID, payloadHash, retry); err != nil {
+		return err
+	}
+	return nil
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(t, out, "if err := worker.PerformStep(\n")
+	require.Contains(
+		t, out, "\n		ctx, requestID, payloadHash, "+
+			"retry,\n	); err != nil {",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 

@@ -256,7 +256,10 @@ func shouldOutdentCompositeElems(contIndent, innerIndent string, elems []string,
 
 			maxInner = l
 		}
-		if l := maxLineLenWithIndentAndComma(t, contIndent); l > maxOutdent {
+		if l := maxLineLenWithIndentAndComma(
+			t, contIndent,
+		); l > maxOutdent {
+
 			maxOutdent = l
 		}
 	}
