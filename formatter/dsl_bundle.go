@@ -45,6 +45,7 @@ func dslBundleForOptions(opts StageOptions) DSLBundle {
 		Comments: DSLStageSpec{
 			Rules: dslRulesForComments(
 				opts.Style.CommentMoveInline,
+				opts.Style.CommentMode,
 			),
 			NodeOrder:     dsl.NodeOrderPreorder,
 			MaxIterations: 1,

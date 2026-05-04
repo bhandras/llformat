@@ -142,7 +142,9 @@ This helps avoid oscillations like:
 
 Goal:
 
-- Reflow standalone comment blocks while preserving meaning.
+- Reflow standalone comment blocks while preserving meaning. The CLI default is
+  conservative `overflow` mode: preserve comment blocks that already fit the
+  column limit, and preserve blocks that look preformatted.
 - Preserve tool directives embedded in comments.
 - Optionally hoist inline trailing comments above statements so they can be
   wrapped safely (`--wrap-inline-comments`).
@@ -159,6 +161,9 @@ Key safety rules:
   - `//go:build`, `//go:generate`, `//go:embed`, `// +build`
   - `//nolint`, `//lint:ignore`, `//staticcheck:ignore`, etc.
   - cgo pragmas (`/* #cgo ... */`, `/* #include ... */`)
+- In `overflow` mode, do not reflow already-fitting blocks, numbered lists,
+  fenced examples, table-like comments, URL-heavy comments, or comments with
+  alignment spacing.
 
 ### 2) Compact calls stage (`compact-calls`)
 

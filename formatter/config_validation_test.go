@@ -21,6 +21,14 @@ func TestValidatePipelineConfig_RejectsUnknownSigsStyle(t *testing.T) {
 	require.Contains(t, err.Error(), "allowed")
 }
 
+func TestValidatePipelineConfig_RejectsUnknownCommentMode(t *testing.T) {
+	t.Parallel()
+
+	err := ValidatePipelineConfig(PipelineConfig{CommentMode: "markdown"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "CommentMode")
+}
+
 func TestValidatePipelineConfig_RejectsUnknownMultiLineStyle(t *testing.T) {
 	t.Parallel()
 

@@ -10,9 +10,19 @@ import (
 // llformat is next-only, but comment formatting still delegates to the legacy
 // comment formatter implementation (now located under internal/compat) because
 // it remains the spec oracle for comment reflow semantics.
-func dslRulesForComments(commentMoveInline bool) []dsl.Rule {
+func dslRulesForComments(commentMoveInline bool,
+	commentMode string) []dsl.Rule {
+
+	formatComments := func(src []byte, colLimit, tabStop int,
+		moveInlineAbove bool) ([]byte, bool) {
+
+		return compat.FormatCommentsInSource(
+			src, colLimit, tabStop, moveInlineAbove, commentMode,
+		)
+	}
+
 	return dsl.LegacyCommentRules(
-		compat.FormatCommentsInSource, commentMoveInline,
+		formatComments, commentMoveInline,
 	)
 }
 

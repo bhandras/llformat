@@ -17,6 +17,10 @@ func ValidatePipelineConfig(cfg PipelineConfig) error {
 	var issues []configIssue
 
 	validateOptionalEnum(
+		&issues, "CommentMode", cfg.CommentMode,
+		[]string{"prose", "overflow", "off"},
+	)
+	validateOptionalEnum(
 		&issues, "DSLMultiLineStyle", cfg.DSLMultiLineStyle,
 		allowedDSLMultiLineStyles(),
 	)

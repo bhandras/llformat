@@ -138,6 +138,7 @@ type StageSelectionOptions struct {
 
 type StageStyleOptions struct {
 	CommentMoveInline bool
+	CommentMode       string
 	Excludes          []string
 
 	DSLMultiLineStyle string
@@ -187,6 +188,7 @@ func DefaultStages(cfg BaseConfig, commentMoveInline bool,
 			Selection: StageSelectionOptions{},
 			Style: StageStyleOptions{
 				CommentMoveInline: commentMoveInline,
+				CommentMode:       "prose",
 				Excludes:          excludes,
 			},
 		},

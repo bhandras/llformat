@@ -11,6 +11,7 @@ type PipelineConfig struct {
 	ColumnLimit            int
 	TabStop                int
 	MoveInlineAbove        bool     // For comment formatter
+	CommentMode            string   // Comment style: prose|overflow|off
 	Excludes               []string // Functions to exclude from multiline formatting
 	UseDSLComments         bool     // Use DSL-based comment formatting (delegates to legacy)
 	UseDSLLogCalls         bool     // Use DSL-based log/printf call formatting
@@ -109,6 +110,9 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = DefaultTabStop
 	}
+	if cfg.CommentMode == "" {
+		cfg.CommentMode = "prose"
+	}
 
 	// Enable the full DSL pipeline by default when callers did not
 	// explicitly configure any stage toggles.
@@ -183,6 +187,7 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 			},
 			Style: StageStyleOptions{
 				CommentMoveInline:             cfg.MoveInlineAbove,
+				CommentMode:                   cfg.CommentMode,
 				Excludes:                      cfg.Excludes,
 				DSLMultiLineStyle:             cfg.DSLMultiLineStyle,
 				DSLSigsStyle:                  cfg.DSLSigsStyle,

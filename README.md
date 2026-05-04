@@ -27,8 +27,9 @@ Goals:
 - **Idempotent**: running `llformat` repeatedly should converge quickly.
 - **Parse-safe**: output must remain valid Go (final output is normalized by
   `gofmt`).
-- **Directive-safe comments**: never break `//go:` directives, `//nolint`, cgo
-  pragmas, etc.
+- **Conservative comments**: wrap overflowing prose comments by default while
+  preserving fitting and preformatted comment blocks; never break `//go:`
+  directives, `//nolint`, cgo pragmas, etc.
 
 Non-goals:
 
@@ -40,7 +41,8 @@ Non-goals:
 
 The formatter runs a **pipeline of stages** over the file, then runs `gofmt`:
 
-1. Comments (directive-safe reflow; optionally hoist inline comments)
+1. Comments (conservative, directive-safe reflow; optionally hoist inline
+   comments)
 2. Compact calls (log/printf/error string packing + string splitting)
 3. Expressions (selected long-expression splits)
 4. Multiline calls (non-log calls: pack args + layout selector chains)
@@ -85,6 +87,8 @@ Helpful flags:
 
 - `--col N`: column limit (default `80`)
 - `--tab N`: tab stop width (default `8`)
+- `--comments MODE`: comment formatting mode: `overflow`, `prose`, or `off`
+  (default `overflow`)
 - `--wrap-inline-comments`: hoist trailing inline comments above statements so
   they can be wrapped safely
 - `--multiline-exclude a,b,c`: exclude function names from generic multiline

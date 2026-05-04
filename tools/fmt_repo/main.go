@@ -30,6 +30,7 @@ type runConfig struct {
 	colLimit           int
 	tabStop            int
 	moveInline         bool
+	commentMode        string
 	multilineExclude   string
 	logCallsMinTailLen int
 	fixpointIters      int
@@ -43,6 +44,7 @@ func main() {
 		colLimit           int
 		tabStop            int
 		moveInline         bool
+		commentMode        string
 		multilineExclude   string
 		logCallsMinTailLen int
 		fixpointIters      int
@@ -65,6 +67,10 @@ func main() {
 	flag.BoolVar(
 		&moveInline, "wrap-inline-comments", false,
 		"hoist trailing inline comments above for wrapping",
+	)
+	flag.StringVar(
+		&commentMode, "comments", "overflow",
+		"comment formatting mode: overflow, prose, or off",
 	)
 	flag.StringVar(
 		&multilineExclude, "multiline-exclude", "", "comma-separated"+
@@ -103,6 +109,7 @@ func main() {
 		colLimit:           colLimit,
 		tabStop:            tabStop,
 		moveInline:         moveInline,
+		commentMode:        commentMode,
 		multilineExclude:   multilineExclude,
 		logCallsMinTailLen: logCallsMinTailLen,
 		fixpointIters:      fixpointIters,
@@ -260,6 +267,7 @@ func buildArgs(cfg runConfig, path string) []string {
 	args := []string{
 		"--col", fmt.Sprint(cfg.colLimit),
 		"--tab", fmt.Sprint(cfg.tabStop),
+		"--comments", cfg.commentMode,
 		"--logcalls-min-tail-len", fmt.Sprint(
 			cfg.logCallsMinTailLen,
 		),

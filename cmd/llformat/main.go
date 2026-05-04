@@ -21,6 +21,7 @@ type cliFlags struct {
 	colLimit           int
 	tabStop            int
 	moveInline         bool
+	commentMode        string
 	multilineExclude   string
 	logCallsMinTailLen int
 	logCallsNames      string
@@ -57,6 +58,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		&f.moveInline, "wrap-inline-comments", false, "when "+
 			"formatting comments, hoist trailing inline "+
 			"comments above for wrapping",
+	)
+	fs.StringVar(
+		&f.commentMode, "comments", "overflow",
+		"comment formatting mode: overflow, prose, or off",
 	)
 	fs.StringVar(
 		&f.multilineExclude, "multiline-exclude", "", "comma-separat"+
@@ -150,9 +155,9 @@ func printUsage(w io.Writer) {
 		w, "usage:",
 	)
 	fmt.Fprintln(
-		w, "  llformat [-w] [--wrap-inline-comments] [--col N] "+
-			"[--tab N] [--multiline-exclude FUNCS] "+
-			"[--logcalls-min-tail-len N] "+
+		w, "  llformat [-w] [--wrap-inline-comments] [--comments "+
+			"MODE] [--col N] [--tab N] [--multiline-exclude "+
+			"FUNCS] [--logcalls-min-tail-len N] "+
 			"[--logcalls-selector-names NAMES] "+
 			"[--logcalls-selector-prefixes PREFIXES] "+
 			"[--fixpoint-iters N] <path>",
@@ -176,6 +181,10 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(
 		w, "  --wrap-inline-comments    hoist trailing inline "+
 			"comments above for wrapping",
+	)
+	fmt.Fprintln(
+		w, "  --comments MODE           comment formatting mode: "+
+			"overflow, prose, or off (default overflow)",
 	)
 	fmt.Fprintln(
 		w, "  --multiline-exclude FUNCS comma-separated function "+
@@ -236,6 +245,7 @@ func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 		ColumnLimit:              f.colLimit,
 		TabStop:                  f.tabStop,
 		MoveInlineAbove:          f.moveInline,
+		CommentMode:              f.commentMode,
 		Excludes:                 excludes,
 		LogCallsMinTailLen:       f.logCallsMinTailLen,
 		LogCallsSelectorNames:    logCallsNames,

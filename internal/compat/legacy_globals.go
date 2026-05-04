@@ -13,6 +13,7 @@ var (
 	formatGlobalsMu sync.Mutex
 	columnLimit     = 80
 	tabStop         = 8
+	commentMode     = CommentModeProse
 )
 
 func visualLen(s string) int {

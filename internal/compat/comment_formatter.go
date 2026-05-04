@@ -5,10 +5,27 @@ import (
 	"unicode"
 )
 
+const (
+	// CommentModeProse greedily reflows all standalone prose-like comment
+	// blocks. This preserves the historical formatter behavior.
+	CommentModeProse = "prose"
+
+	// CommentModeOverflow only reflows standalone comment blocks when at
+	// least one physical line exceeds the column limit. Blocks that already
+	// fit, or that look preformatted, are preserved verbatim.
+	CommentModeOverflow = "overflow"
+
+	// CommentModeOff disables comment reflow.
+	CommentModeOff = "off"
+)
+
 // CommentConfig holds configuration for comment reflowing.
 type CommentConfig struct {
 	ColumnLimit int
 	TabStop     int
+	// Mode controls how aggressively standalone comments are reflowed.
+	// Empty defaults to CommentModeProse for compatibility.
+	Mode string
 	// MoveInlineAbove hoists trailing inline comments (// and single-line
 	// /* */) above the code line as standalone comment lines for reflowing.
 	MoveInlineAbove bool
@@ -40,12 +57,19 @@ func NewCommentFormatter(cfg CommentConfig) *CommentFormatter {
 	if cfg.TabStop <= 0 {
 		cfg.TabStop = 8
 	}
+	if cfg.Mode == "" {
+		cfg.Mode = CommentModeProse
+	}
 
 	return &CommentFormatter{cfg: cfg}
 }
 
 // FormatFile implements greedy reflowing of comment-only lines.
 func (f *CommentFormatter) FormatFile(src []byte) []byte {
+	if f.cfg.Mode == CommentModeOff {
+		return src
+	}
+
 	formatGlobalsMu.Lock()
 	defer formatGlobalsMu.Unlock()
 
@@ -56,6 +80,7 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 	if f.cfg.TabStop > 0 {
 		tabStop = f.cfg.TabStop
 	}
+	commentMode = f.cfg.Mode
 
 	// Optional pre-pass: hoist inline comments above their line.
 	if f.cfg.MoveInlineAbove {
@@ -66,8 +91,16 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 	var out []string
 
 	i := 0
+	inRawString := false
 	for i < len(lines) {
 		line := lines[i]
+
+		if inRawString {
+			out = append(out, line)
+			inRawString = rawStringStateAfterLine(line, inRawString)
+			i++
+			continue
+		}
 
 		// Try line comment block
 		if newOut, newIdx, handled := processLineCommentBlock(
@@ -91,6 +124,7 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 
 		// Default: copy unchanged.
 		out = append(out, line)
+		inRawString = rawStringStateAfterLine(line, inRawString)
 		i++
 	}
 
@@ -100,12 +134,17 @@ func (f *CommentFormatter) FormatFile(src []byte) []byte {
 // FormatCommentsInSource applies the legacy comment formatter to src and
 // reports whether it changed anything.
 func FormatCommentsInSource(src []byte, colLimit, tabStop int,
-	moveInlineAbove bool) ([]byte, bool) {
+	moveInlineAbove bool, mode ...string) ([]byte, bool) {
 
+	commentMode := CommentModeProse
+	if len(mode) > 0 && mode[0] != "" {
+		commentMode = mode[0]
+	}
 	f := NewCommentFormatter(
 		CommentConfig{
 			ColumnLimit:     colLimit,
 			TabStop:         tabStop,
+			Mode:            commentMode,
 			MoveInlineAbove: moveInlineAbove,
 		},
 	)
@@ -156,6 +195,64 @@ func splitIndent(s string) (indent, rest string) {
 	}
 
 	return s[:i], s[i:]
+}
+
+func rawStringStateAfterLine(line string, inRaw bool) bool {
+	for i := 0; i < len(line); i++ {
+		if inRaw {
+			if line[i] == '`' {
+				inRaw = false
+			}
+			continue
+		}
+
+		switch line[i] {
+		case '`':
+			inRaw = true
+
+		case '"', '\'':
+			i = skipQuotedLiteral(line, i)
+
+		case '/':
+			if i+1 >= len(line) {
+				continue
+			}
+			switch line[i+1] {
+			case '/':
+				return inRaw
+
+			case '*':
+				i = skipInlineBlockComment(line, i+2)
+			}
+		}
+	}
+
+	return inRaw
+}
+
+func skipQuotedLiteral(line string, start int) int {
+	quote := line[start]
+	for i := start + 1; i < len(line); i++ {
+		if line[i] == '\\' {
+			i++
+			continue
+		}
+		if line[i] == quote {
+			return i
+		}
+	}
+
+	return len(line) - 1
+}
+
+func skipInlineBlockComment(line string, start int) int {
+	for i := start; i+1 < len(line); i++ {
+		if line[i] == '*' && line[i+1] == '/' {
+			return i + 1
+		}
+	}
+
+	return len(line) - 1
 }
 
 func isStandaloneLineComment(s string) bool {
@@ -269,6 +366,10 @@ func isDirectiveBlockComment(block []string) bool {
 }
 
 func reflowLineCommentBlock(block []string, indent string) []string {
+	if commentModePreservesBlock(block, commentMode) {
+		return block
+	}
+
 	type paraKind int
 	const (
 		paraBlank paraKind = iota
@@ -376,6 +477,9 @@ func reflowBlockComment(block []string, indent string) []string {
 	if len(block) < 2 {
 		return block
 	}
+	if commentModePreservesBlock(block, commentMode) {
+		return block
+	}
 	open := block[0]
 	close := block[len(block)-1]
 
@@ -481,6 +585,112 @@ func reflowBlockComment(block []string, indent string) []string {
 	out = append(out, close)
 
 	return out
+}
+
+func commentModePreservesBlock(block []string, mode string) bool {
+	if mode != CommentModeOverflow {
+		return false
+	}
+	if commentBlockFits(block) {
+		return true
+	}
+
+	return commentBlockLooksPreformatted(block)
+}
+
+func commentBlockFits(block []string) bool {
+	for _, line := range block {
+		if visualLen(line) > columnLimit {
+			return false
+		}
+	}
+
+	return true
+}
+
+func commentBlockLooksPreformatted(block []string) bool {
+	for _, raw := range block {
+		content := commentLineContent(raw)
+		trimmed := strings.TrimSpace(content)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") ||
+			strings.HasPrefix(trimmed, "~~~") {
+
+			return true
+		}
+		if strings.Contains(trimmed, "|") {
+			return true
+		}
+		if strings.Contains(trimmed, "http://") ||
+			strings.Contains(trimmed, "https://") {
+
+			return true
+		}
+		if hasAlignmentSpaces(content) {
+			return true
+		}
+		if startsNumberedList(trimmed) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func commentLineContent(line string) string {
+	_, rest := splitIndent(line)
+	if strings.HasPrefix(rest, "//") {
+		return strings.TrimPrefix(rest, "//")
+	}
+	trimmed := strings.TrimSpace(rest)
+	if strings.HasPrefix(trimmed, "/*") ||
+		strings.HasPrefix(trimmed, "*/") {
+
+		return ""
+	}
+	trimmed = strings.TrimPrefix(trimmed, "*")
+
+	return strings.TrimPrefix(trimmed, " ")
+}
+
+func hasAlignmentSpaces(s string) bool {
+	prevNonSpace := false
+	spaces := 0
+	for _, r := range s {
+		if r == ' ' || r == '\t' {
+			if prevNonSpace {
+				spaces++
+			}
+			continue
+		}
+		if spaces >= 2 {
+			return true
+		}
+		prevNonSpace = true
+		spaces = 0
+	}
+
+	return false
+}
+
+func startsNumberedList(s string) bool {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 || i == len(s) {
+		return false
+	}
+	if s[i] != '.' && s[i] != ')' {
+		return false
+	}
+	if i+1 == len(s) {
+		return true
+	}
+
+	return s[i+1] == ' ' || s[i+1] == '\t'
 }
 
 func reflowWords(text, prefix, contPrefix string) []string {
