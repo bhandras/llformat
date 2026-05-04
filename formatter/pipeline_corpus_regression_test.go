@@ -786,6 +786,91 @@ type Env struct{}
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksCompositeKeyedCallValueAfterKeyOverflow(
+	t *testing.T) {
+
+	const in = `package p
+
+type Handler any
+type InputMessage struct{}
+type OutputMessage struct{}
+
+type Request struct {
+	Short                   int
+	VeryLongNamedFactory    Handler
+	OtherLongConfiguration  string
+}
+
+func MakeProcessor[In, Out any](string, string) Handler {
+	return nil
+}
+
+func f(primary, secondary string) Request {
+	return Request{
+		Short:                  1,
+		VeryLongNamedFactory:   MakeProcessor[InputMessage, OutputMessage](primary, secondary),
+		OtherLongConfiguration: "enabled",
+	}
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "VeryLongNamedFactory: "+
+			"MakeProcessor["+
+			"\n"+
+			"			InputMessage,"+
+			"\n"+
+			"			OutputMessage,"+
+			"\n		](\n			primary, "+
+			"secondary,\n		),",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
+func TestPipelineNext_Corpus_BreaksMultilineCompositeKeyedCallHead(
+	t *testing.T) {
+
+	const in = `package p
+
+type Handler any
+type InputMessage struct{}
+type OutputMessage struct{}
+
+type Request struct {
+	VeryLongNamedFactory Handler
+}
+
+func MakeProcessor[In, Out any](string) Handler {
+	return nil
+}
+
+func f(primary string) Request {
+	return Request{
+		VeryLongNamedFactory: MakeProcessor[InputMessage, OutputMessage](
+			primary,
+		),
+	}
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "VeryLongNamedFactory: "+
+			"MakeProcessor["+
+			"\n"+
+			"			InputMessage,"+
+			"\n"+
+			"			OutputMessage,"+
+			"\n"+
+			"		]("+
+			"\n			primary,\n		),",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestPipelineNext_Corpus_ReservesReturnSuffixForSplitFormatString(
 	t *testing.T) {
 

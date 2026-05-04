@@ -185,6 +185,11 @@ func (p *NodePattern) matchType(n ast.Node) bool {
 
 		return ok
 
+	case "KeyValueExpr":
+		_, ok := n.(*ast.KeyValueExpr)
+
+		return ok
+
 	case "ParenExpr":
 		_, ok := n.(*ast.ParenExpr)
 

@@ -190,8 +190,12 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig,
 			cond := &dsl.IsLogOrPrintfCallCond{
 				Target:                 "node",
 				MatchAnySelectorPrefix: true,
-				SelectorNames:          opts.Style.DSLLogCallsSelectorNames,
-				SelectorPrefixes:       opts.Style.DSLLogCallsSelectorPrefixes,
+				SelectorNames: opts.
+					Style.
+					DSLLogCallsSelectorNames,
+				SelectorPrefixes: opts.
+					Style.
+					DSLLogCallsSelectorPrefixes,
 				IncludeNonFStringCalls: true,
 			}
 
@@ -242,18 +246,20 @@ func buildMultiLineCallStageFormatter(stageName string, cfg BaseConfig,
 
 	return NewDSLExprFormatter(
 		DSLExprConfig{
-			ColumnLimit:       cfg.ColumnLimit,
-			TabStop:           cfg.TabStop,
-			Rules:             bundle.MultiLineCalls.Rules,
-			Trace:             opts.DSL.Trace,
-			TraceReasons:      opts.DSL.TraceReasons,
-			NodeOrder:         bundle.MultiLineCalls.NodeOrder,
-			MaxIterations:     bundle.MultiLineCalls.MaxIterations,
-			AutoMaxIterations: bundle.MultiLineCalls.AutoMaxIterations,
-			DetectCycles:      bundle.MultiLineCalls.DetectCycles,
-			SkipGofmt:         true,
-			StageName:         stageName,
-			Budget:            dslBudgetNext(),
+			ColumnLimit:   cfg.ColumnLimit,
+			TabStop:       cfg.TabStop,
+			Rules:         bundle.MultiLineCalls.Rules,
+			Trace:         opts.DSL.Trace,
+			TraceReasons:  opts.DSL.TraceReasons,
+			NodeOrder:     bundle.MultiLineCalls.NodeOrder,
+			MaxIterations: bundle.MultiLineCalls.MaxIterations,
+			AutoMaxIterations: bundle.
+				MultiLineCalls.
+				AutoMaxIterations,
+			DetectCycles: bundle.MultiLineCalls.DetectCycles,
+			SkipGofmt:    true,
+			StageName:    stageName,
+			Budget:       dslBudgetNext(),
 			OwnedSpansFunc: func(src []byte) llast.OffsetSpanSet {
 				return multilineCallOwnedSpans(src, opts)
 			},

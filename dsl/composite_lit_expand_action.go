@@ -7,6 +7,8 @@ import (
 	"go/printer"
 	"go/token"
 	"strings"
+
+	"github.com/bhandras/llformat/dsl/layout"
 )
 
 // ExpandCompositeLitAction expands a composite literal into a multiline form
@@ -14,6 +16,111 @@ import (
 // composite literal.
 type ExpandCompositeLitAction struct {
 	Target string
+}
+
+// BreakCompositeKeyValueAction breaks the value side of an overlong keyed
+// composite-literal element without expanding the whole literal.
+type BreakCompositeKeyValueAction struct {
+	Target string
+}
+
+// Execute implements Action for BreakCompositeKeyValueAction.
+func (a *BreakCompositeKeyValueAction) Execute(caps Captures, ctx *Context) (
+	[]byte, bool) {
+
+	node := resolveTarget(caps, a.Target)
+	kv, ok := node.(*ast.KeyValueExpr)
+	if !ok || kv == nil || kv.Key == nil || kv.Value == nil {
+		return nil, false
+	}
+
+	if !shouldBreakCompositeKeyValue(kv, ctx) {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(kv.Pos()).Offset
+	end := ctx.Fset.Position(kv.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+
+	orig := string(ctx.Source[start:end])
+	if orig == "" || hasLineComment(orig) || hasBlockComment(orig) {
+
+		return nil, false
+	}
+
+	keyText := renderNode(kv.Key, ctx.Fset)
+	valueText := renderNode(kv.Value, ctx.Fset)
+	if keyText == "" || valueText == "" ||
+		strings.Contains(keyText, "\n") ||
+		strings.Contains(valueText, "\n") ||
+		hasAnyComment(keyText) || hasAnyComment(valueText) {
+
+		return nil, false
+	}
+
+	info, ok := exprDocWithKind(kv.Value, ctx, exprDocKindCallArg)
+	if !ok {
+		return nil, false
+	}
+	valueDoc := info.Doc
+	if info.NeedsContinuationIndent {
+		valueDoc = layout.N("\t", valueDoc)
+	}
+
+	doc := layout.G(
+		layout.C(
+			layout.T(keyText), layout.T(": "),
+			layout.N("\t", valueDoc),
+		),
+	)
+
+	formatted := layout.RenderAt(
+		doc, ctx.ColumnLimit, ctx.TabStop, ctx.IndentAt(kv),
+		prefixWidthAt(ctx.Source, start, ctx.TabStop),
+	)
+	if formatted == "" || formatted == orig ||
+		!strings.Contains(formatted, "\n") {
+
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func shouldBreakCompositeKeyValue(kv *ast.KeyValueExpr, ctx *Context) bool {
+	if kv == nil || ctx == nil {
+		return false
+	}
+
+	if ctx.LineWidth(kv) <= ctx.ColumnLimit {
+		return false
+	}
+
+	if _, ok := kv.Key.(*ast.Ident); !ok {
+		return false
+	}
+
+	if exprContainsCompositeLit(kv.Value) {
+		return false
+	}
+
+	lit, ok := ctx.Parent(kv).(*ast.CompositeLit)
+	if !ok || lit == nil {
+		return false
+	}
+
+	if !isMultilineCompositeLit(lit, ctx) {
+		return false
+	}
+
+	return true
 }
 
 // Execute implements Action for ExpandCompositeLitAction.

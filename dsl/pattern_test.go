@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"testing"
@@ -182,6 +183,23 @@ func TestNodePatternMatchCallExpr(t *testing.T) {
 			},
 		)
 	}
+}
+
+func TestNodePatternMatchKeyValueExpr(t *testing.T) {
+	fset := token.NewFileSet()
+
+	expr, err := parser.ParseExpr("T{Field: MakeValue()}")
+	require.NoError(t, err)
+	lit, ok := expr.(*ast.CompositeLit)
+	require.True(t, ok)
+	require.Len(t, lit.Elts, 1)
+	kv := lit.Elts[0]
+
+	_, ok = (&NodePattern{Type: "KeyValueExpr"}).Match(kv, fset)
+	require.True(t, ok)
+
+	_, ok = (&NodePattern{Type: "CompositeLit"}).Match(kv, fset)
+	require.False(t, ok)
 }
 
 func TestWildcard(t *testing.T) {

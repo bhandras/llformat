@@ -44,9 +44,11 @@ func (p *Pipeline) Plan() PipelinePlan {
 		DSLMultiLineStyle: p.cfg.DSLMultiLineStyle,
 		DSLSigsStyle:      p.cfg.DSLSigsStyle,
 
-		UseDSLFuncSigsNative:          p.cfg.UseDSLFuncSigsNative,
-		UseDSLBlankLinesNative:        p.cfg.UseDSLBlankLinesNative,
-		DSLBlankLinesExtraIfErrReturn: p.cfg.DSLBlankLinesExtraIfErrReturn,
+		UseDSLFuncSigsNative:   p.cfg.UseDSLFuncSigsNative,
+		UseDSLBlankLinesNative: p.cfg.UseDSLBlankLinesNative,
+		DSLBlankLinesExtraIfErrReturn: p.
+			cfg.
+			DSLBlankLinesExtraIfErrReturn,
 
 		DSLExprLogicalStyle:       p.cfg.DSLExprLogicalStyle,
 		DSLExprArithmeticStyle:    p.cfg.DSLExprArithmeticStyle,
