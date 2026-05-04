@@ -615,6 +615,9 @@ func commentBlockLooksPreformatted(block []string) bool {
 		if trimmed == "" {
 			continue
 		}
+		if isCommentRuler(trimmed) {
+			return true
+		}
 		if strings.HasPrefix(trimmed, "```") ||
 			strings.HasPrefix(trimmed, "~~~") {
 
@@ -637,6 +640,26 @@ func commentBlockLooksPreformatted(block []string) bool {
 	}
 
 	return false
+}
+
+func isCommentRuler(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) < 3 {
+		return false
+	}
+
+	count := 0
+	for _, r := range trimmed {
+		if r == ' ' || r == '\t' {
+			continue
+		}
+		if !strings.ContainsRune("-=_*~#.", r) {
+			return false
+		}
+		count++
+	}
+
+	return count >= 3
 }
 
 func commentLineContent(line string) string {
@@ -702,32 +725,32 @@ func reflowWords(text, prefix, contPrefix string) []string {
 	lines := make([]string, 0, 8)
 	cur := prefix
 	curLen := visualLen(prefix)
-	for i, w := range words {
-		need := visualLen(w)
-		if curLen > visualLen(prefix) {
-			need += 1
+	for _, w := range words {
+		wordLen := visualLen(w)
+		prefixLen := visualLen(prefix)
+
+		if curLen > prefixLen {
+			if curLen+1+wordLen <= columnLimit {
+				cur += " " + w
+				curLen += 1 + wordLen
+				continue
+			}
+			lines = append(lines, cur)
+			prefix = contPrefix
+			prefixLen = visualLen(prefix)
 		}
 
-		if curLen+need <= columnLimit {
-			if curLen > visualLen(prefix) {
-				cur += " "
-				curLen++
-			}
-			cur += w
-			curLen += visualLen(w)
-		} else {
-			if curLen > visualLen(prefix) {
-				lines = append(lines, cur)
-			} else {
-				lines = append(lines, prefix+w)
-			}
-			prefix = contPrefix
-			cur = prefix + w
-			curLen = visualLen(prefix) + visualLen(w)
-		}
-		if i == len(words)-1 {
+		cur = prefix + w
+		curLen = prefixLen + wordLen
+		if curLen > columnLimit {
 			lines = append(lines, cur)
+			prefix = contPrefix
+			cur = prefix
+			curLen = visualLen(prefix)
 		}
+	}
+	if curLen > visualLen(prefix) {
+		lines = append(lines, cur)
 	}
 
 	return lines

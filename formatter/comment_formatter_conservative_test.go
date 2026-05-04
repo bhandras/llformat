@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bhandras/llformat/internal/compat"
@@ -79,6 +80,51 @@ func fenced() {}
 	out := f.FormatFile(in)
 
 	require.Equal(t, string(in), string(out))
+}
+
+func TestCommentFormatterOverflowModePreservesPunctuationRulers(t *testing.T) {
+	in := []byte(`package p
+
+type Example struct {
+	// =============================================================================
+	Field string
+}
+`)
+
+	f := compat.NewCommentFormatter(
+		compat.CommentConfig{
+			ColumnLimit: 48,
+			Mode:        compat.CommentModeOverflow,
+		},
+	)
+	out := f.FormatFile(in)
+	out2 := f.FormatFile(out)
+
+	require.Equal(t, string(in), string(out))
+	require.Equal(t, string(out), string(out2))
+}
+
+func TestCommentFormatterOverflowModeEmitsLongWordOnce(t *testing.T) {
+	in := []byte(`package p
+
+// SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious
+func f() {}
+`)
+
+	f := compat.NewCommentFormatter(
+		compat.CommentConfig{
+			ColumnLimit: 40,
+			Mode:        compat.CommentModeOverflow,
+		},
+	)
+	out := string(f.FormatFile(in))
+
+	require.Equal(
+		t, 1, strings.Count(
+			out, "SupercalifragilisticexpialidociousSupercalifra"+
+				"gilisticexpialidocious",
+		),
+	)
 }
 
 func TestCommentFormatterProseModeKeepsLegacyReflow(t *testing.T) {
