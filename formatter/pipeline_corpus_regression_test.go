@@ -1104,6 +1104,34 @@ func f(handler Handler) Config {
 	)
 }
 
+func TestPipelineNext_Corpus_BreaksAssignmentTypeAssertRHS(t *testing.T) {
+
+	const in = `package p
+
+type RuntimeEnvelope[A, B any] struct{}
+type InputEventWithLongName struct{}
+type OutputEventWithLongName struct{}
+
+func f(value any) bool {
+	typedValue, ok := value.(*RuntimeEnvelope[InputEventWithLongName, OutputEventWithLongName])
+	return ok && typedValue != nil
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "typedValue, ok "+
+			":="+
+			"\n"+
+			"		value.(*RuntimeEnvelope["+
+			"\n"+
+			"			InputEventWithLongName,"+
+			"\n			OutputEventWithLongName])",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 

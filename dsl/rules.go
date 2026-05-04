@@ -2080,6 +2080,40 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				},
 			},
 		},
+
+		// Assignment with long type assertion RHS. Calls are handled by
+		// multiline-call rules, but type assertions can only be
+		// shortened by moving the RHS onto a continuation line.
+		{
+			Name: "assignment_with_long_type_assert_rhs",
+			Pattern: &NodePattern{
+				Type: "AssignStmt",
+				Fields: map[string]FieldMatch{
+					"rhs": {
+						Capture: "expr",
+						SubPattern: &NodePattern{
+							Type: "TypeAssertExpr",
+						},
+					},
+				},
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&LineWidthCond{
+						Target: "node",
+						Op:     ">",
+						Value:  0,
+					},
+					&ExprEditSafeCond{
+						Target: "expr",
+					},
+				},
+			},
+			Priority: 31,
+			Action: &BreakAssignRHSAction{
+				Target: "node",
+			},
+		},
 	}
 }
 

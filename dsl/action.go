@@ -541,6 +541,12 @@ type BreakArithmeticChainLayoutAction struct {
 	Target string
 }
 
+// BreakAssignRHSAction moves an overlong single RHS expression onto a
+// continuation line after the assignment operator.
+type BreakAssignRHSAction struct {
+	Target string
+}
+
 // BreakCaseClauseLayoutAction formats a long case clause list (`case A, B, C:`)
 // using the layout engine. It breaks after commas using the standard
 // continuation indentation (`indent + "\t"`).
@@ -1001,6 +1007,110 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures,
 	}
 
 	return out, true
+}
+
+// Execute implements Action for BreakAssignRHSAction.
+func (a *BreakAssignRHSAction) Execute(caps Captures, ctx *Context) ([]byte,
+	bool) {
+
+	node := resolveTarget(caps, a.Target)
+	assign, ok := node.(*ast.AssignStmt)
+	if !ok || assign == nil || ctx == nil || len(assign.Rhs) != 1 {
+		return nil, false
+	}
+	if assign.Tok != token.ASSIGN && assign.Tok != token.DEFINE {
+		return nil, false
+	}
+	if stmtIsControlHeaderInit(ctx, assign) {
+		return nil, false
+	}
+	if ctx.LineWidth(assign) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(assign.Pos()).Offset
+	end := ctx.Fset.Position(assign.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	original := string(ctx.Source[start:end])
+	if strings.Contains(original, "\n") || hasAnyComment(original) {
+		return nil, false
+	}
+
+	rhs := assign.Rhs[0]
+	rhsStart := ctx.Fset.Position(rhs.Pos()).Offset
+	rhsEnd := ctx.Fset.Position(rhs.End()).Offset
+	opStart := ctx.Fset.Position(assign.TokPos).Offset
+	opEnd := opStart + len(assign.Tok.String())
+	if opStart < start || opEnd > rhsStart || rhsEnd > len(ctx.Source) {
+		return nil, false
+	}
+	if strings.TrimSpace(string(ctx.Source[opEnd:rhsStart])) != "" {
+		return nil, false
+	}
+
+	info, ok := exprDocWithKind(rhs, ctx, exprDocKindCallArg)
+	if !ok {
+		return nil, false
+	}
+	doc := info.Doc
+	if info.NeedsContinuationIndent {
+		doc = layout.N("\t", doc)
+	}
+
+	contIndent := ctx.IndentAt(assign) + "\t"
+	formatted := layout.RenderAt(
+		doc, ctx.ColumnLimit, ctx.TabStop, contIndent,
+		visualLen(contIndent, ctx.TabStop),
+	)
+	if formatted == "" {
+		return nil, false
+	}
+
+	prefixStart := lineStart(ctx.Source, opStart)
+	if visualLen(string(ctx.Source[prefixStart:opEnd]), ctx.TabStop) >
+		ctx.ColumnLimit {
+
+		return nil, false
+	}
+
+	replacement := []byte("\n" + contIndent + formatted)
+	if !replacementLinesFit(replacement[1:], ctx.ColumnLimit, ctx.TabStop) {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, opEnd, rhsEnd, replacement)
+	if err != nil {
+		return nil, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
+		return nil, false
+	}
+
+	return out, true
+}
+
+func replacementLinesFit(src []byte, colLimit, tabStop int) bool {
+	for start := 0; start <= len(src); {
+		end := start
+		for end < len(src) && src[end] != '\n' {
+			end++
+		}
+		if visualLen(string(src[start:end]), tabStop) > colLimit {
+			return false
+		}
+		if end == len(src) {
+			return true
+		}
+		start = end + 1
+	}
+
+	return true
 }
 
 // Execute implements Action for BreakCaseClauseLayoutAction.

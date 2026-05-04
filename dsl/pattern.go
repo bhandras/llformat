@@ -180,6 +180,11 @@ func (p *NodePattern) matchType(n ast.Node) bool {
 
 		return ok
 
+	case "TypeAssertExpr":
+		_, ok := n.(*ast.TypeAssertExpr)
+
+		return ok
+
 	case "CompositeLit":
 		_, ok := n.(*ast.CompositeLit)
 
