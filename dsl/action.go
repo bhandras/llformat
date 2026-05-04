@@ -1945,6 +1945,17 @@ type PackedMultiLineCallAction struct {
 	OnlyIfSingleLine bool
 }
 
+// BreakSelectorCallArgsAction breaks only the argument list of a selector call
+// whose callee head should remain flat, such as `make(x).Check(...)`.
+type BreakSelectorCallArgsAction struct {
+	Target string
+
+	// FormatFunc formats a synthetic call whose callee has no parentheses.
+	// This lets us reuse packed call-argument formatting without confusing
+	// lexical call parsers with receiver-call parentheses in the real head.
+	FormatFunc PackedMultiLineFormatFunc
+}
+
 // LegacyOnePerLineCallAction formats generic function calls using the legacy
 // MultiLineCallFormatter style (one argument per line). Unlike AST-based call
 // actions, this action preserves comments inside argument lists because it only
@@ -2239,6 +2250,90 @@ func legacyFormatCallOnePerLine(callBytes []byte, wsIndent string) string {
 	b.WriteString(")")
 
 	return b.String()
+}
+
+// Execute implements Action for BreakSelectorCallArgsAction.
+func (a *BreakSelectorCallArgsAction) Execute(caps Captures, ctx *Context) (
+	[]byte, bool) {
+
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil || len(call.Args) == 0 {
+		return nil, false
+	}
+	if _, ok := call.Fun.(*ast.SelectorExpr); !ok {
+		return nil, false
+	}
+
+	start, end, ok := callSpanOffsets(ctx, call)
+	if !ok {
+		return nil, false
+	}
+	open := ctx.Fset.Position(call.Lparen).Offset
+	close := ctx.Fset.Position(call.Rparen).Offset
+	if open <= start || close < open || close >= len(ctx.Source) {
+		return nil, false
+	}
+
+	original := ctx.Source[start:end]
+	if hasAnyComment(string(original)) ||
+		bytes.Contains(original, []byte("\n")) {
+
+		return nil, false
+	}
+	if ctx.LineWidth(call) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	head := string(ctx.Source[start:open])
+	if !strings.Contains(head, "(") {
+		return nil, false
+	}
+	headLineWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop) +
+		visualLen(head+"(", ctx.TabStop)
+	if headLineWidth > ctx.ColumnLimit {
+		return nil, false
+	}
+
+	const placeholder = "__llformat_selector_call__"
+	argsBody := string(ctx.Source[open+1 : close])
+	synthetic := []byte(placeholder + "(" + argsBody + ")")
+	wsIndent := ctx.IndentAt(call)
+
+	var formattedSynthetic string
+	if a.FormatFunc != nil {
+		formattedSynthetic = a.FormatFunc(
+			synthetic, wsIndent, placeholder, ctx.ColumnLimit,
+			ctx.TabStop,
+		)
+	} else {
+		formattedSynthetic = legacyFormatCallOnePerLine(
+			synthetic, wsIndent,
+		)
+	}
+	if !strings.HasPrefix(formattedSynthetic, placeholder) {
+		return nil, false
+	}
+
+	formatted := head + strings.TrimPrefix(formattedSynthetic, placeholder)
+	if formatted == string(original) {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
+		return nil, false
+	}
+
+	return out, true
 }
 
 // Execute implements Action for PackedMultiLineCallAction.

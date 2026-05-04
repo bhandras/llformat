@@ -986,6 +986,33 @@ func f(ctx context.Context, requestID string, payloadHash string, retry RetryPol
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksSelectorCallArgsWithFlatReceiver(
+	t *testing.T) {
+
+	const in = `package p
+
+type Item struct{}
+type Checker struct{}
+
+func NewChecker(Item) Checker { return Checker{} }
+func (Checker) Check(Item, string, ...any) {}
+
+func f(item Item, primaryValue any, secondaryValue any, tertiaryValue any) {
+	NewChecker(item).Check(item, "message", primaryValue, secondaryValue, tertiaryValue)
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(t, out, "NewChecker(item).Check(\n")
+	require.NotContains(t, out, "NewChecker(\n")
+	require.Contains(
+		t, out, "\n		item, \"message\", primaryValue, "+
+			"secondaryValue, tertiaryValue,\n	)",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
