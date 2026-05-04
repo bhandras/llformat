@@ -109,6 +109,72 @@ func TestGoFilesUnderExcludesDirsAndSuffixes(t *testing.T) {
 	}
 }
 
+func TestApplyProfileAdoptionAddsGeneratedExcludes(t *testing.T) {
+	t.Parallel()
+
+	cfg := reportConfig{
+		Profile:     "adoption",
+		ExcludeDirs: defaultExcludeDirs([]string{"custom"}),
+		ExcludeSuffix: []string{
+			".custom.go",
+		},
+	}
+	if err := applyProfile(&cfg); err != nil {
+		t.Fatalf("applyProfile returned error: %v", err)
+	}
+
+	for _, want := range []string{"custom", "generated", "gen"} {
+		if !containsString(cfg.ExcludeDirs, want) {
+			t.Fatalf(
+				"missing exclude dir %q in %#v", want,
+				cfg.ExcludeDirs,
+			)
+		}
+	}
+	for _, want := range []string{".custom.go", ".pb.go", "_generated.go"} {
+		if !containsString(cfg.ExcludeSuffix, want) {
+			t.Fatalf(
+				"missing exclude suffix %q in %#v", want,
+				cfg.ExcludeSuffix,
+			)
+		}
+	}
+}
+
+func TestApplyProfileAllKeepsExplicitExcludesOnly(t *testing.T) {
+	t.Parallel()
+
+	cfg := reportConfig{
+		Profile:     "all",
+		ExcludeDirs: defaultExcludeDirs(nil),
+		ExcludeSuffix: []string{
+			".custom.go",
+		},
+	}
+	if err := applyProfile(&cfg); err != nil {
+		t.Fatalf("applyProfile returned error: %v", err)
+	}
+
+	if containsString(cfg.ExcludeDirs, "generated") {
+		t.Fatalf(
+			"unexpected generated dir exclude: %#v",
+			cfg.ExcludeDirs,
+		)
+	}
+	if containsString(cfg.ExcludeSuffix, ".pb.go") {
+		t.Fatalf(
+			"unexpected generated suffix exclude: %#v",
+			cfg.ExcludeSuffix,
+		)
+	}
+	if !containsString(cfg.ExcludeSuffix, ".custom.go") {
+		t.Fatalf(
+			"missing explicit suffix exclude: %#v",
+			cfg.ExcludeSuffix,
+		)
+	}
+}
+
 func TestChangedLines(t *testing.T) {
 	t.Parallel()
 
@@ -296,4 +362,14 @@ func equalStrings(a, b []string) bool {
 	}
 
 	return true
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+
+	return false
 }

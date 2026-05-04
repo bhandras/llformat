@@ -48,6 +48,7 @@ type report struct {
 
 type reportConfig struct {
 	LLFormat        string   `json:"llformat"`
+	Profile         string   `json:"profile"`
 	ColumnLimit     int      `json:"column_limit"`
 	TabStop         int      `json:"tab_stop"`
 	CommentMode     string   `json:"comment_mode"`
@@ -161,6 +162,10 @@ func main() {
 		llformatBin = flag.String(
 			"llformat", "./bin/llformat", "path to llformat binary",
 		)
+		profile = flag.String(
+			"profile", "adoption",
+			"diagnostic profile: adoption or all",
+		)
 		col = flag.Int("col", 80, "column limit")
 		tab = flag.Int(
 			"tab", width.DefaultTabStop, "tab stop",
@@ -207,6 +212,7 @@ func main() {
 
 	cfg := reportConfig{
 		LLFormat:        *llformatBin,
+		Profile:         *profile,
 		ColumnLimit:     *col,
 		TabStop:         *tab,
 		CommentMode:     *commentMode,
@@ -214,6 +220,9 @@ func main() {
 		ExcludeDirs:     defaultExcludeDirs(excludeDirs),
 		ExcludeSuffix:   append([]string{}, excludeSuffixes...),
 		MaxCasesPerFile: *maxCasesPerFile,
+	}
+	if err := applyProfile(&cfg); err != nil {
+		fatalf("%v", err)
 	}
 
 	rep, err := buildReport(repos, cfg)
@@ -705,6 +714,60 @@ func defaultExcludeDirs(extra []string) []string {
 	}
 
 	return uniq
+}
+
+func applyProfile(cfg *reportConfig) error {
+	switch cfg.Profile {
+	case "", "adoption":
+		cfg.Profile = "adoption"
+		cfg.ExcludeDirs = mergeStringLists(
+			cfg.ExcludeDirs,
+			[]string{
+				"generated",
+				"gen",
+			},
+		)
+		cfg.ExcludeSuffix = mergeStringLists(
+			cfg.ExcludeSuffix,
+			[]string{
+				".pb.go",
+				".pb.gw.go",
+				".pb.validate.go",
+				".connect.go",
+				".gen.go",
+				"_gen.go",
+				"_generated.go",
+			},
+		)
+
+	case "all":
+
+	default:
+		return fmt.Errorf("unknown --profile %q: want adoption or all",
+			cfg.Profile)
+	}
+
+	return nil
+}
+
+func mergeStringLists(lists ...[]string) []string {
+	var out []string
+	seen := make(map[string]struct{})
+	for _, list := range lists {
+		for _, value := range list {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, value)
+		}
+	}
+
+	return out
 }
 
 func runLLFormat(llformatBin string, col, tabStop int, commentMode string,
@@ -1387,10 +1450,19 @@ func renderSummary(rep report) string {
 		&b, "Generated: `%s`\n\n", rep.GeneratedAt.Format(time.RFC3339),
 	)
 	fmt.Fprintf(&b, "- llformat: `%s`\n", rep.Config.LLFormat)
+	fmt.Fprintf(&b, "- profile: `%s`\n", rep.Config.Profile)
 	fmt.Fprintf(&b, "- column limit: `%d`\n", rep.Config.ColumnLimit)
 	fmt.Fprintf(&b, "- tab stop: `%d`\n", rep.Config.TabStop)
 	fmt.Fprintf(&b, "- comment mode: `%s`\n", rep.Config.CommentMode)
 	fmt.Fprintf(&b, "- redacted: `%t`\n", rep.Config.Redact)
+	fmt.Fprintf(
+		&b, "- exclude dirs: `%s`\n",
+		strings.Join(rep.Config.ExcludeDirs, ", "),
+	)
+	fmt.Fprintf(
+		&b, "- exclude suffixes: `%s`\n",
+		strings.Join(rep.Config.ExcludeSuffix, ", "),
+	)
 	fmt.Fprintf(&b, "- emitted cases: `%d`\n", len(rep.Cases))
 	fmt.Fprintf(&b, "- clusters: `%d`\n\n", len(rep.Clusters))
 

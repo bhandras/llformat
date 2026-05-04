@@ -164,6 +164,9 @@ Key safety rules:
 - In `overflow` mode, do not reflow already-fitting blocks, numbered lists,
   fenced examples, table-like comments, URL-heavy comments, or comments with
   alignment spacing.
+- Treat punctuation-only ruler comments as preformatted/non-prose. They are
+  preserved instead of being word-wrapped, which keeps overflow mode
+  idempotent for hand-drawn separators.
 
 ### 2) Compact calls stage (`compact-calls`)
 

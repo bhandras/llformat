@@ -29,7 +29,7 @@ Goals:
   `gofmt`).
 - **Conservative comments**: wrap overflowing prose comments by default while
   preserving fitting and preformatted comment blocks; never break `//go:`
-  directives, `//nolint`, cgo pragmas, etc.
+  directives, `//nolint`, cgo pragmas, punctuation rulers, etc.
 
 Non-goals:
 
@@ -133,6 +133,20 @@ files into a scratch directory (not committed):
 ```bash
 go run ./tools/gen_next_goldens --out .next_goldens
 ```
+
+### Corpus diagnostics
+
+The corpus checker compares formatting results across one or more repositories
+and writes redacted Markdown/JSON reports:
+
+```bash
+go run ./tools/corpus_check -repo /path/to/repo -out .corpus_reports/latest
+```
+
+By default it uses the `adoption` profile, which keeps the normal safety
+excludes and skips common generated-file suffixes so reports focus on
+hand-maintained source. Use `-profile all` when you intentionally want the
+broader scan.
 
 ## Code Layout
 
