@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,6 +50,8 @@ type reportConfig struct {
 	LLFormat        string   `json:"llformat"`
 	ColumnLimit     int      `json:"column_limit"`
 	TabStop         int      `json:"tab_stop"`
+	CommentMode     string   `json:"comment_mode"`
+	Redact          bool     `json:"redact"`
 	ExcludeDirs     []string `json:"exclude_dirs"`
 	ExcludeSuffix   []string `json:"exclude_suffixes"`
 	MaxCasesPerFile int      `json:"max_cases_per_file"`
@@ -63,6 +66,7 @@ type repoSummary struct {
 	ParseFailuresBefore     int    `json:"parse_failures_before"`
 	ParseFailuresAfter      int    `json:"parse_failures_after"`
 	ASTInequivalentFiles    int    `json:"ast_inequivalent_files"`
+	ASTStructuralDiffFiles  int    `json:"ast_structural_diff_files"`
 	NonIdempotentFiles      int    `json:"non_idempotent_files"`
 	LLFormatFailures        int    `json:"llformat_failures"`
 	OriginalOverflowLines   int    `json:"original_overflow_lines"`
@@ -73,29 +77,31 @@ type repoSummary struct {
 }
 
 type caseRecord struct {
-	ID             string   `json:"id"`
-	Repo           string   `json:"repo"`
-	RepoRoot       string   `json:"repo_root"`
-	File           string   `json:"file"`
-	AbsFile        string   `json:"abs_file"`
-	Kind           string   `json:"kind"`
-	Line           int      `json:"line"`
-	Width          int      `json:"width"`
-	OriginalWidth  int      `json:"original_same_line_width"`
-	ColumnLimit    int      `json:"column_limit"`
-	Text           string   `json:"text"`
-	Syntax         string   `json:"syntax"`
-	ChangedLine    bool     `json:"changed_line"`
-	ParseOKBefore  bool     `json:"parse_ok_before"`
-	ParseOKAfter   bool     `json:"parse_ok_after"`
-	ASTEquivalent  bool     `json:"ast_equivalent"`
-	Idempotent     bool     `json:"idempotent"`
-	EnclosingKind  string   `json:"enclosing_kind"`
-	EnclosingStart int      `json:"enclosing_start_line,omitempty"`
-	EnclosingEnd   int      `json:"enclosing_end_line,omitempty"`
-	NodeKind       string   `json:"node_kind"`
-	NodePath       []string `json:"node_path,omitempty"`
-	ClusterKey     string   `json:"cluster_key"`
+	ID                  string   `json:"id"`
+	Repo                string   `json:"repo"`
+	RepoRoot            string   `json:"repo_root"`
+	File                string   `json:"file"`
+	AbsFile             string   `json:"abs_file"`
+	Kind                string   `json:"kind"`
+	Line                int      `json:"line"`
+	Width               int      `json:"width"`
+	OriginalWidth       int      `json:"original_same_line_width"`
+	ColumnLimit         int      `json:"column_limit"`
+	Text                string   `json:"text"`
+	Syntax              string   `json:"syntax"`
+	ChangedLine         bool     `json:"changed_line"`
+	ParseOKBefore       bool     `json:"parse_ok_before"`
+	ParseOKAfter        bool     `json:"parse_ok_after"`
+	ASTEquivalent       bool     `json:"ast_equivalent"`
+	ASTStrictEquivalent bool     `json:"ast_strict_equivalent"`
+	ASTDiffKind         string   `json:"ast_diff_kind"`
+	Idempotent          bool     `json:"idempotent"`
+	EnclosingKind       string   `json:"enclosing_kind"`
+	EnclosingStart      int      `json:"enclosing_start_line,omitempty"`
+	EnclosingEnd        int      `json:"enclosing_end_line,omitempty"`
+	NodeKind            string   `json:"node_kind"`
+	NodePath            []string `json:"node_path,omitempty"`
+	ClusterKey          string   `json:"cluster_key"`
 }
 
 type cluster struct {
@@ -116,20 +122,22 @@ type overflowLine struct {
 }
 
 type fileAnalysis struct {
-	relPath            string
-	absPath            string
-	original           []byte
-	formatted          []byte
-	changed            bool
-	parseOKBefore      bool
-	parseOKAfter       bool
-	astEquivalent      bool
-	idempotent         bool
-	llformatErr        error
-	originalOverflows  []overflowLine
-	formattedOverflows []overflowLine
-	changedLines       map[int]bool
-	cases              []caseRecord
+	relPath             string
+	absPath             string
+	original            []byte
+	formatted           []byte
+	changed             bool
+	parseOKBefore       bool
+	parseOKAfter        bool
+	astEquivalent       bool
+	astStrictEquivalent bool
+	astDiffKind         string
+	idempotent          bool
+	llformatErr         error
+	originalOverflows   []overflowLine
+	formattedOverflows  []overflowLine
+	changedLines        map[int]bool
+	cases               []caseRecord
 }
 
 type astContext struct {
@@ -156,6 +164,14 @@ func main() {
 		col = flag.Int("col", 80, "column limit")
 		tab = flag.Int(
 			"tab", width.DefaultTabStop, "tab stop",
+		)
+		commentMode = flag.String(
+			"comments", "overflow",
+			"comment formatting mode to pass to llformat",
+		)
+		redact = flag.Bool(
+			"redact", true,
+			"redact repo names, paths, and source text in reports",
 		)
 		maxCasesPerFile = flag.Int(
 			"max-cases-per-file", 20,
@@ -193,6 +209,8 @@ func main() {
 		LLFormat:        *llformatBin,
 		ColumnLimit:     *col,
 		TabStop:         *tab,
+		CommentMode:     *commentMode,
+		Redact:          *redact,
 		ExcludeDirs:     defaultExcludeDirs(excludeDirs),
 		ExcludeSuffix:   append([]string{}, excludeSuffixes...),
 		MaxCasesPerFile: *maxCasesPerFile,
@@ -241,6 +259,9 @@ func buildReport(repos []string, cfg reportConfig) (report, error) {
 		rep.Cases = append(rep.Cases, cases...)
 	}
 
+	if cfg.Redact {
+		redactReport(&rep)
+	}
 	rep.Clusters = buildClusters(rep.Cases, cfg.ColumnLimit)
 
 	return rep, nil
@@ -299,7 +320,8 @@ func analyzeFile(root, path string, cfg reportConfig) fileAnalysis {
 	)
 
 	formatted, err := runLLFormat(
-		cfg.LLFormat, cfg.ColumnLimit, cfg.TabStop, path,
+		cfg.LLFormat, cfg.ColumnLimit, cfg.TabStop, cfg.CommentMode,
+		path,
 	)
 	if err != nil {
 		analysis.llformatErr = err
@@ -313,7 +335,10 @@ func analyzeFile(root, path string, cfg reportConfig) fileAnalysis {
 		formatted, cfg.ColumnLimit, cfg.TabStop,
 	)
 	analysis.changedLines = changedLines(original, formatted, 0)
-	analysis.astEquivalent = astEquivalent(original, formatted)
+	analysis.astStrictEquivalent, analysis.astEquivalent,
+		analysis.astDiffKind = classifyASTDiff(
+		original, formatted,
+	)
 	analysis.idempotent = checkIdempotent(formatted, cfg)
 	analysis.cases = casesForFile(root, analysis, cfg)
 
@@ -335,8 +360,11 @@ func accumulateSummary(summary *repoSummary, analysis fileAnalysis) {
 	if !analysis.parseOKAfter {
 		summary.ParseFailuresAfter++
 	}
-	if !analysis.astEquivalent {
+	if !analysis.astStrictEquivalent {
 		summary.ASTInequivalentFiles++
+	}
+	if analysis.astDiffKind == "structural" {
+		summary.ASTStructuralDiffFiles++
 	}
 	if !analysis.idempotent {
 		summary.NonIdempotentFiles++
@@ -383,27 +411,29 @@ func casesForFile(root string, analysis fileAnalysis,
 			ID: caseID(
 				repoName, analysis.relPath, ov.Line, ov.Text,
 			),
-			Repo:           repoName,
-			RepoRoot:       root,
-			File:           analysis.relPath,
-			AbsFile:        analysis.absPath,
-			Kind:           kind,
-			Line:           ov.Line,
-			Width:          ov.Width,
-			OriginalWidth:  origWidth,
-			ColumnLimit:    cfg.ColumnLimit,
-			Text:           ov.Text,
-			Syntax:         syntax,
-			ChangedLine:    changed,
-			ParseOKBefore:  analysis.parseOKBefore,
-			ParseOKAfter:   analysis.parseOKAfter,
-			ASTEquivalent:  analysis.astEquivalent,
-			Idempotent:     analysis.idempotent,
-			EnclosingKind:  ac.EnclosingKind,
-			EnclosingStart: ac.EnclosingStart,
-			EnclosingEnd:   ac.EnclosingEnd,
-			NodeKind:       ac.NodeKind,
-			NodePath:       ac.NodePath,
+			Repo:                repoName,
+			RepoRoot:            root,
+			File:                analysis.relPath,
+			AbsFile:             analysis.absPath,
+			Kind:                kind,
+			Line:                ov.Line,
+			Width:               ov.Width,
+			OriginalWidth:       origWidth,
+			ColumnLimit:         cfg.ColumnLimit,
+			Text:                ov.Text,
+			Syntax:              syntax,
+			ChangedLine:         changed,
+			ParseOKBefore:       analysis.parseOKBefore,
+			ParseOKAfter:        analysis.parseOKAfter,
+			ASTEquivalent:       analysis.astEquivalent,
+			ASTStrictEquivalent: analysis.astStrictEquivalent,
+			ASTDiffKind:         analysis.astDiffKind,
+			Idempotent:          analysis.idempotent,
+			EnclosingKind:       ac.EnclosingKind,
+			EnclosingStart:      ac.EnclosingStart,
+			EnclosingEnd:        ac.EnclosingEnd,
+			NodeKind:            ac.NodeKind,
+			NodePath:            ac.NodePath,
 		}
 		rec.ClusterKey = clusterKey(rec)
 		cases = append(cases, rec)
@@ -661,12 +691,13 @@ func defaultExcludeDirs(extra []string) []string {
 	return uniq
 }
 
-func runLLFormat(llformatBin string, col, tabStop int,
+func runLLFormat(llformatBin string, col, tabStop int, commentMode string,
 	path string) ([]byte, error) {
 
 	cmd := exec.Command(
 		llformatBin, "--col", strconv.Itoa(col),
-		"--tab", strconv.Itoa(tabStop), path,
+		"--tab", strconv.Itoa(tabStop),
+		"--comments", commentMode, path,
 	)
 	out, err := cmd.Output()
 	if err == nil {
@@ -690,12 +721,38 @@ func parseOK(src []byte) bool {
 	return err == nil
 }
 
+func classifyASTDiff(before, after []byte) (strictEquivalent bool,
+	safeEquivalent bool, kind string) {
+
+	if astEquivalent(before, after) {
+		return true, true, "none"
+	}
+	if astEquivalentFoldedStringConcat(before, after) {
+		return false, true, "string_const_rewrite"
+	}
+
+	return false, false, "structural"
+}
+
 func astEquivalent(before, after []byte) bool {
 	a, err := canonicalASTDump(before)
 	if err != nil {
 		return false
 	}
 	b, err := canonicalASTDump(after)
+	if err != nil {
+		return false
+	}
+
+	return a == b
+}
+
+func astEquivalentFoldedStringConcat(before, after []byte) bool {
+	a, err := canonicalASTDumpFoldedStringConcat(before)
+	if err != nil {
+		return false
+	}
+	b, err := canonicalASTDumpFoldedStringConcat(after)
 	if err != nil {
 		return false
 	}
@@ -720,6 +777,145 @@ func canonicalASTDump(src []byte) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+func canonicalASTDumpFoldedStringConcat(src []byte) (string, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(
+		fset, "in.go", src, parser.AllErrors|parser.ParseComments,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	stripASTMetadata(file)
+	normalizeStringConcatInAST(file)
+
+	var b bytes.Buffer
+	if err := format.Node(&b, token.NewFileSet(), file); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
+}
+
+func normalizeStringConcatInAST(v any) {
+	normalizeValue(reflect.ValueOf(v))
+}
+
+func normalizeValue(v reflect.Value) {
+	if !v.IsValid() {
+		return
+	}
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			f := v.Field(i)
+			if !f.CanSet() && f.Kind() != reflect.Pointer &&
+				f.Kind() != reflect.Interface &&
+				f.Kind() != reflect.Slice &&
+				f.Kind() != reflect.Struct {
+
+				continue
+			}
+			if f.CanSet() && f.Type().Implements(exprType) {
+				if expr, ok := f.Interface().(ast.Expr); ok {
+					f.Set(
+						reflect.ValueOf(
+							normalizeExpr(expr),
+						),
+					)
+				}
+				continue
+			}
+			normalizeValue(f)
+		}
+
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			item := v.Index(i)
+			if item.CanSet() && item.Type().Implements(exprType) {
+				if expr, ok := item.Interface().(ast.Expr); ok {
+					item.Set(
+						reflect.ValueOf(
+							normalizeExpr(expr),
+						),
+					)
+				}
+				continue
+			}
+			normalizeValue(item)
+		}
+	}
+}
+
+var exprType = reflect.TypeOf((*ast.Expr)(nil)).Elem()
+
+func normalizeExpr(expr ast.Expr) ast.Expr {
+	if expr == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(expr)
+	if !rv.IsValid() || (rv.Kind() == reflect.Pointer && rv.IsNil()) {
+		return expr
+	}
+	normalizeValue(reflect.ValueOf(expr))
+	if text, ok := flattenStringConstExpr(expr); ok {
+		return &ast.BasicLit{
+			Kind:  token.STRING,
+			Value: strconv.Quote(text),
+		}
+	}
+
+	return expr
+}
+
+func flattenStringConstExpr(expr ast.Expr) (string, bool) {
+	if expr == nil {
+		return "", false
+	}
+	rv := reflect.ValueOf(expr)
+	if !rv.IsValid() || (rv.Kind() == reflect.Pointer && rv.IsNil()) {
+		return "", false
+	}
+	switch e := expr.(type) {
+	case *ast.BasicLit:
+		if e.Kind != token.STRING {
+			return "", false
+		}
+		text, err := strconv.Unquote(e.Value)
+		if err != nil {
+			return "", false
+		}
+
+		return text, true
+
+	case *ast.ParenExpr:
+		return flattenStringConstExpr(e.X)
+
+	case *ast.BinaryExpr:
+		if e.Op != token.ADD {
+			return "", false
+		}
+		left, ok := flattenStringConstExpr(e.X)
+		if !ok {
+			return "", false
+		}
+		right, ok := flattenStringConstExpr(e.Y)
+		if !ok {
+			return "", false
+		}
+
+		return left + right, true
+	}
+
+	return "", false
 }
 
 func stripASTMetadata(node ast.Node) {
@@ -780,7 +976,8 @@ func checkIdempotent(src []byte, cfg reportConfig) bool {
 		return false
 	}
 	out, err := runLLFormat(
-		cfg.LLFormat, cfg.ColumnLimit, cfg.TabStop, tmp.Name(),
+		cfg.LLFormat, cfg.ColumnLimit, cfg.TabStop, cfg.CommentMode,
+		tmp.Name(),
 	)
 	if err != nil {
 		return false
@@ -1065,6 +1262,69 @@ func caseID(repo, file string, line int, text string) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
+func redactReport(rep *report) {
+	repoNames := make(map[string]string, len(rep.Repos))
+	for i := range rep.Repos {
+		redacted := fmt.Sprintf("repo%d", i+1)
+		repoNames[rep.Repos[i].Name] = redacted
+		rep.Repos[i].Name = redacted
+		rep.Repos[i].Root = ""
+	}
+
+	fileNames := make(map[string]string)
+	nextFile := 1
+	for i := range rep.Cases {
+		c := &rep.Cases[i]
+		if name, ok := repoNames[c.Repo]; ok {
+			c.Repo = name
+		}
+		c.RepoRoot = ""
+		c.AbsFile = ""
+		fileKey := c.Repo + "\x00" + c.File
+		redactedFile, ok := fileNames[fileKey]
+		if !ok {
+			redactedFile = fmt.Sprintf("file_%04d.go", nextFile)
+			nextFile++
+			fileNames[fileKey] = redactedFile
+		}
+		c.File = redactedFile
+		c.Text = redactSourceShape(c.Text)
+		c.ID = caseID(c.Repo, c.File, c.Line, c.Text)
+		c.ClusterKey = clusterKey(*c)
+	}
+}
+
+func redactSourceShape(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteByte('a')
+
+		case r >= 'A' && r <= 'Z':
+			b.WriteByte('A')
+
+		case r >= '0' && r <= '9':
+			b.WriteByte('0')
+
+		case r == '_' || r == '-':
+			b.WriteRune(r)
+
+		case r == '\t' || r == ' ':
+			b.WriteRune(r)
+
+		case r == '"' || r == '`' || r == '\'':
+			b.WriteRune(r)
+
+		default:
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
+}
+
 func writeReport(outDir string, rep report) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return err
@@ -1113,6 +1373,8 @@ func renderSummary(rep report) string {
 	fmt.Fprintf(&b, "- llformat: `%s`\n", rep.Config.LLFormat)
 	fmt.Fprintf(&b, "- column limit: `%d`\n", rep.Config.ColumnLimit)
 	fmt.Fprintf(&b, "- tab stop: `%d`\n", rep.Config.TabStop)
+	fmt.Fprintf(&b, "- comment mode: `%s`\n", rep.Config.CommentMode)
+	fmt.Fprintf(&b, "- redacted: `%t`\n", rep.Config.Redact)
 	fmt.Fprintf(&b, "- emitted cases: `%d`\n", len(rep.Cases))
 	fmt.Fprintf(&b, "- clusters: `%d`\n\n", len(rep.Clusters))
 
@@ -1120,21 +1382,23 @@ func renderSummary(rep report) string {
 	fmt.Fprintf(
 		&b, "| repo | files | changed | case files | before ov | "+
 			"after ov | new ov | changed ov | parse after fail "+
-			"| AST diff | non-idem | llformat fail |\n",
+			"| AST diff | structural diff | non-idem | "+
+			"llformat fail |\n",
 	)
 	fmt.Fprintf(
 		&b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | "+
-			"---: | ---: | ---: | ---: | ---: |\n",
+			"---: | ---: | ---: | ---: | ---: | ---: |\n",
 	)
 	for _, r := range rep.Repos {
 		fmt.Fprintf(
 			&b, "| `%s` | %d | %d | %d | %d | %d | %d | %d | %d "+
-				"| %d | %d | %d |\n", r.Name, r.FilesTotal,
+				"| %d | %d | %d | %d |\n", r.Name, r.FilesTotal,
 			r.FilesChanged, r.FilesWithCases,
 			r.OriginalOverflowLines, r.FormattedOverflowLines,
 			r.NewOverflowLines, r.ChangedOverflowLines,
 			r.ParseFailuresAfter, r.ASTInequivalentFiles,
-			r.NonIdempotentFiles, r.LLFormatFailures,
+			r.ASTStructuralDiffFiles, r.NonIdempotentFiles,
+			r.LLFormatFailures,
 		)
 	}
 
