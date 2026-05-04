@@ -2114,6 +2114,25 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 				Target: "node",
 			},
 		},
+
+		// Value spec with a long generic conversion value. This covers
+		// compile-time interface assertions such as:
+		// var _ Interface[T, U] = (*Concrete[T, U])(nil)
+		{
+			Name: "value_spec_with_long_generic_conversion",
+			Pattern: &NodePattern{
+				Type: "ValueSpec",
+			},
+			When: &LineWidthCond{
+				Target: "node",
+				Op:     ">",
+				Value:  0,
+			},
+			Priority: 30,
+			Action: &BreakValueSpecGenericConversionAction{
+				Target: "node",
+			},
+		},
 	}
 }
 

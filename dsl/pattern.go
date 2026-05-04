@@ -210,6 +210,11 @@ func (p *NodePattern) matchType(n ast.Node) bool {
 
 		return ok
 
+	case "ValueSpec":
+		_, ok := n.(*ast.ValueSpec)
+
+		return ok
+
 	case "FuncType":
 		_, ok := n.(*ast.FuncType)
 

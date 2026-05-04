@@ -547,6 +547,12 @@ type BreakAssignRHSAction struct {
 	Target string
 }
 
+// BreakValueSpecGenericConversionAction breaks the type-argument list in a
+// generic conversion value inside an overlong var declaration.
+type BreakValueSpecGenericConversionAction struct {
+	Target string
+}
+
 // BreakCaseClauseLayoutAction formats a long case clause list (`case A, B, C:`)
 // using the layout engine. It breaks after commas using the standard
 // continuation indentation (`indent + "\t"`).
@@ -1111,6 +1117,137 @@ func replacementLinesFit(src []byte, colLimit, tabStop int) bool {
 	}
 
 	return true
+}
+
+// Execute implements Action for BreakValueSpecGenericConversionAction.
+func (a *BreakValueSpecGenericConversionAction) Execute(caps Captures,
+	ctx *Context) ([]byte, bool) {
+
+	node := resolveTarget(caps, a.Target)
+	spec, ok := node.(*ast.ValueSpec)
+	if !ok || spec == nil || ctx == nil || len(spec.Values) != 1 {
+		return nil, false
+	}
+	if ctx.LineWidth(spec) <= ctx.ColumnLimit {
+		return nil, false
+	}
+
+	specStart := ctx.Fset.Position(spec.Pos()).Offset
+	specEnd := ctx.Fset.Position(spec.End()).Offset
+	if specStart < 0 || specEnd > len(ctx.Source) || specStart >= specEnd {
+		return nil, false
+	}
+	original := string(ctx.Source[specStart:specEnd])
+	if strings.Contains(original, "\n") || hasAnyComment(original) {
+		return nil, false
+	}
+
+	idx, ok := genericConversionIndexList(spec.Values[0])
+	if !ok {
+		return nil, false
+	}
+	start := ctx.Fset.Position(idx.Pos()).Offset
+	end := ctx.Fset.Position(idx.End()).Offset
+	if start < specStart || end > specEnd || start >= end {
+		return nil, false
+	}
+
+	formatted, ok := formatGenericIndexListForDecl(
+		idx, ctx.IndentAt(spec), ctx,
+	)
+	if !ok {
+		return nil, false
+	}
+	if formatted == string(ctx.Source[start:end]) {
+		return nil, false
+	}
+
+	affectedStart := lineStart(ctx.Source, start)
+	affectedEnd := lineEnd(ctx.Source, end)
+	if affectedEnd < affectedStart || affectedEnd > len(ctx.Source) {
+		return nil, false
+	}
+	var affected bytes.Buffer
+	affected.Write(ctx.Source[affectedStart:start])
+	affected.WriteString(formatted)
+	affected.Write(ctx.Source[end:affectedEnd])
+	if !replacementLinesFit(
+		affected.Bytes(), ctx.ColumnLimit, ctx.TabStop,
+	) {
+
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
+		return nil, false
+	}
+
+	return out, true
+}
+
+func genericConversionIndexList(expr ast.Expr) (*ast.IndexListExpr, bool) {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok || call == nil || call.Fun == nil {
+		return nil, false
+	}
+
+	fun := call.Fun
+	if paren, ok := fun.(*ast.ParenExpr); ok {
+		fun = paren.X
+	}
+	if star, ok := fun.(*ast.StarExpr); ok {
+		fun = star.X
+	}
+
+	idx, ok := fun.(*ast.IndexListExpr)
+	if !ok || idx == nil || len(idx.Indices) < 2 {
+		return nil, false
+	}
+
+	return idx, true
+}
+
+func formatGenericIndexListForDecl(idx *ast.IndexListExpr, indent string,
+	ctx *Context) (string, bool) {
+
+	if idx == nil || idx.X == nil || len(idx.Indices) < 2 {
+		return "", false
+	}
+
+	base := renderNode(idx.X, ctx.Fset)
+	if base == "" || strings.Contains(base, "\n") || hasAnyComment(base) {
+		return "", false
+	}
+
+	typeIndent := indent + "\t"
+	var out strings.Builder
+	out.WriteString(base)
+	out.WriteString("[\n")
+	for i, index := range idx.Indices {
+		indexText := renderNode(index, ctx.Fset)
+		if indexText == "" || strings.Contains(indexText, "\n") ||
+			hasAnyComment(indexText) {
+
+			return "", false
+		}
+		out.WriteString(typeIndent)
+		out.WriteString(indexText)
+		if i < len(idx.Indices)-1 {
+			out.WriteByte(',')
+			out.WriteByte('\n')
+		}
+	}
+	out.WriteByte(']')
+
+	return out.String(), true
 }
 
 // Execute implements Action for BreakCaseClauseLayoutAction.

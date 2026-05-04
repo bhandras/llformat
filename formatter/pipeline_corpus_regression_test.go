@@ -1132,6 +1132,26 @@ func f(value any) bool {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksValueSpecGenericConversion(t *testing.T) {
+
+	const in = `package p
+
+type VeryLongInterfaceName[A, B any] interface{}
+type VeryLongConcreteTypeName[A, B any] struct{}
+type VeryLongTypeName struct{}
+
+var _ VeryLongInterfaceName[VeryLongTypeName, any] = (*VeryLongConcreteTypeName[VeryLongTypeName, any])(nil)
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "(*VeryLongConcreteTypeName["+
+			"\n	VeryLongTypeName,\n	any])(nil)",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
