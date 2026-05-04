@@ -118,7 +118,8 @@ func f() {
 	// Keep an inline comment inside args; argument rewrites should avoid
 	// dropping it.
 	_ = outerFunctionNameThatIsVeryLong(
-		firstConditionThatIsVeryLong && secondConditionThatIsVeryLong, // keep me
+		// keep me
+		firstConditionThatIsVeryLong && secondConditionThatIsVeryLong,
 		thirdConditionThatIsVeryLong || fourthConditionThatIsVeryLong,
 	)
 }

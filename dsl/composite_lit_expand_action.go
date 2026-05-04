@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bhandras/llformat/dsl/layout"
+	llscanner "github.com/bhandras/llformat/scanner"
 )
 
 // ExpandCompositeLitAction expands a composite literal into a multiline form
@@ -22,6 +23,178 @@ type ExpandCompositeLitAction struct {
 // composite-literal element without expanding the whole literal.
 type BreakCompositeKeyValueAction struct {
 	Target string
+}
+
+// MoveCompositeTrailingCommentAction moves an overflowing trailing line comment
+// above a multiline composite literal element when both resulting lines fit.
+type MoveCompositeTrailingCommentAction struct {
+	Target string
+}
+
+// Execute implements Action for MoveCompositeTrailingCommentAction.
+func (a *MoveCompositeTrailingCommentAction) Execute(caps Captures,
+	ctx *Context) ([]byte, bool) {
+
+	node := resolveTarget(caps, a.Target)
+	lit, ok := node.(*ast.CompositeLit)
+	if !ok || lit == nil || ctx == nil {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(lit.Pos()).Offset
+	end := ctx.Fset.Position(lit.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+	if !bytes.Contains(ctx.Source[start:end], []byte("\n")) {
+		return nil, false
+	}
+
+	editStart, editEnd, replacement, ok := compositeTrailingCommentEdit(
+		ctx, start, end,
+	)
+	if !ok {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, editStart, editEnd, replacement)
+	if err != nil {
+		return nil, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
+		return nil, false
+	}
+
+	return out, true
+}
+
+func compositeTrailingCommentEdit(ctx *Context, start, end int) (int, int,
+	[]byte, bool) {
+
+	for lineStartIdx := lineStart(ctx.Source, start); lineStartIdx < end; {
+		lineEndIdx := lineEnd(ctx.Source, lineStartIdx)
+		if lineEndIdx <= start {
+			lineStartIdx = nextLineStart(
+				lineEndIdx, len(ctx.Source),
+			)
+			continue
+		}
+		if lineStartIdx >= end {
+			break
+		}
+
+		line := string(ctx.Source[lineStartIdx:lineEndIdx])
+		if visualLen(line, ctx.TabStop) <= ctx.ColumnLimit {
+			lineStartIdx = nextLineStart(
+				lineEndIdx, len(ctx.Source),
+			)
+			continue
+		}
+
+		commentIdx := trailingLineCommentIndex(line)
+		if commentIdx < 0 {
+			lineStartIdx = nextLineStart(
+				lineEndIdx, len(ctx.Source),
+			)
+			continue
+		}
+
+		code := strings.TrimRight(line[:commentIdx], " \t")
+		if !strings.HasSuffix(strings.TrimSpace(code), ",") {
+			lineStartIdx = nextLineStart(
+				lineEndIdx, len(ctx.Source),
+			)
+			continue
+		}
+
+		comment := strings.TrimSpace(line[commentIdx:])
+		if isDirectiveLikeLineComment(comment) {
+			lineStartIdx = nextLineStart(
+				lineEndIdx, len(ctx.Source),
+			)
+			continue
+		}
+
+		indent := lineLeadingWhitespace(line)
+		commentLine := indent + comment
+		if visualLen(code, ctx.TabStop) > ctx.ColumnLimit ||
+			visualLen(commentLine, ctx.TabStop) > ctx.ColumnLimit {
+
+			lineStartIdx = nextLineStart(
+				lineEndIdx, len(ctx.Source),
+			)
+			continue
+		}
+
+		replacement := []byte(commentLine + "\n" + code)
+
+		return lineStartIdx, lineEndIdx, replacement, true
+	}
+
+	return 0, 0, nil, false
+}
+
+func nextLineStart(lineEndIdx, srcLen int) int {
+	if lineEndIdx < srcLen {
+		return lineEndIdx + 1
+	}
+
+	return lineEndIdx
+}
+
+func lineLeadingWhitespace(line string) string {
+	for i := 0; i < len(line); i++ {
+		if line[i] != ' ' && line[i] != '\t' {
+			return line[:i]
+		}
+	}
+
+	return line
+}
+
+func trailingLineCommentIndex(line string) int {
+	src := []byte(line)
+	for i := 0; i < len(src); {
+		switch {
+		case llscanner.IsStringStart(src, i):
+			i = llscanner.ScanString(src, i)
+
+		case llscanner.IsLineCommentStart(src, i):
+			return i
+
+		case llscanner.IsBlockCommentStart(src, i):
+			i = llscanner.ScanBlockComment(src, i)
+
+		default:
+			i++
+		}
+	}
+
+	return -1
+}
+
+func isDirectiveLikeLineComment(comment string) bool {
+	rest := strings.TrimSpace(comment)
+	lower := strings.ToLower(rest)
+
+	return strings.HasPrefix(rest, "//go:") ||
+		strings.HasPrefix(rest, "// +build") ||
+		strings.HasPrefix(rest, "//+build") ||
+		strings.HasPrefix(rest, "//line") ||
+		strings.HasPrefix(rest, "//export") ||
+		strings.Contains(lower, "nolint") ||
+		strings.HasPrefix(lower, "//lint:") ||
+		strings.HasPrefix(lower, "// lint:") ||
+		strings.HasPrefix(lower, "//staticcheck:") ||
+		strings.HasPrefix(lower, "// staticcheck:") ||
+		strings.HasPrefix(lower, "//gosec:") ||
+		strings.HasPrefix(lower, "// gosec:") ||
+		strings.HasPrefix(lower, "//revive:") ||
+		strings.HasPrefix(lower, "// revive:")
 }
 
 // Execute implements Action for BreakCompositeKeyValueAction.

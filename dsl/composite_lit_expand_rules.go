@@ -4,6 +4,17 @@ package dsl
 // a multiline form when needed.
 func ExpandCompositeLitRules() []Rule {
 	rules := BreakCompositeKeyValueRules()
+	rules = append(rules, Rule{
+		Name: "move_composite_trailing_comment",
+		Pattern: &NodePattern{
+			Type: "CompositeLit",
+		},
+		When:     TrueCond{},
+		Priority: 27,
+		Action: &MoveCompositeTrailingCommentAction{
+			Target: "node",
+		},
+	})
 
 	return append(rules, Rule{
 		Name: "expand_composite_lit",

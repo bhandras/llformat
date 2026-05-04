@@ -1013,6 +1013,97 @@ func f(item Item, primaryValue any, secondaryValue any, tertiaryValue any) {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksGenericCompositeLiteralHead(t *testing.T) {
+
+	const in = `package p
+
+type Result[A, B, C any] struct {
+	Value int
+}
+type InputEventWithLongName struct{}
+type OutputEventWithLongName struct{}
+type RuntimeEnvironmentWithLongName struct{}
+
+func f() *Result[InputEventWithLongName, OutputEventWithLongName, *RuntimeEnvironmentWithLongName] {
+	return &Result[InputEventWithLongName, OutputEventWithLongName, *RuntimeEnvironmentWithLongName]{
+		Value: 1,
+	}
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(t, out, "return &Result[\n")
+	require.Contains(
+		t, out, "\n"+
+			"		InputEventWithLongName,"+
+			"\n"+
+			"		OutputEventWithLongName,"+
+			"\n"+
+			"		*RuntimeEnvironmentWithLongName,"+
+			"\n	]{",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
+func TestPipelineNext_Corpus_MovesCompositeTrailingComment(t *testing.T) {
+
+	const in = `package p
+
+type Handler struct{}
+type Config struct {
+	PrimaryDeliveryRouteForDelayedMessages Handler
+	RetryLimit                             int
+}
+
+func f(handler Handler) Config {
+	return Config{
+		PrimaryDeliveryRouteForDelayedMessages: handler, // Used when delayed messages have no route.
+		RetryLimit: 3,
+	}
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "return Config{\n		// Used when "+
+			"delayed messages have no "+
+			"route."+
+			"\n"+
+			"		PrimaryDeliveryRouteForDelayedMessa"+
+			"ges: handler,",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
+func TestPipelineNext_Corpus_DoesNotMoveCompositeDirectiveComment(
+	t *testing.T) {
+
+	const in = `package p
+
+type Handler struct{}
+type Config struct {
+	PrimaryDeliveryRouteForDelayedMessages Handler
+	RetryLimit                             int
+}
+
+func f(handler Handler) Config {
+	return Config{
+		PrimaryDeliveryRouteForDelayedMessages: handler, //nolint:keepinline
+		RetryLimit: 3,
+	}
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "PrimaryDeliveryRouteForDelayedMessages: handler, "+
+			"//nolint:keepinline",
+	)
+}
+
 func formatWithDefaultNext(t *testing.T, in string) string {
 	t.Helper()
 
