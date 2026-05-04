@@ -149,6 +149,15 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 		return nil, false
 	}
 
+	if strings.Contains(orig, "\n") {
+		if out, changed := breakCompositeLitTypeArgs(
+			lit, ctx,
+		); changed {
+
+			return out, true
+		}
+	}
+
 	// Only expand when it helps: either the literal participates in a line
 	// that exceeds the limit, or it's nested inside a multiline composite
 	// literal.
@@ -266,6 +275,12 @@ func formatCompositeLitMultiline(lit *ast.CompositeLit, ctx *Context) string {
 		_ = printer.Fprint(&typeBuf, ctx.Fset, lit.Type)
 	}
 	typeText := strings.TrimSpace(typeBuf.String())
+	if formattedType, ok := formatCompositeLitTypeArgs(
+		lit, typeText, wsIndent, ctx,
+	); ok {
+
+		typeText = formattedType
+	}
 
 	open := "{"
 	if typeText != "" {
@@ -294,6 +309,99 @@ func formatCompositeLitMultiline(lit *ast.CompositeLit, ctx *Context) string {
 	out.WriteString("}")
 
 	return out.String()
+}
+
+func breakCompositeLitTypeArgs(lit *ast.CompositeLit,
+	ctx *Context) ([]byte, bool) {
+
+	if lit == nil || lit.Type == nil || ctx == nil {
+		return nil, false
+	}
+
+	typeStart := ctx.Fset.Position(lit.Type.Pos()).Offset
+	typeEnd := ctx.Fset.Position(lit.Type.End()).Offset
+	if typeStart < 0 || typeEnd > len(ctx.Source) || typeStart >= typeEnd {
+		return nil, false
+	}
+
+	typeText := string(ctx.Source[typeStart:typeEnd])
+	formattedType, ok := formatCompositeLitTypeArgs(
+		lit, typeText, ctx.IndentAt(lit), ctx,
+	)
+	if !ok {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(
+		ctx.Source, typeStart, typeEnd, []byte(formattedType),
+	)
+	if err != nil {
+		return nil, false
+	}
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(
+		fset, "out.go", out, parser.AllErrors,
+	); err != nil {
+
+		return nil, false
+	}
+
+	return out, true
+}
+
+func formatCompositeLitTypeArgs(lit *ast.CompositeLit, typeText,
+	wsIndent string, ctx *Context) (string, bool) {
+
+	if lit == nil || lit.Type == nil || typeText == "" ||
+		strings.Contains(typeText, "\n") || hasAnyComment(typeText) {
+
+		return "", false
+	}
+
+	idx, ok := lit.Type.(*ast.IndexListExpr)
+	if !ok || len(idx.Indices) < 2 {
+		return "", false
+	}
+
+	start := ctx.Fset.Position(lit.Pos()).Offset
+	if start < 0 || start > len(ctx.Source) {
+		return "", false
+	}
+	headWidth := prefixWidthAt(ctx.Source, start, ctx.TabStop) +
+		visualLen(typeText+"{", ctx.TabStop)
+	if headWidth <= ctx.ColumnLimit {
+		return "", false
+	}
+
+	base := renderNode(idx.X, ctx.Fset)
+	if base == "" || strings.Contains(base, "\n") || hasAnyComment(base) {
+		return "", false
+	}
+
+	typeIndent := wsIndent + "\t"
+	var out strings.Builder
+	out.WriteString(base)
+	out.WriteString("[\n")
+	for _, index := range idx.Indices {
+		indexText := renderNode(index, ctx.Fset)
+		if indexText == "" || strings.Contains(indexText, "\n") ||
+			hasAnyComment(indexText) {
+
+			return "", false
+		}
+		out.WriteString(typeIndent)
+		out.WriteString(indexText)
+		out.WriteString(",\n")
+	}
+	out.WriteString(wsIndent)
+	out.WriteByte(']')
+
+	formatted := out.String()
+	if formatted == typeText {
+		return "", false
+	}
+
+	return formatted, true
 }
 
 func writeCompositeElement(out *strings.Builder, elemIndent, eltText string) {
