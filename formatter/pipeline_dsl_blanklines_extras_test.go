@@ -215,4 +215,51 @@ func f(i int, childIdx uint32) error {
 	require.NoError(t, err)
 }
 
+func TestDSLBlankLinesNative_RemovesBlankAfterSingleLineIfWithWrappedFatalf(
+	t *testing.T) {
+
+	const in = `package p
+
+import "testing"
+
+func f(t *testing.T, got, want []int) {
+	if len(got) != len(want) {
+
+		t.Fatalf("input_indices length mismatch: got %d want %d",
+			len(got), len(want))
+	}
+}
+`
+
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLLogCalls:         true,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	out := string(first)
+	require.Contains(
+		t, out, "if len(got) != len(want) "+
+			"{\n		t.Fatalf(\"input_indices length "+
+			"mismatch: got %d want %d\",",
+	)
+	require.Contains(t, out, "\n\t\t\tlen(got), len(want))")
+	require.NotContains(
+		t, out, "if len(got) != len(want) {\n\n		t.Fatalf(",
+	)
+	require.NotContains(t, out, "t.Fatalf(\n")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+}
+
 // Note: legacy/parity profiles were removed; llformat is next-only.

@@ -5103,6 +5103,7 @@ func (c *blankLineBatchContext) inspectFile(file *ast.File) {
 			caps := Captures{"node": n}
 			switch n.(type) {
 			case *ast.CaseClause:
+				c.maybeRemoveBlankAfterSingleLineBlockHeader(n)
 				if c.caseCond.Eval(caps, c.ctx) {
 					c.maybeInsertBlankBefore(n)
 				}
@@ -5128,17 +5129,89 @@ func (c *blankLineBatchContext) inspectFile(file *ast.File) {
 				}
 
 			case *ast.IfStmt:
+				c.maybeRemoveBlankAfterSingleLineBlockHeader(n)
 				if c.opts.ExtraIfErrReturn && c.ifErrReturnCond.Eval(
 					caps, c.ctx,
 				) {
 
 					c.maybeInsertBlankBefore(n)
 				}
+
+			case *ast.ForStmt:
+				c.maybeRemoveBlankAfterSingleLineBlockHeader(n)
+
+			case *ast.RangeStmt:
+				c.maybeRemoveBlankAfterSingleLineBlockHeader(n)
 			}
 
 			return true
 		},
 	)
+}
+
+func (c *blankLineBatchContext) maybeRemoveBlankAfterSingleLineBlockHeader(
+	node ast.Node) {
+
+	var first ast.Stmt
+	var headerStart token.Position
+	var headerEnd token.Position
+
+	switch n := node.(type) {
+	case *ast.IfStmt:
+		if n == nil || n.Body == nil || len(n.Body.List) == 0 {
+			return
+		}
+		first = n.Body.List[0]
+		headerStart = c.ctx.Fset.Position(n.Pos())
+		headerEnd = c.ctx.Fset.Position(n.Body.Lbrace)
+
+	case *ast.ForStmt:
+		if n == nil || n.Body == nil || len(n.Body.List) == 0 {
+			return
+		}
+		first = n.Body.List[0]
+		headerStart = c.ctx.Fset.Position(n.Pos())
+		headerEnd = c.ctx.Fset.Position(n.Body.Lbrace)
+
+	case *ast.RangeStmt:
+		if n == nil || n.Body == nil || len(n.Body.List) == 0 {
+			return
+		}
+		first = n.Body.List[0]
+		headerStart = c.ctx.Fset.Position(n.Pos())
+		headerEnd = c.ctx.Fset.Position(n.Body.Lbrace)
+
+	case *ast.CaseClause:
+		if n == nil || len(n.Body) == 0 {
+			return
+		}
+		first = n.Body[0]
+		headerStart = c.ctx.Fset.Position(n.Pos())
+		headerEnd = c.ctx.Fset.Position(n.Colon)
+
+	default:
+		return
+	}
+
+	if headerStart.Line != headerEnd.Line {
+		return
+	}
+
+	if _, ok := first.(*ast.ReturnStmt); ok &&
+		onlyStmtInBlockWithoutLeadingComment(c.ctx, first) {
+		return
+	}
+
+	start := c.ctx.Fset.Position(first.Pos()).Offset
+	if start <= 0 || start > len(c.ctx.Source) {
+		return
+	}
+	lineStartIdx := lineStart(c.ctx.Source, start)
+	if leadingCommentBlockLineStart(c.ctx.Source, lineStartIdx) !=
+		lineStartIdx {
+		return
+	}
+	c.maybeRemoveBlankBeforeLineStart(lineStartIdx)
 }
 
 func (c *blankLineBatchContext) maybeRemoveBlankBeforeLineStart(

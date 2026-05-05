@@ -132,7 +132,6 @@ func buildSplitQuotedForCallArgDSL(text string, startCol int, wsIndent string,
 	}
 
 	for rest != "" {
-
 		// If indentation already exceeds the available width budget,
 		// splitting can't help.
 		if curStart >= colLimit {
