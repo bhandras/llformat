@@ -247,20 +247,17 @@ func buildReport(repos []string, cfg reportConfig) (report, error) {
 	for _, repoArg := range repos {
 		root, err := filepath.Abs(repoArg)
 		if err != nil {
-			return report{}, fmt.Errorf(
-				"resolve repo %q: %w", repoArg, err,
-			)
+			return report{}, fmt.Errorf("resolve repo %q: %w",
+				repoArg, err)
 		}
 		info, err := os.Stat(root)
 		if err != nil {
-			return report{}, fmt.Errorf(
-				"stat repo %q: %w", root, err,
-			)
+			return report{}, fmt.Errorf("stat repo %q: %w", root,
+				err)
 		}
 		if !info.IsDir() {
-			return report{}, fmt.Errorf(
-				"repo %q is not a directory", root,
-			)
+			return report{}, fmt.Errorf("repo %q is not a "+
+				"directory", root)
 		}
 
 		summary, cases, err := analyzeRepo(root, cfg)
@@ -782,9 +779,8 @@ func runLLFormat(llformatBin string, col, tabStop int, commentMode string,
 	}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
-		return nil, fmt.Errorf(
-			"%w: %s", err, strings.TrimSpace(string(ee.Stderr)),
-		)
+		return nil, fmt.Errorf("%w: %s", err,
+			strings.TrimSpace(string(ee.Stderr)))
 	}
 
 	return nil, err

@@ -331,13 +331,14 @@ func TestFormatCallPackedMultiLine_DoesNotReflowNestedSlogAttrWhenItFits(
 	requireNoLineLongerThan(t, out, 80)
 }
 
-func TestFormatCallGreedy_DoesNotSplitShortFormatStringToFitCommaSpace(
+func TestFormatCallGreedy_BreaksBeforeTrailingArgForShortFormatString(
 	t *testing.T) {
 
 	// Regression test for "early break" in deeply indented return
-	// statements: when the whole call cannot fit on the current line, but
-	// the short argument list fits on a continuation line, prefer a
-	// multiline call over splitting the string into `"..." +\n"...", err`.
+	// statements: when the whole call cannot fit on the current line, keep
+	// the call head packed and break before the trailing arg instead of
+	// using a hanging-paren layout or splitting a short format string into
+	// `"..." +\n"...", err`.
 	call := []byte(`fmt.Errorf("error parsing psbt: %w", err)`)
 
 	// Choose a baseLen such that the quoted format string ends at column
@@ -350,9 +351,10 @@ func TestFormatCallGreedy_DoesNotSplitShortFormatStringToFitCommaSpace(
 	// 24 == 79 => curLen == 55 => baseLen == 44.
 	out := FormatCallGreedy(call, "\t\t\t\t\t", 44, 80, 8)
 
-	require.Contains(t, out, "fmt.Errorf(\n")
+	require.Contains(t, out, "fmt.Errorf(\"error parsing psbt: %w\",\n")
 	require.Contains(t, out, "\n					"+
-		"	\"error parsing psbt: %w\", err,")
+		"	err)")
+	require.NotContains(t, out, "fmt.Errorf(\n")
 	require.NotContains(
 		t, out, "\" +\n", "must not split a short format string "+
 			"just to make room for a following space",

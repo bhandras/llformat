@@ -438,7 +438,7 @@ func f() error {
 	require.NotContains(t, out, `"nil Message in " +`)
 }
 
-func TestPipelineNext_LogCalls_ShortConcatUsesMultilineCallWhenIndented(
+func TestPipelineNext_LogCalls_ShortConcatSplitsStringWhenIndented(
 	t *testing.T) {
 
 	const in = `package p
@@ -472,15 +472,16 @@ func f(msg any) error {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "return "+
-			"fmt.Errorf(\n				\"nil "+
-			"Message in "+
-			"SendServerEventRequest\",\n			)",
+		t, out, "return fmt.Errorf(\"nil Message in \" "+
+			"+"+
+			"\n"+
+			"				\"SendServerEventReq"+
+			"uest\")",
 	)
-	require.NotContains(t, out, `"nil Message in " +`)
+	require.NotContains(t, out, "return fmt.Errorf(\n")
 }
 
-func TestPipelineNext_LogCalls_ShortErrorfArgsUseMultilineCallWhenIndented(
+func TestPipelineNext_LogCalls_ShortErrorfArgsBreakBeforeArgWhenIndented(
 	t *testing.T) {
 
 	const in = `package p
@@ -512,11 +513,10 @@ func f(err error) (any, error) {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "return nil, "+
-			"fmt.Errorf(\n				\"control "+
-			"block to bytes: %w\", err,\n			)",
+		t, out, "return nil, fmt.Errorf(\"control block to bytes: "+
+			"%w\",\n				err)",
 	)
-	require.NotContains(t, out, `"control block to bytes: %w",`+"\n")
+	require.NotContains(t, out, "return nil, fmt.Errorf(\n")
 }
 
 func TestPipelineNext_LogCalls_ShortErrorfArgsStaySingleLineWhenTheyFit(
@@ -595,6 +595,44 @@ func nodeMaxDepth(depth int) (int, error) {
 		t, out,
 		"return 0, fmt.Errorf(\n",
 	)
+}
+
+func TestPipelineNext_LogCalls_SplitsReturnErrorfWithoutHangingParen(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+func sum(inputs []Input) (int, error) {
+	for i := range inputs {
+		input := inputs[i]
+		if input.Amount <= 0 {
+			return 0, fmt.Errorf("input %d amount must be "+
+				"positive", i)
+		}
+	}
+
+	return 0, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.NotContains(t, out, "fmt.Errorf(\n")
+	requireNoLineLongerThan(t, out, 80)
 }
 
 func TestPipelineNext_LogCalls_FormatCompositeArgAsBlock(t *testing.T) {
