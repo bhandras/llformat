@@ -169,4 +169,49 @@ func record() {}
 	require.NoError(t, err)
 }
 
+func TestDSLBlankLinesNative_DoesNotBlankBeforeOnlyWrappedReturn(t *testing.T) {
+	const in = `package p
+
+import "fmt"
+
+func f(i int, childIdx uint32) error {
+	if childIdx <= uint32(i) {
+		return fmt.Errorf("node[%d] child index "+
+			"%d must be > parent index (cycle or "+
+			"back-reference)", i, childIdx)
+	}
+
+	return nil
+}
+`
+
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLLogCalls:         true,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	out := string(first)
+	require.Contains(
+		t, out,
+		"if childIdx <= uint32(i) {\n		return fmt.Errorf(",
+	)
+	require.NotContains(
+		t, out,
+		"if childIdx <= uint32(i) {\n\n		return fmt.Errorf(",
+	)
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+}
+
 // Note: legacy/parity profiles were removed; llformat is next-only.
