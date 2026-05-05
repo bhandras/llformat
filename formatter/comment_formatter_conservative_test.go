@@ -52,6 +52,42 @@ func f() {}
 	requireNoLineLongerThan(t, out, 48)
 }
 
+func TestCommentFormatterOverflowModeSplitsLineBlocksAtBlankComments(
+	t *testing.T) {
+
+	in := []byte(`package p
+
+// The queued value is persisted for crash recovery, but successful responses
+// are intentionally handled by the in-memory request path for this generic worker.
+// Returns an error if the claim has expired or belongs to another worker.
+//
+// The context should contain any transaction needed for atomic operations.
+// If a transaction is present, the update will be part of that
+// transaction.
+func f() {}
+`)
+
+	f := compat.NewCommentFormatter(
+		compat.CommentConfig{
+			ColumnLimit: 80,
+			Mode:        compat.CommentModeOverflow,
+		},
+	)
+	out := string(f.FormatFile(in))
+
+	require.Contains(
+		t, out, "// The context should contain any transaction "+
+			"needed for atomic operations.\n// If a "+
+			"transaction is present, the update will be part "+
+			"of that\n// transaction.",
+	)
+	require.NotContains(
+		t, out, "// The context should contain any transaction "+
+			"needed for atomic operations. If a",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestCommentFormatterOverflowModePreservesPreformattedBlocks(t *testing.T) {
 	in := []byte(`package p
 

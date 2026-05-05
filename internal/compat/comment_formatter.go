@@ -958,10 +958,61 @@ func processLineCommentBlock(lines []string, i int, out []string) ([]string,
 		j++
 	}
 
+	if commentMode == CommentModeOverflow &&
+		lineCommentBlockHasBlank(block) {
+
+		reflowed := reflowLineCommentBlockByBlankBoundaries(
+			block, indent,
+		)
+		out = append(out, reflowed...)
+
+		return out, j, true
+	}
+
 	reflowed := reflowLineCommentBlock(block, indent)
 	out = append(out, reflowed...)
 
 	return out, j, true
+}
+
+func lineCommentBlockHasBlank(block []string) bool {
+	for _, line := range block {
+		if isBlankLineComment(line) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isBlankLineComment(line string) bool {
+	return strings.TrimSpace(commentLineContent(line)) == ""
+}
+
+func reflowLineCommentBlockByBlankBoundaries(block []string,
+	indent string) []string {
+
+	var out []string
+	var segment []string
+	flush := func() {
+		if len(segment) == 0 {
+			return
+		}
+		out = append(out, reflowLineCommentBlock(segment, indent)...)
+		segment = nil
+	}
+
+	for _, line := range block {
+		if isBlankLineComment(line) {
+			flush()
+			out = append(out, line)
+			continue
+		}
+		segment = append(segment, line)
+	}
+	flush()
+
+	return out
 }
 
 // processBlockComment handles a standalone block comment starting at index i.

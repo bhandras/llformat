@@ -555,6 +555,48 @@ func f(t *Tree) (*Path, error) {
 	require.NotContains(t, out, "fmt.Errorf(\n")
 }
 
+func TestPipelineNext_LogCalls_PreservesFittingMultilineErrorf(t *testing.T) {
+	const in = `package p
+
+import "fmt"
+
+const maxTreeDepth = 32
+
+func nodeMaxDepth(depth int) (int, error) {
+	if depth > maxTreeDepth {
+		return 0, fmt.Errorf(
+			"tree depth exceeds limit %d",
+			maxTreeDepth,
+		)
+	}
+
+	return 0, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "\"tree depth exceeds limit "+
+			"%d\",\n			maxTreeDepth,",
+	)
+	require.NotContains(
+		t, out, "\"tree depth exceeds limit %d\", maxTreeDepth,",
+	)
+}
+
 func TestPipelineNext_LogCalls_FormatCompositeArgAsBlock(t *testing.T) {
 	const in = `package p
 
