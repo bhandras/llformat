@@ -58,7 +58,6 @@ func ApplyEdits(src []byte, edits []Edit) ([]byte, error) {
 // single-span replacement case.
 func ApplySingleEdit(src []byte, start, end int,
 	replace []byte) ([]byte, error) {
-
 	return ApplyEdits(
 		src, []Edit{
 			{Start: start, End: end, Replace: replace},

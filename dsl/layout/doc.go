@@ -90,18 +90,15 @@ type IndentByCols struct {
 }
 
 func (IndentByCols) isDoc() {}
-
-func T(s string) Doc { return Text(s) }
-func L() Doc         { return Line{} }
-func SL() Doc        { return SoftLine{} }
-func FB() Doc        { return ForceBreak{} }
-func G(d Doc) Doc    { return Group{Doc: d} }
+func T(s string) Doc        { return Text(s) }
+func L() Doc                { return Line{} }
+func SL() Doc               { return SoftLine{} }
+func FB() Doc               { return ForceBreak{} }
+func G(d Doc) Doc           { return Group{Doc: d} }
 func N(indent string, d Doc) Doc {
 	return Nest{Indent: indent, Doc: d}
 }
-
-func C(docs ...Doc) Doc { return Concat(docs) }
-
+func C(docs ...Doc) Doc       { return Concat(docs) }
 func IB(broken, flat Doc) Doc { return IfBreak{Broken: broken, Flat: flat} }
 func A(d Doc) Doc             { return Align{Doc: d} }
 func I(cols int, d Doc) Doc   { return IndentByCols{Cols: cols, Doc: d} }

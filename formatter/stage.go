@@ -183,7 +183,6 @@ type DSLStageOptions struct {
 // stages from the existing formatters with explicit dependencies.
 func DefaultStages(cfg BaseConfig, commentMoveInline bool,
 	excludes []string) []Stage {
-
 	return DefaultStagesWithOptions(
 		cfg, StageOptions{
 			Selection: StageSelectionOptions{},

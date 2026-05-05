@@ -108,7 +108,6 @@ type Context struct {
 // NewContext creates a new formatting context.
 func NewContext(fset *token.FileSet, source []byte, columnLimit,
 	tabStop int) *Context {
-
 	return &Context{
 		Fset:        fset,
 		Source:      source,

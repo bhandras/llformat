@@ -116,7 +116,6 @@ func formatKeyedCompositeElem(elem, elemIndent string, alignKeyLen int) string {
 	}
 	candidate := key + " " + formatted
 	if maxLineLenWithIndentAndComma(candidate, elemIndent) >= elemWidth {
-
 		return elem
 	}
 

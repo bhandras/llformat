@@ -2113,18 +2113,8 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 	if !ok {
 		return false
 	}
-	if block, ok := ctx.Parent(node).(*ast.BlockStmt); ok &&
-		block != nil && len(block.List) == 1 && block.List[0] == node {
-
-		brace := ctx.Fset.Position(block.Lbrace).Offset
-		returnStart := ctx.Fset.Position(node.Pos()).Offset
-		if brace >= 0 && brace+1 <= returnStart {
-			gap := string(ctx.Source[brace+1 : returnStart])
-			if !strings.Contains(gap, "//") &&
-				!strings.Contains(gap, "/*") {
-				return false
-			}
-		}
+	if onlyStmtInBlockWithoutLeadingComment(ctx, node) {
+		return false
 	}
 
 	pos := ctx.Fset.Position(node.Pos())
@@ -2173,6 +2163,30 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 	}
 
 	return true
+}
+
+func onlyStmtInBlockWithoutLeadingComment(ctx *Context, node ast.Node) bool {
+	block, ok := ctx.Parent(node).(*ast.BlockStmt)
+	if !ok || block == nil || len(block.List) != 1 ||
+		block.List[0] != node {
+		return false
+	}
+	switch ctx.Parent(block).(type) {
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt:
+
+	default:
+		return false
+	}
+
+	brace := ctx.Fset.Position(block.Lbrace).Offset
+	nodeStart := ctx.Fset.Position(node.Pos()).Offset
+	if brace < 0 || brace+1 > nodeStart {
+		return false
+	}
+
+	gap := string(ctx.Source[brace+1 : nodeStart])
+
+	return !strings.Contains(gap, "//") && !strings.Contains(gap, "/*")
 }
 
 // IsIfErrReturnNeedingBlankCond checks if an `if err != nil { return ... }`

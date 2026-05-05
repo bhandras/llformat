@@ -85,8 +85,8 @@ func TestDSLExprFormatterBreaksLogicalChain(t *testing.T) {
 	src := []byte(
 		`package main
 
-func foo(alpha, beta, gamma, delta bool) bool {
-	return alpha && beta && gamma && delta
+func foo() bool {
+	return alphaValue && betaValue && gammaValue && deltaValue
 }
 `,
 	)

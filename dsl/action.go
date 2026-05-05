@@ -2885,7 +2885,6 @@ func callAlreadyAcceptableWithMultilineLiteralArg(ctx *Context,
 		return false
 	}
 	if !callHasDirectMultilineLiteralArg(ctx, call) {
-
 		return false
 	}
 
@@ -4855,7 +4854,6 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) (
 		method, indent, ctx.ColumnLimit, ctx.TabStop, a.FormatFunc,
 		func(signature, indent string, colLimit, tabStop int) (string,
 			bool) {
-
 			return formatMethodSimple(
 				signature, indent, colLimit, tabStop,
 			), false
@@ -5109,6 +5107,16 @@ func (c *blankLineBatchContext) inspectFile(file *ast.File) {
 				}
 
 			case *ast.ReturnStmt:
+				if onlyStmtInBlockWithoutLeadingComment(
+					c.ctx, n,
+				) {
+
+					start := c.ctx.Fset.Position(n.Pos()).Offset
+					c.maybeRemoveBlankBeforeLineStart(
+						lineStart(c.ctx.Source, start),
+					)
+					break
+				}
 				if c.returnCond.Eval(caps, c.ctx) {
 					c.maybeInsertBlankBefore(n)
 				}
@@ -5130,6 +5138,25 @@ func (c *blankLineBatchContext) inspectFile(file *ast.File) {
 			return true
 		},
 	)
+}
+
+func (c *blankLineBatchContext) maybeRemoveBlankBeforeLineStart(
+	lineStartIdx int) {
+
+	if lineStartIdx <= 0 || lineStartIdx > len(c.ctx.Source) {
+		return
+	}
+	if !hasBlankLineBeforeLineStart(c.ctx.Source, lineStartIdx) {
+		return
+	}
+
+	prevLineEnd := lineStartIdx - 1
+	prevStart := lineStart(c.ctx.Source, prevLineEnd)
+	if prevStart < 0 || prevStart > lineStartIdx {
+		return
+	}
+
+	c.b.Delete(prevStart, lineStartIdx)
 }
 
 // parseCheckOK performs a defensive parse check on the output.

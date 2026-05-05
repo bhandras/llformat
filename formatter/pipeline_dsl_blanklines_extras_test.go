@@ -176,6 +176,7 @@ import "fmt"
 
 func f(i int, childIdx uint32) error {
 	if childIdx <= uint32(i) {
+
 		return fmt.Errorf("node[%d] child index "+
 			"%d must be > parent index (cycle or "+
 			"back-reference)", i, childIdx)

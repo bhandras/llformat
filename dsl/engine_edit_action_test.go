@@ -24,7 +24,6 @@ type replaceIdentEditAction struct {
 
 func (a *replaceIdentEditAction) Execute(caps Captures, ctx *Context) ([]byte,
 	bool) {
-
 	return nil, false
 }
 
@@ -55,7 +54,6 @@ type overlappingEditAction struct{}
 
 func (a *overlappingEditAction) Execute(caps Captures, ctx *Context) ([]byte,
 	bool) {
-
 	return nil, false
 }
 

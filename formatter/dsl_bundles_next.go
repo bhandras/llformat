@@ -15,7 +15,6 @@ func dslRulesForComments(commentMoveInline bool,
 
 	formatComments := func(src []byte, colLimit, tabStop int,
 		moveInlineAbove bool) ([]byte, bool) {
-
 		return compat.FormatCommentsInSource(
 			src, colLimit, tabStop, moveInlineAbove, commentMode,
 		)
@@ -37,7 +36,6 @@ func dslRulesForLogCalls(opts StageOptions) []dsl.Rule {
 	}
 	formatFunc := func(call []byte, wsIndent string, baseLen int, colLimit,
 		ts int) string {
-
 		return formatCallGreedyNextWithMinTailLen(
 			call, wsIndent, baseLen, colLimit, ts, minTailLen,
 		)
@@ -205,7 +203,6 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 		funcFormatter := FormatFuncSignatureNext
 		methodFormatter := func(signature, indent string, colLimit,
 			tabStop int) (string, bool) {
-
 			return FormatInterfaceMethodNext(
 				signature, indent, colLimit, tabStop,
 			), false
@@ -296,7 +293,6 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 					MethodFormatter: func(signature,
 						indent string, colLimit,
 						tabStop int) (string, bool) {
-
 						return FormatInterfaceMethodNext(
 							signature, indent,
 							colLimit, tabStop,

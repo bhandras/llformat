@@ -218,7 +218,6 @@ func (a *BreakCompositeKeyValueAction) Execute(caps Captures, ctx *Context) (
 
 	orig := string(ctx.Source[start:end])
 	if orig == "" || hasLineComment(orig) || hasBlockComment(orig) {
-
 		return nil, false
 	}
 

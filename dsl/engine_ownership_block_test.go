@@ -22,7 +22,6 @@ func (a fixedEditAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 
 func (a fixedEditAction) ExecuteEdits(caps Captures, ctx *Context) ([]Edit,
 	bool, error) {
-
 	return []Edit{
 		{
 			Start:   a.start,
