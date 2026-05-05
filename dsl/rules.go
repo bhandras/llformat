@@ -917,7 +917,24 @@ func BlankLineRulesWithOptions(opts BlankLineOptions) []Rule {
 				},
 			},
 			Priority: 10,
-			Action: &InsertBlankBeforeAction{
+			Action: &InsertBlankBeforeClauseAction{
+				Target: "node",
+			},
+		},
+		{
+			Name: "blank_before_comm_clause",
+			Pattern: &NodePattern{
+				Type: "CommClause",
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&HasPrecedingSiblingCond{
+						Target: "node",
+					},
+				},
+			},
+			Priority: 10,
+			Action: &InsertBlankBeforeClauseAction{
 				Target: "node",
 			},
 		},

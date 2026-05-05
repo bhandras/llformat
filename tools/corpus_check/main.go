@@ -736,7 +736,6 @@ func applyProfile(cfg *reportConfig) error {
 		)
 
 	case "all":
-
 	default:
 		return fmt.Errorf("unknown --profile %q: want adoption or all",
 			cfg.Profile)

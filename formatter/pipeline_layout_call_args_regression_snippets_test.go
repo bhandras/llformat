@@ -434,7 +434,6 @@ func f() {
 func exprToType(expr string) string {
 	switch {
 	case strings.Contains(expr, "[") && strings.Contains(expr, "]"):
-
 		// Generic instantiation-like expressions are already
 		// type-shaped.
 		return "SomeGenericTypeNameThatIsVeryLong[VeryLongTypeNameThatIsVeryLong]"

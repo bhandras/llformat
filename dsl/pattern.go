@@ -314,7 +314,6 @@ func getFieldBinaryExpr(node *ast.BinaryExpr, name string) ast.Node {
 		return node.Y
 
 	case "Op", "op":
-
 		// Op is handled specially in matchLiteral.
 		return nil
 
@@ -329,7 +328,6 @@ func getFieldUnaryExpr(node *ast.UnaryExpr, name string) ast.Node {
 		return node.X
 
 	case "Op", "op":
-
 		// Op is handled specially in matchLiteral.
 		return nil
 

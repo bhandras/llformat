@@ -36,7 +36,6 @@ func RulesFor(set RuleSet, opts DefaultRuleOptions) []Rule {
 		return ExpressionRules()
 
 	default:
-
 		// Unknown rule set: fall back to the default for safety.
 		return DefaultRulesWithOptions(opts)
 	}

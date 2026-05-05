@@ -436,7 +436,6 @@ func isSimpleCallArg(arg ast.Expr) bool {
 		return isSimpleCallArg(a.X)
 
 	case *ast.UnaryExpr:
-
 		// Treat common unary wrappers (&x, -1) as simple when their
 		// operand is.
 		return isSimpleCallArg(a.X)
@@ -1010,7 +1009,6 @@ func (a *BreakArithmeticChainLayoutAction) Execute(caps Captures,
 
 	switch binExpr.Op {
 	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
-
 	default:
 		return nil, false
 	}
@@ -5163,6 +5161,21 @@ func (c *blankLineBatchContext) initConditions() {
 }
 
 func (c *blankLineBatchContext) maybeInsertBlankBefore(n ast.Node) {
+	c.maybeInsertBlankBeforeNode(n, true)
+}
+
+func (c *blankLineBatchContext) maybeInsertBlankBeforeClause(n ast.Node) {
+	insert, attachLeadingComments := clauseSeparatorBehavior(c.ctx, n)
+	if !insert {
+		return
+	}
+
+	c.maybeInsertBlankBeforeNode(n, attachLeadingComments)
+}
+
+func (c *blankLineBatchContext) maybeInsertBlankBeforeNode(n ast.Node,
+	attachLeadingComments bool) {
+
 	if n == nil {
 		return
 	}
@@ -5171,7 +5184,9 @@ func (c *blankLineBatchContext) maybeInsertBlankBefore(n ast.Node) {
 		return
 	}
 	ls := lineStart(c.ctx.Source, start)
-	ls = leadingCommentBlockLineStart(c.ctx.Source, ls)
+	if attachLeadingComments {
+		ls = leadingCommentBlockLineStart(c.ctx.Source, ls)
+	}
 	if ls <= 0 || hasBlankLineBeforeLineStart(c.ctx.Source, ls) {
 		return
 	}
@@ -5191,7 +5206,13 @@ func (c *blankLineBatchContext) inspectFile(file *ast.File) {
 			case *ast.CaseClause:
 				c.maybeRemoveBlankAfterSingleLineBlockHeader(n)
 				if c.caseCond.Eval(caps, c.ctx) {
-					c.maybeInsertBlankBefore(n)
+					c.maybeInsertBlankBeforeClause(n)
+				}
+
+			case *ast.CommClause:
+				c.maybeRemoveBlankAfterSingleLineBlockHeader(n)
+				if c.caseCond.Eval(caps, c.ctx) {
+					c.maybeInsertBlankBeforeClause(n)
 				}
 
 			case *ast.ReturnStmt:
@@ -5268,12 +5289,34 @@ func (c *blankLineBatchContext) maybeRemoveBlankAfterSingleLineBlockHeader(
 		headerEnd = c.ctx.Fset.Position(n.Body.Lbrace)
 
 	case *ast.CaseClause:
-		if n == nil || len(n.Body) == 0 {
+		if n == nil {
+			return
+		}
+		headerStart = c.ctx.Fset.Position(n.Pos())
+		headerEnd = c.ctx.Fset.Position(n.Colon)
+		c.maybeRemoveBlankAfterHeaderLine(headerStart, headerEnd)
+		if headerStart.Line == headerEnd.Line {
+			return
+		}
+		if len(n.Body) == 0 {
 			return
 		}
 		first = n.Body[0]
+
+	case *ast.CommClause:
+		if n == nil {
+			return
+		}
 		headerStart = c.ctx.Fset.Position(n.Pos())
 		headerEnd = c.ctx.Fset.Position(n.Colon)
+		c.maybeRemoveBlankAfterHeaderLine(headerStart, headerEnd)
+		if headerStart.Line == headerEnd.Line {
+			return
+		}
+		if len(n.Body) == 0 {
+			return
+		}
+		first = n.Body[0]
 
 	default:
 		return
@@ -5298,6 +5341,31 @@ func (c *blankLineBatchContext) maybeRemoveBlankAfterSingleLineBlockHeader(
 		return
 	}
 	c.maybeRemoveBlankBeforeLineStart(lineStartIdx)
+}
+
+func (c *blankLineBatchContext) maybeRemoveBlankAfterHeaderLine(
+	headerStart, headerEnd token.Position) {
+
+	if headerStart.Line != headerEnd.Line {
+		return
+	}
+
+	headerLineEnd := lineEnd(c.ctx.Source, headerEnd.Offset)
+	if headerLineEnd < 0 || headerLineEnd >= len(c.ctx.Source) ||
+		c.ctx.Source[headerLineEnd] != '\n' {
+		return
+	}
+
+	blankLineStart := headerLineEnd + 1
+	blankLineEnd := lineEnd(c.ctx.Source, blankLineStart)
+	if blankLineEnd < blankLineStart || blankLineEnd >= len(c.ctx.Source) {
+		return
+	}
+	if !isWhitespaceOnlyLine(c.ctx.Source[blankLineStart:blankLineEnd]) {
+		return
+	}
+
+	c.b.Delete(blankLineStart, blankLineEnd+1)
 }
 
 func (c *blankLineBatchContext) maybeRemoveBlankBeforeLineStart(
@@ -5466,6 +5534,130 @@ func (a *InsertBlankBeforeAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	return out, true
+}
+
+// InsertBlankBeforeClauseAction inserts a blank line before a switch/select
+// clause label.
+type InsertBlankBeforeClauseAction struct {
+	Target string
+}
+
+// Execute implements Action for InsertBlankBeforeClauseAction.
+func (a *InsertBlankBeforeClauseAction) Execute(caps Captures, ctx *Context) (
+	[]byte, bool) {
+
+	node := resolveTarget(caps, a.Target)
+	if node == nil {
+		return nil, false
+	}
+
+	pos := ctx.Fset.Position(node.Pos())
+	insert, attachLeadingComments := clauseSeparatorBehavior(ctx, node)
+	if !insert {
+		return nil, false
+	}
+
+	ls := lineStart(ctx.Source, pos.Offset)
+	if attachLeadingComments {
+		ls = leadingCommentBlockLineStart(ctx.Source, ls)
+	}
+	if hasBlankLineBeforeLineStart(ctx.Source, ls) {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, ls, ls, []byte("\n"))
+	if err != nil {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func clauseSeparatorBehavior(ctx *Context,
+	node ast.Node) (insert bool, attachLeadingComments bool) {
+
+	parent, ok := ctx.Parent(node).(*ast.BlockStmt)
+	if !ok || parent == nil {
+		return true, true
+	}
+
+	for i, stmt := range parent.List {
+		if stmt != node {
+			continue
+		}
+		if i == 0 {
+			return true, true
+		}
+
+		prev := parent.List[i-1]
+		if clauseBodyLen(prev) > 0 {
+			return true, true
+		}
+
+		if clauseGapHasComment(ctx, prev, node) {
+			return true, false
+		}
+
+		return false, false
+	}
+
+	return true, true
+}
+
+func clauseBodyLen(stmt ast.Stmt) int {
+	switch n := stmt.(type) {
+	case *ast.CaseClause:
+		if n == nil {
+			return 0
+		}
+
+		return len(n.Body)
+
+	case *ast.CommClause:
+		if n == nil {
+			return 0
+		}
+
+		return len(n.Body)
+
+	default:
+		return 0
+	}
+}
+
+func clauseGapHasComment(ctx *Context, prev ast.Stmt, next ast.Node) bool {
+	start := clauseColonOffset(ctx, prev)
+	end := ctx.Fset.Position(next.Pos()).Offset
+	if start < 0 || end < 0 || start >= end || end > len(ctx.Source) {
+		return false
+	}
+
+	gap := ctx.Source[start:end]
+
+	return bytes.Contains(gap, []byte("//")) ||
+		bytes.Contains(gap, []byte("/*"))
+}
+
+func clauseColonOffset(ctx *Context, stmt ast.Stmt) int {
+	var pos token.Pos
+	switch n := stmt.(type) {
+	case *ast.CaseClause:
+		if n == nil {
+			return -1
+		}
+		pos = n.Colon
+
+	case *ast.CommClause:
+		if n == nil {
+			return -1
+		}
+		pos = n.Colon
+
+	default:
+		return -1
+	}
+
+	return ctx.Fset.Position(pos).Offset
 }
 
 // InsertBlankAfterAction inserts a blank line after a node if not already

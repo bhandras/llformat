@@ -213,8 +213,8 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 	if (&IsInCallArgsCond{Target: c.Target}).Eval(caps, ctx) {
 		switch c.CallArgsPolicy {
 		case CallArgsPolicyForce:
-
 			// OK.
+
 		case CallArgsPolicyAuto:
 			call := enclosingCallForArg(node, ctx)
 			if call == nil {
@@ -325,19 +325,16 @@ func callExprFuncNameFromExpr(fun ast.Expr) string {
 		return prefix + "." + v.Sel.Name
 
 	case *ast.IndexExpr:
-
 		// Generic instantiation: f[T](...) is represented as
 		// CallExpr{Fun: IndexExpr}.
 		return callExprFuncNameFromExpr(v.X)
 
 	case *ast.IndexListExpr:
-
 		// Generic instantiation: f[T, U](...) is represented as
 		// CallExpr{Fun: IndexListExpr}.
 		return callExprFuncNameFromExpr(v.X)
 
 	default:
-
 		// Unknown callee shape (e.g. type conversions / other
 		// expressions). Return empty to indicate "not
 		// allowlist-addressable".
@@ -649,12 +646,10 @@ func (c *IsSimpleLiteralCond) Eval(caps Captures, ctx *Context) bool {
 func isSimpleLiteral(n ast.Node) bool {
 	switch node := n.(type) {
 	case *ast.BasicLit:
-
 		// Numbers and strings
 		return true
 
 	case *ast.Ident:
-
 		// true, false, nil
 		return node.Name == "true" || node.Name == "false" ||
 			node.Name == "nil"
@@ -1091,20 +1086,18 @@ func (c *IsFinalReturnCond) Eval(caps Captures, ctx *Context) bool {
 
 	switch blockParent.(type) {
 	case *ast.FuncDecl, *ast.FuncLit:
-
 		// This is a function body, check if there are multiple
 		// statements
 		return len(blockStmt.List) > 1
 
 	default:
-
 		// Inside an if/for/switch block - don't add blank line
 		return false
 	}
 }
 
-// HasPrecedingSiblingCond checks if a case clause has a preceding sibling case.
-// Used to determine if blank line is needed before a case.
+// HasPrecedingSiblingCond checks if a switch/select clause has a preceding
+// sibling clause. Used to determine if a blank line is needed before a clause.
 type HasPrecedingSiblingCond struct {
 	Target string
 }
@@ -1116,8 +1109,9 @@ func (c *HasPrecedingSiblingCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	caseClause, ok := node.(*ast.CaseClause)
-	if !ok {
+	switch node.(type) {
+	case *ast.CaseClause, *ast.CommClause:
+	default:
 		return false
 	}
 
@@ -1133,9 +1127,9 @@ func (c *HasPrecedingSiblingCond) Eval(caps Captures, ctx *Context) bool {
 		return false
 	}
 
-	// Find this case in the block's statements
+	// Find this clause in the block's statements.
 	for i, stmt := range blockStmt.List {
-		if stmt == caseClause {
+		if stmt == node {
 			return i > 0 // Has preceding sibling if not first
 		}
 	}
@@ -1427,7 +1421,6 @@ func isNonFStringLogCall(call *ast.CallExpr) bool {
 		return fun.Sel != nil && isNonFStringLogName(fun.Sel.Name)
 
 	case *ast.Ident:
-
 		// Support dot-imported variants (e.g. `Error(...)`) when
 		// enabled.
 		return isNonFStringLogName(fun.Name)
@@ -1442,7 +1435,6 @@ func isLogPrintfCallWithAnyPrefix(call *ast.CallExpr,
 
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
-
 		// Support dot-imported variants (e.g. `Infof(...)`) when
 		// enabled.
 		return isLogPrintfName(fun.Name, allowedNames)
@@ -1461,7 +1453,6 @@ func isLogPrintfCallWithAllowedPrefixes(call *ast.CallExpr,
 
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
-
 		// No selector prefix exists to validate; treat as a
 		// dot-imported log/printf-style call when enabled by the
 		// caller.
@@ -2115,6 +2106,9 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 	if !ok {
 		return false
 	}
+	if onlyStmtInClause(ctx, node) {
+		return false
+	}
 	if onlyStmtInBlockWithoutLeadingComment(ctx, node) {
 		return false
 	}
@@ -2167,6 +2161,21 @@ func (c *IsReturnNeedingBlankCond) Eval(caps Captures, ctx *Context) bool {
 	return true
 }
 
+func onlyStmtInClause(ctx *Context, node ast.Node) bool {
+	switch parent := ctx.Parent(node).(type) {
+	case *ast.CaseClause:
+		return parent != nil && len(parent.Body) == 1 &&
+			parent.Body[0] == node
+
+	case *ast.CommClause:
+		return parent != nil && len(parent.Body) == 1 &&
+			parent.Body[0] == node
+
+	default:
+		return false
+	}
+}
+
 func onlyStmtInBlockWithoutLeadingComment(ctx *Context, node ast.Node) bool {
 	block, ok := ctx.Parent(node).(*ast.BlockStmt)
 	if !ok || block == nil || len(block.List) != 1 ||
@@ -2175,7 +2184,6 @@ func onlyStmtInBlockWithoutLeadingComment(ctx *Context, node ast.Node) bool {
 	}
 	switch ctx.Parent(block).(type) {
 	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt:
-
 	default:
 		return false
 	}

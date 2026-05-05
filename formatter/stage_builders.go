@@ -115,7 +115,6 @@ func selectorExprName(sel *ast.SelectorExpr) string {
 		return prefix + "." + sel.Sel.Name
 
 	default:
-
 		// For cases like `foo().Bar()`, a full "pkg.Func" style name
 		// isn't meaningful; fall back to the terminal selector name so
 		// exclude lists can still match on suffixes.

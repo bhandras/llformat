@@ -68,8 +68,8 @@ func RenderAt(doc Doc, colLimit int, tabStop int, indent string,
 			}
 
 		case ForceBreak:
-
 			// No output; acts only as a fit-check barrier.
+
 		case Concat:
 			// Push in reverse so we render in order.
 			for i := len(d) - 1; i >= 0; i-- {
@@ -192,8 +192,8 @@ func fitsAt(doc Doc, remaining int, tabStop int, startCol int) bool {
 			}
 
 		case SoftLine:
-
 			// Flat soft line is empty.
+
 		case ForceBreak:
 			return false
 

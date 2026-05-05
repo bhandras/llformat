@@ -122,8 +122,8 @@ func isTrivialInlineFuncLit(fn *ast.FuncLit) bool {
 	for _, res := range ret.Results {
 		switch res.(type) {
 		case *ast.Ident, *ast.BasicLit:
-
 			// OK.
+
 		default:
 			return false
 		}

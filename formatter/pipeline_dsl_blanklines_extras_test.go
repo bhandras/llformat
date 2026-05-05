@@ -169,6 +169,153 @@ func record() {}
 	require.NoError(t, err)
 }
 
+func TestDSLBlankLinesNative_SelectCasesSeparateClausesNotHeaders(
+	t *testing.T) {
+
+	const in = `package p
+
+import "context"
+
+func f(ctx context.Context, done chan struct{}) error {
+	select {
+	case <-done:
+		// Work completed.
+		return nil
+	case <-ctx.Done():
+		// Context cancelled before work finished.
+		close(done)
+		return ctx.Err()
+	}
+}
+`
+
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	out := string(first)
+	require.Contains(
+		t, out, "case <-done:\n		// Work "+
+			"completed.\n		return nil\n\n	case "+
+			"<-ctx.Done():",
+	)
+	require.Contains(
+		t, out,
+		"close(done)\n\n\t\treturn ctx.Err()\n\t}",
+	)
+	require.NotContains(t, out, "case <-done:\n\n		// Work "+
+		"completed.")
+
+	const commentOnlyCase = `package p
+
+func f(done chan struct{}, cancel chan struct{}) {
+	select {
+	case <-done:
+		// Good.
+	case <-cancel:
+		return
+	}
+}
+`
+
+	commentOnlyOut := string(p.Format([]byte(commentOnlyCase)))
+	require.Contains(
+		t, commentOnlyOut,
+		"case <-done:\n		// Good.\n\n	case <-cancel:",
+	)
+	require.NotContains(t, commentOnlyOut, "case "+
+		"<-done:\n\n		// Good.")
+
+	const commentOnlyWithHeaderBlank = `package p
+
+func f(done chan struct{}, cancel chan struct{}) {
+	select {
+	case <-done:
+
+		// Good.
+
+	case <-cancel:
+		return
+	}
+}
+`
+
+	cleanedCommentOnlyOut := string(
+		p.Format(
+			[]byte(commentOnlyWithHeaderBlank),
+		),
+	)
+	require.Contains(
+		t, cleanedCommentOnlyOut,
+		"case <-done:\n		// Good.\n\n	case <-cancel:",
+	)
+	require.NotContains(
+		t, cleanedCommentOnlyOut,
+		"case <-done:\n\n		// Good.",
+	)
+
+	const commentAndReturnWithHeaderBlank = `package p
+
+func f(done chan struct{}, cancel chan struct{}) {
+	select {
+	case <-done:
+
+		// Good.
+		return
+	case <-cancel:
+		return
+	}
+}
+`
+
+	cleanedCommentAndReturnOut := string(
+		p.Format(
+			[]byte(commentAndReturnWithHeaderBlank),
+		),
+	)
+	require.Contains(
+		t, cleanedCommentAndReturnOut, "case <-done:\n		// "+
+			"Good.\n		return\n\n	case <-cancel:",
+	)
+	require.NotContains(
+		t, cleanedCommentAndReturnOut,
+		"case <-done:\n\n		// Good.",
+	)
+
+	const emptyCases = `package p
+
+func f(notify chan struct{}, timer <-chan struct{}, done chan struct{}) {
+	select {
+	case <-notify:
+	case <-timer:
+	case <-done:
+		return
+	}
+}
+`
+
+	emptyCasesOut := string(p.Format([]byte(emptyCases)))
+	require.Contains(
+		t, emptyCasesOut,
+		"case <-notify:\n	case <-timer:\n	case <-done:",
+	)
+	require.NotContains(t, emptyCasesOut, "case <-notify:\n\n")
+	require.NotContains(t, emptyCasesOut, "case <-timer:\n\n")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+}
+
 func TestDSLBlankLinesNative_DoesNotBlankBeforeOnlyWrappedReturn(t *testing.T) {
 	const in = `package p
 

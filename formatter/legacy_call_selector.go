@@ -30,7 +30,6 @@ func legacyScanCallStartPos(fun ast.Expr) token.Pos {
 		return token.NoPos
 
 	default:
-
 		// The legacy scan detectors do not understand generic
 		// instantiations (`f[T](`) or other non-ident callees.
 		return token.NoPos
