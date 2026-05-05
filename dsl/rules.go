@@ -1043,6 +1043,28 @@ func LogPrintfRulesWithOptions(opts LogPrintfOptions,
 
 	return []Rule{
 		{
+			Name: "structured_log_call",
+			Pattern: &NodePattern{
+				Type: "CallExpr",
+			},
+			When: &AndCond{
+				Conds: []Condition{
+					&IsStructuredLogCallCond{
+						Target: "node",
+					},
+					&NotCond{
+						Cond: &HasAnyCommentCond{
+							Target: "node",
+						},
+					},
+				},
+			},
+			Priority: 80,
+			Action: &StructuredLogCallAction{
+				Target: "node",
+			},
+		},
+		{
 			Name: "log_printf_call",
 			Pattern: &NodePattern{
 				Type: "CallExpr",
@@ -1179,6 +1201,11 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 		},
 		&NotCond{
 			Cond: &IsNonFLogCallCond{
+				Target: "node",
+			},
+		},
+		&NotCond{
+			Cond: &IsStructuredLogCallCond{
 				Target: "node",
 			},
 		},

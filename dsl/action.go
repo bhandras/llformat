@@ -603,6 +603,12 @@ type BreakCallArgsLayoutAction struct {
 	Grouping string
 }
 
+// StructuredLogCallAction formats structured logging calls by keeping the
+// message prelude compact and packing trailing key/value pairs as units.
+type StructuredLogCallAction struct {
+	Target string
+}
+
 // BreakBinaryExprLayoutAction tries to break a binary expression using the
 // layout engine, based on configured style toggles.
 //
@@ -1536,6 +1542,179 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	return out, true
+}
+
+// Execute implements Action for StructuredLogCallAction.
+func (a *StructuredLogCallAction) Execute(caps Captures, ctx *Context) ([]byte,
+	bool) {
+
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil {
+		return nil, false
+	}
+
+	pairStart, ok := structuredLogPairStart(call)
+	if !ok || len(call.Args) <= pairStart {
+		return nil, false
+	}
+	if !structuredLogPairsAreSafe(call.Args[pairStart:]) {
+		return nil, false
+	}
+
+	start, end, original, ok := getNodeSpan(call, ctx)
+	if !ok || !isSafeStandaloneExprSpan(original) {
+		return nil, false
+	}
+	if !isWideCallExpr(caps, ctx, a.Target) {
+		return nil, false
+	}
+
+	formatted, ok := formatStructuredLogCallPacked(
+		call, pairStart, ctx, start,
+	)
+	if !ok || formatted == "" || formatted == original {
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(ctx.Source, start, end, []byte(formatted))
+	if err != nil {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func structuredLogPairsAreSafe(args []ast.Expr) bool {
+	if len(args) < 2 || len(args)%2 != 0 {
+		return false
+	}
+
+	for i := 0; i < len(args); i += 2 {
+		if !isStringLit(args[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func formatStructuredLogCallPacked(call *ast.CallExpr, pairStart int,
+	ctx *Context, start int) (string, bool) {
+
+	funText := renderNode(call.Fun, ctx.Fset)
+	if funText == "" {
+		return "", false
+	}
+
+	argTexts := make([]string, 0, len(call.Args))
+	for _, arg := range call.Args {
+		argText := renderNode(arg, ctx.Fset)
+		if argText == "" || strings.Contains(argText, "\n") {
+			return "", false
+		}
+		argTexts = append(argTexts, argText)
+	}
+
+	prelude := argTexts[:pairStart]
+	pairs := structuredLogPairTexts(argTexts[pairStart:])
+	if len(prelude) == 0 || len(pairs) == 0 {
+		return "", false
+	}
+
+	wsIndent := ctx.IndentAt(call)
+	contIndent := wsIndent + "\t"
+	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
+
+	var b strings.Builder
+	head := funText + "(" + strings.Join(prelude, ", ")
+	if startCol+visualLen(head+",", ctx.TabStop) <= ctx.ColumnLimit {
+		b.WriteString(head)
+		b.WriteByte(',')
+	} else {
+		b.WriteString(funText)
+		b.WriteByte('(')
+		for _, arg := range prelude {
+			b.WriteByte('\n')
+			b.WriteString(contIndent)
+			b.WriteString(arg)
+			b.WriteByte(',')
+		}
+	}
+
+	for _, line := range packStructuredLogPairLines(
+		pairs, contIndent, ctx.ColumnLimit, ctx.TabStop,
+	) {
+		b.WriteByte('\n')
+		b.WriteString(contIndent)
+		b.WriteString(line)
+	}
+
+	b.WriteByte('\n')
+	b.WriteString(wsIndent)
+	b.WriteByte(')')
+
+	return b.String(), true
+}
+
+func structuredLogPairTexts(args []string) []string {
+	pairs := make([]string, 0, len(args)/2)
+	for i := 0; i+1 < len(args); i += 2 {
+		pairs = append(pairs, args[i]+", "+args[i+1])
+	}
+
+	return pairs
+}
+
+func packStructuredLogPairLines(pairs []string, indent string, colLimit int,
+	tabStop int) []string {
+
+	if len(pairs) == 0 {
+		return nil
+	}
+
+	indentWidth := visualLen(indent, tabStop)
+	var lines []string
+	current := ""
+
+	flush := func() {
+		if current == "" {
+			return
+		}
+		lines = append(lines, current+",")
+		current = ""
+	}
+
+	for _, pair := range pairs {
+		pairWithComma := pair + ","
+		if indentWidth+visualLen(pairWithComma, tabStop) > colLimit {
+			flush()
+			parts := strings.SplitN(pair, ", ", 2)
+			if len(parts) == 2 {
+				lines = append(
+					lines, parts[0]+",", parts[1]+",",
+				)
+				continue
+			}
+		}
+
+		candidate := pair
+		if current != "" {
+			candidate = current + ", " + pair
+		}
+		if current != "" &&
+			indentWidth+visualLen(candidate+",", tabStop) > colLimit {
+
+			flush()
+			current = pair
+			continue
+		}
+
+		current = candidate
+	}
+	flush()
+
+	return lines
 }
 
 func buildCallArgsGroupDocs(argDocs []layout.Doc, isMake bool) []layout.Doc {

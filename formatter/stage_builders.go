@@ -198,14 +198,22 @@ func buildCompactCallStageFormatter(stageName string, cfg BaseConfig,
 					DSLLogCallsSelectorPrefixes,
 				IncludeNonFStringCalls: true,
 			}
+			structuredCond := &dsl.IsStructuredLogCallCond{
+				Target: "node",
+			}
 
 			return ownedSpansForCalls(
 				src,
 				func(call *ast.CallExpr) bool {
+					caps := dsl.Captures{
+						"node": call,
+					}
+
 					return cond.Eval(
-						dsl.Captures{
-							"node": call,
-						},
+						caps,
+						nil,
+					) || structuredCond.Eval(
+						caps,
 						nil,
 					)
 				},
@@ -278,22 +286,27 @@ func multilineCallOwnedSpans(src []byte,
 		IncludeNonFStringCalls: true,
 	}
 	nonFLogCond := &dsl.IsNonFLogCallCond{Target: "node"}
+	structuredLogCond := &dsl.IsStructuredLogCallCond{Target: "node"}
 
 	return ownedSpansForCalls(
 		src,
 		func(call *ast.CallExpr) bool {
 			return shouldOwnMultilineCall(
 				call, opts, logCond, nonFLogCond,
+				structuredLogCond,
 			)
 		},
 	)
 }
 
 func shouldOwnMultilineCall(call *ast.CallExpr, opts StageOptions,
-	logCond dsl.Condition, nonFLogCond dsl.Condition) bool {
+	logCond dsl.Condition, nonFLogCond dsl.Condition,
+	structuredLogCond dsl.Condition) bool {
 
 	caps := dsl.Captures{"node": call}
-	if logCond.Eval(caps, nil) || nonFLogCond.Eval(caps, nil) {
+	if logCond.Eval(caps, nil) || nonFLogCond.Eval(caps, nil) ||
+		structuredLogCond.Eval(caps, nil) {
+
 		return false
 	}
 

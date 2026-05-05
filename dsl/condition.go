@@ -1585,6 +1585,76 @@ func NonFStringLogNames() []string {
 	return []string{"Info", "Debug", "Trace", "Warn", "Error"}
 }
 
+// IsStructuredLogCallCond checks for structured logging calls whose trailing
+// arguments are key/value pairs.
+type IsStructuredLogCallCond struct {
+	Target string
+}
+
+// Eval implements Condition for IsStructuredLogCallCond.
+func (c *IsStructuredLogCallCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil {
+		return false
+	}
+
+	_, ok = structuredLogPairStart(call)
+
+	return ok
+}
+
+func structuredLogPairStart(call *ast.CallExpr) (int, bool) {
+	if call == nil {
+		return 0, false
+	}
+
+	name := structuredLogCallName(call)
+	if name == "" {
+		return 0, false
+	}
+
+	switch name {
+	case "InfoS", "DebugS", "WarnS":
+		if len(call.Args) < 3 || !isStringLit(call.Args[0]) {
+			return 0, false
+		}
+
+		return 1, true
+
+	case "ErrorS":
+		if len(call.Args) < 4 || !isStringLit(call.Args[1]) {
+			return 0, false
+		}
+
+		return 2, true
+
+	default:
+		return 0, false
+	}
+}
+
+func structuredLogCallName(call *ast.CallExpr) string {
+	if call == nil {
+		return ""
+	}
+
+	switch fun := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		if fun.Sel == nil {
+			return ""
+		}
+
+		return fun.Sel.Name
+
+	case *ast.Ident:
+		return fun.Name
+
+	default:
+		return ""
+	}
+}
+
 // Eval implements Condition for IsNonFLogCallCond.
 func (c *IsNonFLogCallCond) Eval(caps Captures, ctx *Context) bool {
 	node := resolveTarget(caps, c.Target)
