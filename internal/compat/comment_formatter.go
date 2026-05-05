@@ -366,6 +366,9 @@ func isDirectiveBlockComment(block []string) bool {
 }
 
 func reflowLineCommentBlock(block []string, indent string) []string {
+	if commentBlockHasGoExampleOutput(block) {
+		return block
+	}
 	if commentModePreservesBlock(block, commentMode) {
 		return block
 	}
@@ -475,6 +478,9 @@ func reflowLineCommentBlock(block []string, indent string) []string {
 
 func reflowBlockComment(block []string, indent string) []string {
 	if len(block) < 2 {
+		return block
+	}
+	if commentBlockHasGoExampleOutput(block) {
 		return block
 	}
 	if commentModePreservesBlock(block, commentMode) {
@@ -635,6 +641,17 @@ func commentBlockLooksPreformatted(block []string) bool {
 			return true
 		}
 		if startsNumberedList(trimmed) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func commentBlockHasGoExampleOutput(block []string) bool {
+	for _, raw := range block {
+		switch strings.TrimSpace(commentLineContent(raw)) {
+		case "Output:", "Unordered output:":
 			return true
 		}
 	}

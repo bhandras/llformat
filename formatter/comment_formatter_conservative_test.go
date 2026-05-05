@@ -103,6 +103,48 @@ type Example struct {
 	require.Equal(t, string(out), string(out2))
 }
 
+func TestCommentFormatterOverflowModePreservesGoExampleOutput(t *testing.T) {
+	in := []byte(`package p
+
+func ExampleWidget() {
+	// Output:
+	// first line stays separate even though this sentence is intentionally long
+	// second line stays separate too
+}
+`)
+
+	f := compat.NewCommentFormatter(
+		compat.CommentConfig{
+			ColumnLimit: 48,
+			Mode:        compat.CommentModeOverflow,
+		},
+	)
+	out := f.FormatFile(in)
+
+	require.Equal(t, string(in), string(out))
+}
+
+func TestCommentFormatterProseModePreservesGoExampleOutput(t *testing.T) {
+	in := []byte(`package p
+
+func ExampleWidget() {
+	// Unordered output:
+	// alpha is intentionally first in this source fixture
+	// beta remains on its own output line
+}
+`)
+
+	f := compat.NewCommentFormatter(
+		compat.CommentConfig{
+			ColumnLimit: 80,
+			Mode:        compat.CommentModeProse,
+		},
+	)
+	out := f.FormatFile(in)
+
+	require.Equal(t, string(in), string(out))
+}
+
 func TestCommentFormatterOverflowModeEmitsLongWordOnce(t *testing.T) {
 	in := []byte(`package p
 
