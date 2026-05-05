@@ -95,7 +95,8 @@ The CLI default is the current "next" profile. Important defaults include:
   separator
 
 These examples show the subset of Lightning Labs-style formatting that
-`llformat` owns. They are not a complete Go style guide.
+`llformat` owns. They are not a complete Go style guide. The examples use
+neutral names and mirror shapes covered by focused tests or golden fixtures.
 
 ### Comments
 
@@ -203,8 +204,9 @@ After:
 ```go
 func f(log Logger, sessionID string, count int, retry bool, reason string) {
 	log.InfoS("processed session with updated state",
-		"session_id", sessionID, "count", count,
-		"retry", retry, "reason", reason)
+		"session_id", sessionID, "count", count, "retry", retry,
+		"reason", reason,
+	)
 }
 ```
 
@@ -223,7 +225,8 @@ After:
 ```go
 func f(log Logger, err error, sessionID string, attempt int) {
 	log.ErrorS(err, "failed to process session",
-		"session_id", sessionID, "attempt", attempt)
+		"session_id", sessionID, "attempt", attempt,
+	)
 }
 ```
 
@@ -242,10 +245,7 @@ func processBundle(store Store, bundle PackageBundle, policy ValidationPolicy, c
 After:
 
 ```go
-func processBundle(
-	store Store,
-	bundle PackageBundle,
-	policy ValidationPolicy,
+func processBundle(store Store, bundle PackageBundle, policy ValidationPolicy,
 	clock Clock) error {
 
 	return store.Save(bundle, policy, clock)
@@ -301,23 +301,62 @@ Multiline function literal signatures also keep a body separator:
 Before:
 
 ```go
-func register(runner Runner) {
-	runner.Run("session", func(ctx context.Context, req *Request) (*Result, error) {
-		return handle(ctx, req)
-	})
+func f() {
+	requestParserForInitialization := func(req *OpenRequest) (*InitMessage, error) {
+		_ = req
+		return nil, nil
+	}
+
+	_ = requestParserForInitialization
 }
 ```
 
 After:
 
 ```go
-func register(runner Runner) {
-	runner.Run("session", func(
-		ctx context.Context,
-		req *Request) (*Result, error) {
+func f() {
+	requestParserForInitialization := func(req *OpenRequest) (*InitMessage,
+		error) {
 
-		return handle(ctx, req)
-	})
+		_ = req
+
+		return nil, nil
+	}
+
+	_ = requestParserForInitialization
+}
+```
+
+Already-multiline closure signatures keep their separator:
+
+Before:
+
+```go
+func f() {
+	alreadyFormatted := func(
+		first SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns,
+		second AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak) {
+		_ = first
+		_ = second
+	}
+
+	_ = alreadyFormatted
+}
+```
+
+After:
+
+```go
+func f() {
+	alreadyFormatted := func(
+		first SomeRidiculouslyLongParameterTypeNameThatForcesLineBreakUnder80Columns,
+		second AnotherRidiculouslyLongParameterTypeNameThatAlsoForcesLineBreak) {
+
+		_ = first
+		_ = second
+	}
+
+	_ = alreadyFormatted
 }
 ```
 
@@ -363,6 +402,7 @@ if missingConfig &&
 	allowDefault {
 
 	log.Debug("using default config")
+
 	return defaultConfig(), nil
 }
 ```
@@ -381,8 +421,9 @@ After:
 
 ```go
 result := buildPackage(
-	sessionID, requestID, previousState, nextState,
-	retryPolicy, clock)
+	sessionID, requestID, previousState, nextState, retryPolicy,
+	clock,
+)
 ```
 
 Method chains break at selector boundaries:
