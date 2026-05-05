@@ -90,7 +90,7 @@ func doSomething() {}
 	require.NoError(t, err)
 }
 
-func TestDSLBlankLinesNative_NoBlankAfterMultilineIfWithSingleReturn(
+func TestDSLBlankLinesNative_BlankAfterMultilineIfWithSingleReturn(
 	t *testing.T) {
 
 	const in = `package p
@@ -121,8 +121,7 @@ func f(first, second, third bool) int {
 	require.Equal(t, string(first), string(second))
 
 	out := string(first)
-	require.Contains(t, out, "third {\n\t\treturn 1")
-	require.NotContains(t, out, "third {\n\n\t\treturn 1")
+	require.Contains(t, out, "third {\n\n\t\treturn 1")
 
 	fset := token.NewFileSet()
 	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)

@@ -163,6 +163,7 @@ func (a *ReflowCallAction) Execute(caps Captures, ctx *Context) ([]byte, bool) {
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
+
 		return nil, false
 	}
 
@@ -639,7 +640,6 @@ func (a *InsertBlankBeforeFirstStmtInBlockAction) Execute(caps Captures,
 	}
 
 	var first ast.Stmt
-	onlyReturn := false
 
 	switch n := node.(type) {
 	case *ast.IfStmt:
@@ -647,21 +647,18 @@ func (a *InsertBlankBeforeFirstStmtInBlockAction) Execute(caps Captures,
 			return nil, false
 		}
 		first = n.Body.List[0]
-		onlyReturn = len(n.Body.List) == 1 && isReturnStmt(first)
 
 	case *ast.ForStmt:
 		if n == nil || n.Body == nil || len(n.Body.List) == 0 {
 			return nil, false
 		}
 		first = n.Body.List[0]
-		onlyReturn = len(n.Body.List) == 1 && isReturnStmt(first)
 
 	case *ast.CaseClause:
 		if n == nil || len(n.Body) == 0 {
 			return nil, false
 		}
 		first = n.Body[0]
-		onlyReturn = len(n.Body) == 1 && isReturnStmt(first)
 
 	default:
 		return nil, false
@@ -680,17 +677,6 @@ func (a *InsertBlankBeforeFirstStmtInBlockAction) Execute(caps Captures,
 	lineStartIdx = leadingCommentBlockLineStart(ctx.Source, lineStartIdx)
 	if lineStartIdx < 0 || lineStartIdx > len(ctx.Source) {
 		return nil, false
-	}
-
-	if onlyReturn {
-		out, changed, err := removeBlankLineBeforeLineStart(
-			ctx.Source, lineStartIdx,
-		)
-		if err != nil || !changed {
-			return nil, false
-		}
-
-		return out, true
 	}
 
 	// Already has a blank line?
@@ -1097,6 +1083,7 @@ func (a *BreakAssignRHSAction) Execute(caps Captures, ctx *Context) ([]byte,
 	prefixStart := lineStart(ctx.Source, opStart)
 	if visualLen(string(ctx.Source[prefixStart:opEnd]), ctx.TabStop) >
 		ctx.ColumnLimit {
+
 		return nil, false
 	}
 
@@ -1113,6 +1100,7 @@ func (a *BreakAssignRHSAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
+
 		return nil, false
 	}
 
@@ -1192,6 +1180,7 @@ func (a *BreakValueSpecGenericConversionAction) Execute(caps Captures,
 	if !replacementLinesFit(
 		affected.Bytes(), ctx.ColumnLimit, ctx.TabStop,
 	) {
+
 		return nil, false
 	}
 
@@ -1203,6 +1192,7 @@ func (a *BreakValueSpecGenericConversionAction) Execute(caps Captures,
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
+
 		return nil, false
 	}
 
@@ -1251,6 +1241,7 @@ func formatGenericIndexListForDecl(idx *ast.IndexListExpr, indent string,
 		indexText := renderNode(index, ctx.Fset)
 		if indexText == "" || strings.Contains(indexText, "\n") ||
 			hasAnyComment(indexText) {
+
 			return "", false
 		}
 		out.WriteString(typeIndent)
@@ -2713,6 +2704,7 @@ func (a *BreakSelectorCallArgsAction) Execute(caps Captures, ctx *Context) (
 	original := ctx.Source[start:end]
 	if hasAnyComment(string(original)) ||
 		bytes.Contains(original, []byte("\n")) {
+
 		return nil, false
 	}
 	if ctx.LineWidth(call) <= ctx.ColumnLimit {
@@ -2763,6 +2755,7 @@ func (a *BreakSelectorCallArgsAction) Execute(caps Captures, ctx *Context) (
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
+
 		return nil, false
 	}
 
@@ -2807,6 +2800,7 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 		!controlHeaderInitCallSuffixOverflows(
 			ctx, call, start, end, callText,
 		) {
+
 		return nil, false
 	}
 
@@ -2822,6 +2816,7 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 		if out, changed, ok := maybeBreakBeforeCallForLongMultiAssignPrefix(
 			ctx, start, end, wsIndent, callText, len(call.Args),
 		); ok {
+
 			return out, changed
 		}
 	}
@@ -3463,6 +3458,7 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	pos = skipHorizontalWhitespace(ctx.Source, pos)
 	if pos >= len(ctx.Source) || ctx.Source[pos] == '\n' ||
 		ctx.Source[pos] == '}' {
+
 		return nil, false, nil
 	}
 
@@ -3484,6 +3480,7 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
+
 		return nil, false, err
 	}
 
@@ -3547,6 +3544,7 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 	funcLit, ok := node.(*ast.FuncLit)
 	if !ok || funcLit == nil || funcLit.Body == nil ||
 		!funcLit.Body.Lbrace.IsValid() {
+
 		return nil, false
 	}
 
@@ -3723,6 +3721,7 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
+
 		return nil, false
 	}
 
@@ -3800,6 +3799,7 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	funcDecl, ok := node.(*ast.FuncDecl)
 	if !ok || funcDecl == nil || funcDecl.Body == nil ||
 		!funcDecl.Body.Lbrace.IsValid() {
+
 		return nil, false
 	}
 
@@ -4098,6 +4098,7 @@ func scanIdent(s string, i int) int {
 	}
 	if s[i] != '_' && (s[i] < 'A' || s[i] > 'Z') &&
 		(s[i] < 'a' || s[i] > 'z') {
+
 		return i
 	}
 	i++
@@ -4352,6 +4353,7 @@ func findTopLevelFuncBodyBrace(sig string, start int) int {
 			if isFuncBodyBrace(
 				sig, i, parenDepth, bracketDepth, braceDepth,
 			) {
+
 				return i
 			}
 			braceDepth++
@@ -4810,6 +4812,7 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) (
 	fieldEnd := ctx.Fset.Position(field.End()).Offset
 	if fieldStart < 0 || fieldEnd > len(ctx.Source) ||
 		fieldStart >= fieldEnd {
+
 		return nil, false
 	}
 
@@ -4822,6 +4825,7 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) (
 	sigText := string(ctx.Source[fieldStart:fieldEnd])
 	if !strings.Contains(sigText, "\n") &&
 		ctx.LineWidth(node) <= ctx.ColumnLimit {
+
 		return nil, false
 	}
 
@@ -5131,6 +5135,7 @@ func extractTrailingComment(source []byte, nodeEnd, lineEnd int) string {
 	trimmed := strings.TrimLeft(lineSuffix, " \t")
 	if !strings.HasPrefix(trimmed, "//") &&
 		!strings.HasPrefix(trimmed, "/*") {
+
 		return lineSuffix
 	}
 	// Normalize to a single space before the comment.
@@ -5231,36 +5236,6 @@ func hasBlankLineBeforeLineStart(src []byte, targetLineStart int) bool {
 	prevLine := src[prevStart:prevLineEnd]
 
 	return isWhitespaceOnlyLine(prevLine)
-}
-
-func removeBlankLineBeforeLineStart(src []byte, targetLineStart int) ([]byte,
-	bool, error) {
-
-	if targetLineStart <= 0 {
-		return nil, false, nil
-	}
-	prevLineEnd := targetLineStart - 1
-	prevStart := lineStart(src, prevLineEnd)
-	if prevStart < 0 {
-		return nil, false, nil
-	}
-	prevLine := src[prevStart:prevLineEnd]
-	if !isWhitespaceOnlyLine(prevLine) {
-		return nil, false, nil
-	}
-
-	out, err := ApplySingleEdit(src, prevStart, targetLineStart, nil)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return out, true, nil
-}
-
-func isReturnStmt(stmt ast.Stmt) bool {
-	_, ok := stmt.(*ast.ReturnStmt)
-
-	return ok
 }
 
 // Execute implements Action for InsertBlankBeforeAction.
@@ -5425,6 +5400,7 @@ func (a *BreakMethodChainAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	if chainStart < 0 || chainEnd > len(ctx.Source) ||
 		chainStart >= chainEnd {
+
 		return nil, false
 	}
 
@@ -5639,6 +5615,7 @@ func (a *BreakReturnValuesAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	if funcType == nil || funcType.Results == nil ||
 		len(funcType.Results.List) == 0 {
+
 		return nil, false
 	}
 
