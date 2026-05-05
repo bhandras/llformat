@@ -79,8 +79,9 @@ func buildStageMap(stages []Stage) (map[string]Stage, []string, error) {
 			return nil, nil, fmt.Errorf("stage with empty name")
 		}
 		if _, exists := stageMap[s.Name]; exists {
-			return nil, nil, fmt.Errorf("duplicate stage name: %q",
-				s.Name)
+			return nil, nil, fmt.Errorf(
+				"duplicate stage name: %q", s.Name,
+			)
 		}
 		stageMap[s.Name] = s
 		order = append(order, s.Name)

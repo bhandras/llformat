@@ -244,7 +244,9 @@ func formatGoFile(path string, cfg runConfig) (bool, error) {
 
 	if cfg.write {
 		if err := cmd.Run(); err != nil {
-			return false, fmt.Errorf("llformat %s: %w", path, err)
+			return false, fmt.Errorf(
+				"llformat %s: %w", path, err,
+			)
 		}
 
 		return false, nil
@@ -252,12 +254,16 @@ func formatGoFile(path string, cfg runConfig) (bool, error) {
 
 	orig, err := os.ReadFile(path)
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", path, err)
+		return false, fmt.Errorf(
+			"read %s: %w", path, err,
+		)
 	}
 
 	formatted, err := cmd.Output()
 	if err != nil {
-		return false, fmt.Errorf("llformat %s: %w", path, err)
+		return false, fmt.Errorf(
+			"llformat %s: %w", path, err,
+		)
 	}
 
 	return !bytes.Equal(orig, formatted), nil

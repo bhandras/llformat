@@ -254,8 +254,9 @@ func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 	fixpointIters := f.fixpointIters
 	if fixpointIters < 0 {
 		return formatter.PipelineConfig{},
-			fmt.Errorf("invalid flags: --fixpoint-iters must be " +
-				">= 0")
+			fmt.Errorf(
+				"invalid flags: --fixpoint-iters must be >= 0",
+			)
 	}
 	if fixpointIters == 0 {
 		fixpointIters = 3

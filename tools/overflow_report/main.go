@@ -686,8 +686,9 @@ func runLLFormat(llformatBin string, col, tabStop int,
 	}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
-		return nil, fmt.Errorf("%w: %s", err,
-			strings.TrimSpace(string(ee.Stderr)))
+		return nil, fmt.Errorf(
+			"%w: %s", err, strings.TrimSpace(string(ee.Stderr)),
+		)
 	}
 
 	return nil, err
@@ -812,8 +813,9 @@ func extractSnippets(originalPath string, formatted []byte,
 	}
 	tf := fset.File(f.Pos())
 	if tf == nil {
-		return make([]snippet, len(overflows)), fmt.Errorf("missing "+
-			"token.File for %s", originalPath)
+		return make([]snippet, len(overflows)), fmt.Errorf(
+			"missing token.File for %s", originalPath,
+		)
 	}
 
 	out := make([]snippet, 0, len(overflows))

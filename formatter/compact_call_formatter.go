@@ -2454,6 +2454,14 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			return candidate
 		}
 	}
+	if head == "fmt.Errorf" {
+		if formatted, ok := formatCallArgsOnContinuationLine(
+			head, normArgs, wsIndent, contIndent, width,
+			hasInlineComment,
+		); ok {
+			return formatted
+		}
+	}
 
 	writeSplit := func(seg string, hasTrailingArgs bool) {
 		q := quoteGoString(seg)
@@ -2799,6 +2807,39 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+func formatCallArgsOnContinuationLine(head string, args []arg, wsIndent,
+	contIndent string, width int, hasInlineComment bool) (string, bool) {
+
+	if hasInlineComment || len(args) == 0 {
+		return "", false
+	}
+
+	parts := make([]string, 0, len(args))
+	for _, a := range args {
+		switch a.kind {
+		case argText:
+			parts = append(parts, quoteGoString(a.text))
+
+		case argExpr:
+			expr := strings.TrimSpace(a.expr)
+			if expr == "" || strings.Contains(expr, "\n") {
+				return "", false
+			}
+			parts = append(parts, expr)
+
+		default:
+			return "", false
+		}
+	}
+
+	argLine := strings.Join(parts, ", ") + ","
+	if advanceCols(visualLen(contIndent), argLine) > width {
+		return "", false
+	}
+
+	return head + "(\n" + contIndent + argLine + "\n" + wsIndent + ")", true
 }
 
 func normalizeCallArgs(rawArgs []string, opts greedyCallOptions) []arg {

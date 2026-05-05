@@ -404,6 +404,85 @@ func f() error {
 	require.NotContains(t, out, `"nil Message in " +`)
 }
 
+func TestPipelineNext_LogCalls_ShortConcatUsesMultilineCallWhenIndented(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+func f(msg any) error {
+	switch msg.(type) {
+	case string:
+		if msg == nil {
+			return fmt.Errorf("nil Message in " +
+				"SendServerEventRequest")
+		}
+	}
+	return nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "return "+
+			"fmt.Errorf(\n				\"nil "+
+			"Message in "+
+			"SendServerEventRequest\",\n			)",
+	)
+	require.NotContains(t, out, `"nil Message in " +`)
+}
+
+func TestPipelineNext_LogCalls_ShortErrorfArgsUseMultilineCallWhenIndented(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+func f(err error) (any, error) {
+	if err != nil {
+		return nil, fmt.Errorf("control block to bytes: %w", err)
+	}
+	return nil, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "return nil, "+
+			"fmt.Errorf(\n			\"control block to "+
+			"bytes: %w\", err,\n		)",
+	)
+	require.NotContains(t, out, `"control block to bytes: %w",`+"\n")
+}
+
 func TestPipelineNext_LogCalls_FormatCompositeArgAsBlock(t *testing.T) {
 	const in = `package p
 

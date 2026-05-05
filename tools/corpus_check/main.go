@@ -247,17 +247,20 @@ func buildReport(repos []string, cfg reportConfig) (report, error) {
 	for _, repoArg := range repos {
 		root, err := filepath.Abs(repoArg)
 		if err != nil {
-			return report{}, fmt.Errorf("resolve repo %q: %w",
-				repoArg, err)
+			return report{}, fmt.Errorf(
+				"resolve repo %q: %w", repoArg, err,
+			)
 		}
 		info, err := os.Stat(root)
 		if err != nil {
-			return report{}, fmt.Errorf("stat repo %q: %w", root,
-				err)
+			return report{}, fmt.Errorf(
+				"stat repo %q: %w", root, err,
+			)
 		}
 		if !info.IsDir() {
-			return report{}, fmt.Errorf("repo %q is not a "+
-				"directory", root)
+			return report{}, fmt.Errorf(
+				"repo %q is not a directory", root,
+			)
 		}
 
 		summary, cases, err := analyzeRepo(root, cfg)
@@ -281,7 +284,9 @@ func analyzeRepo(root string, cfg reportConfig) (repoSummary, []caseRecord,
 
 	files, err := goFilesUnder(root, cfg.ExcludeDirs, cfg.ExcludeSuffix)
 	if err != nil {
-		return repoSummary{}, nil, fmt.Errorf("scan %s: %w", root, err)
+		return repoSummary{}, nil, fmt.Errorf(
+			"scan %s: %w", root, err,
+		)
 	}
 
 	summary := repoSummary{
@@ -318,7 +323,9 @@ func analyzeFile(root, path string, cfg reportConfig) fileAnalysis {
 
 	original, err := os.ReadFile(path)
 	if err != nil {
-		analysis.llformatErr = fmt.Errorf("read: %w", err)
+		analysis.llformatErr = fmt.Errorf(
+			"read: %w", err,
+		)
 
 		return analysis
 	}
@@ -779,8 +786,9 @@ func runLLFormat(llformatBin string, col, tabStop int, commentMode string,
 	}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
-		return nil, fmt.Errorf("%w: %s", err,
-			strings.TrimSpace(string(ee.Stderr)))
+		return nil, fmt.Errorf(
+			"%w: %s", err, strings.TrimSpace(string(ee.Stderr)),
+		)
 	}
 
 	return nil, err
