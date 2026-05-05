@@ -152,4 +152,57 @@ func f(v int) {
 			)
 		},
 	)
+
+	t.Run(
+		"suppress single return",
+		func(t *testing.T) {
+			const src = `package p
+
+func f(a, b bool) int {
+	if a &&
+		b {
+
+		return 1
+	}
+
+	return 0
+}
+`
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(
+				fset, "", src, parser.ParseComments,
+			)
+			require.NoError(t, err)
+
+			var ifStmt *ast.IfStmt
+			ast.Inspect(
+				file,
+				func(n ast.Node) bool {
+					if s, ok := n.(*ast.IfStmt); ok {
+						ifStmt = s
+
+						return false
+					}
+
+					return true
+				},
+			)
+			require.NotNil(t, ifStmt)
+
+			ctx := NewContext(fset, []byte(src), 80, 8)
+			out, changed := (&InsertBlankBeforeFirstStmtInBlockAction{
+				Target:                 "node",
+				SuppressWhenOnlyReturn: true,
+			}).Execute(Captures{"node": ifStmt},
+				ctx,
+			)
+			require.True(t, changed)
+			require.Contains(t, string(out), "{\n		retur"+
+				"n 1")
+			require.NotContains(
+				t, string(out),
+				"{\n\n		return 1",
+			)
+		},
+	)
 }

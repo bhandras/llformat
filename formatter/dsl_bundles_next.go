@@ -334,7 +334,8 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 			When:     &dsl.HasMultilineIfHeaderCond{Target: "node"},
 			Priority: 9,
 			Action: &dsl.InsertBlankBeforeFirstStmtInBlockAction{
-				Target: "node",
+				Target:                 "node",
+				SuppressWhenOnlyReturn: true,
 			},
 		}, dsl.Rule{
 			Name:    "blank_after_multiline_for_header",
@@ -344,7 +345,8 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 			},
 			Priority: 9,
 			Action: &dsl.InsertBlankBeforeFirstStmtInBlockAction{
-				Target: "node",
+				Target:                 "node",
+				SuppressWhenOnlyReturn: true,
 			},
 		}, dsl.Rule{
 			Name:    "blank_after_multiline_case_header",
@@ -354,7 +356,8 @@ func dslRulesForBlankLines(opts StageOptions) []dsl.Rule {
 			},
 			Priority: 9,
 			Action: &dsl.InsertBlankBeforeFirstStmtInBlockAction{
-				Target: "node",
+				Target:                 "node",
+				SuppressWhenOnlyReturn: true,
 			},
 		},
 	)
