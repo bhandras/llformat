@@ -1927,6 +1927,17 @@ func (s *callExprArgNextState) handleCallExprArgNext(a string) bool {
 		return true
 	}
 
+	// If the call fits on its own continuation line, keep it compact even
+	// when a slog attribute contains small nested calls such as len(...).
+	// Recursing here would turn compact attributes like
+	// slog.Int("key", len(xs)) into a multi-line nested call for no
+	// column-limit benefit.
+	if fitsFresh && !hasAlways && isSlogAttrCall(a) {
+		s.writeArgOnFreshLine(a)
+
+		return true
+	}
+
 	// Check if we can use generic placement logic.
 	if !hasAlways && !hasNested && fitsFresh {
 
@@ -1980,6 +1991,32 @@ func (s *callExprArgNextState) writeArgSimple(a string) {
 		s.curLen = lastLineLen(a)
 		s.seenMultilineCall = true
 	}
+}
+
+func (s *callExprArgNextState) writeArgOnFreshLine(a string) {
+	forcedBreak := s.forcedBreak
+	s.forcedBreak = true
+	s.writeArgSimple(a)
+	s.forcedBreak = forcedBreak
+}
+
+func isSlogAttrCall(arg string) bool {
+	fset := token.NewFileSet()
+	expr, err := parser.ParseExprFrom(fset, "", arg, parser.AllErrors)
+	if err != nil {
+		return false
+	}
+	call, ok := expr.(*ast.CallExpr)
+	if !ok || call == nil {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel == nil {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+
+	return ok && ident.Name == "slog"
 }
 
 func formatSelectorCallArgIfOverflowsNext(arg, contIndent string,

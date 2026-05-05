@@ -1585,7 +1585,7 @@ func (a *StructuredLogCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if !ok || len(call.Args) <= pairStart {
 		return nil, false
 	}
-	if !structuredLogPairsAreSafe(call.Args[pairStart:]) {
+	if !structuredLogArgsAreSafe(call.Args[pairStart:]) {
 		return nil, false
 	}
 
@@ -1612,7 +1612,25 @@ func (a *StructuredLogCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	return out, true
 }
 
-func structuredLogPairsAreSafe(args []ast.Expr) bool {
+func structuredLogArgsAreSafe(args []ast.Expr) bool {
+	if len(args) == 0 {
+		return false
+	}
+
+	if structuredLogArgsAreStringPairs(args) {
+		return true
+	}
+
+	for _, arg := range args {
+		if isStringLit(arg) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func structuredLogArgsAreStringPairs(args []ast.Expr) bool {
 	if len(args) < 2 || len(args)%2 != 0 {
 		return false
 	}
@@ -1644,8 +1662,10 @@ func formatStructuredLogCallPacked(call *ast.CallExpr, pairStart int,
 	}
 
 	prelude := argTexts[:pairStart]
-	pairs := structuredLogPairTexts(argTexts[pairStart:])
-	if len(prelude) == 0 || len(pairs) == 0 {
+	units := structuredLogArgUnits(
+		call.Args[pairStart:], argTexts[pairStart:],
+	)
+	if len(prelude) == 0 || len(units) == 0 {
 		return "", false
 	}
 
@@ -1669,8 +1689,8 @@ func formatStructuredLogCallPacked(call *ast.CallExpr, pairStart int,
 		}
 	}
 
-	for _, line := range packStructuredLogPairLines(
-		pairs, contIndent, ctx.ColumnLimit, ctx.TabStop,
+	for _, line := range structuredLogArgUnitLines(
+		units, contIndent, ctx.ColumnLimit, ctx.TabStop,
 	) {
 		b.WriteByte('\n')
 		b.WriteString(contIndent)
@@ -1684,39 +1704,32 @@ func formatStructuredLogCallPacked(call *ast.CallExpr, pairStart int,
 	return b.String(), true
 }
 
-func structuredLogPairTexts(args []string) []string {
-	pairs := make([]string, 0, len(args)/2)
-	for i := 0; i+1 < len(args); i += 2 {
-		pairs = append(pairs, args[i]+", "+args[i+1])
+func structuredLogArgUnits(args []ast.Expr, texts []string) []string {
+	if structuredLogArgsAreStringPairs(args) {
+		units := make([]string, 0, len(texts)/2)
+		for i := 0; i+1 < len(texts); i += 2 {
+			units = append(units, texts[i]+", "+texts[i+1])
+		}
+
+		return units
 	}
 
-	return pairs
+	return texts
 }
 
-func packStructuredLogPairLines(pairs []string, indent string, colLimit int,
+func structuredLogArgUnitLines(units []string, indent string, colLimit int,
 	tabStop int) []string {
 
-	if len(pairs) == 0 {
+	if len(units) == 0 {
 		return nil
 	}
 
 	indentWidth := visualLen(indent, tabStop)
 	var lines []string
-	current := ""
-
-	flush := func() {
-		if current == "" {
-			return
-		}
-		lines = append(lines, current+",")
-		current = ""
-	}
-
-	for _, pair := range pairs {
-		pairWithComma := pair + ","
-		if indentWidth+visualLen(pairWithComma, tabStop) > colLimit {
-			flush()
-			parts := strings.SplitN(pair, ", ", 2)
+	for _, unit := range units {
+		unitWithComma := unit + ","
+		if indentWidth+visualLen(unitWithComma, tabStop) > colLimit {
+			parts := strings.SplitN(unit, ", ", 2)
 			if len(parts) == 2 {
 				lines = append(
 					lines, parts[0]+",", parts[1]+",",
@@ -1725,21 +1738,8 @@ func packStructuredLogPairLines(pairs []string, indent string, colLimit int,
 			}
 		}
 
-		candidate := pair
-		if current != "" {
-			candidate = current + ", " + pair
-		}
-		if current != "" &&
-			indentWidth+visualLen(candidate+",", tabStop) > colLimit {
-
-			flush()
-			current = pair
-			continue
-		}
-
-		current = candidate
+		lines = append(lines, unitWithComma)
 	}
-	flush()
 
 	return lines
 }

@@ -1608,22 +1608,23 @@ func structuredLogPairStart(call *ast.CallExpr) (int, bool) {
 
 	switch name {
 	case "InfoS", "DebugS", "WarnS":
-		if len(call.Args) < 3 || !isStringLit(call.Args[0]) {
-			return 0, false
+		if len(call.Args) > 1 && isStringLit(call.Args[0]) {
+			return 1, true
 		}
-
-		return 1, true
+		if len(call.Args) > 2 && isStringLit(call.Args[1]) {
+			return 2, true
+		}
 
 	case "ErrorS":
-		if len(call.Args) < 4 || !isStringLit(call.Args[1]) {
-			return 0, false
+		if len(call.Args) > 2 && isStringLit(call.Args[1]) {
+			return 2, true
 		}
-
-		return 2, true
-
-	default:
-		return 0, false
+		if len(call.Args) > 3 && isStringLit(call.Args[2]) {
+			return 3, true
+		}
 	}
+
+	return 0, false
 }
 
 func structuredLogCallName(call *ast.CallExpr) string {

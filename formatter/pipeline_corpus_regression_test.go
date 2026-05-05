@@ -298,10 +298,9 @@ func f(ctx context.Context, log Logger, batchID string) {
 	out := formatWithDefaultNext(t, in)
 
 	require.Contains(
-		t, out, "log.WarnS(\n			ctx, \"Update "+
-			"detected for unknown batch\", "+
-			"nil,\n			\"batch_id\", "+
-			"batchID,\n		)",
+		t, out, "log.WarnS(ctx, \"Update detected for unknown "+
+			"batch\", "+
+			"nil,\n			\"batch_id\", batchID)",
 	)
 	requireNoLineLongerThan(t, out, 80)
 }

@@ -315,6 +315,22 @@ func TestFormatCallPackedMultiLine_DoesNotReflowNestedLenCallWhenItFitsOnItsOwnL
 	)
 }
 
+func TestFormatCallPackedMultiLine_DoesNotReflowNestedSlogAttrWhenItFits(
+	t *testing.T) {
+
+	call := []byte(
+		`log.Info("event", slog.Int("tx_count", len(signers)), ` +
+			`slog.Int("cosigner_count", len(index)))`,
+	)
+
+	out := FormatCallPackedMultiLineNext(call, "\t", 80, 8)
+
+	require.Contains(t, out, `slog.Int("tx_count", len(signers)),`)
+	require.Contains(t, out, `slog.Int("cosigner_count", len(index)),`)
+	require.NotContains(t, out, "slog.Int(\n")
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestFormatCallGreedy_DoesNotSplitShortFormatStringToFitCommaSpace(
 	t *testing.T) {
 
