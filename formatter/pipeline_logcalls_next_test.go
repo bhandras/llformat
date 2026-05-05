@@ -323,10 +323,45 @@ func f(t *testing.T, id string) {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(t, out, "\"expiry index \"+")
-	require.Contains(t, out, "\"records map\",")
+	require.Contains(t, out, "expiry index \"+")
+	require.Contains(t, out, "\"but not in records map\",")
 	require.NotContains(t, out, "\"exp\"")
 	require.NotContains(t, out, "\"iry\"")
+}
+
+func TestPipelineNext_LogCalls_FormatsFatalfLikePrintfCalls(t *testing.T) {
+	const in = `package p
+
+import "testing"
+
+func checkRecord(t *testing.T, recordID string, groupName string) {
+	if recordID == "" {
+		t.Fatalf("record %s from group %s was missing from the generated output index", recordID, groupName)
+	}
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, `t.Fatalf("record %s from group %s `+
+		`was missing from the "+`)
+	require.Contains(
+		t, out, `"generated output index", recordID, groupName)`,
+	)
+	require.Contains(t, out, "recordID, groupName)")
+	require.NotContains(t, out, "t.Fatalf(\n")
 }
 
 func TestPipelineNext_LogCalls_DoesNotShardSingleStringUnderDeepIndent(
@@ -364,9 +399,8 @@ func f(t *testing.T, id string) {
 
 	out := string(p.Format([]byte(in)))
 
-	require.Contains(
-		t, out, "\"record %s in expiry index but not in records map\"",
-	)
+	require.Contains(t, out, "record %s in expiry index \"+")
+	require.Contains(t, out, "\"but not in records map\",")
 	require.NotContains(t, out, "\"exp\"")
 	require.NotContains(t, out, "\"iry\"")
 	require.NotContains(t, out, "\" rec\"")

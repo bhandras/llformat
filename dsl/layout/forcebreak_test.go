@@ -15,8 +15,7 @@ func TestForceBreakForcesGroupToBreak(t *testing.T) {
 	// a newline.
 	out := Render(doc, 80, 8, "")
 	if out != "a\nb" {
-		t.Fatalf(
-			"expected forced break output %q, got %q", "a\\nb", out,
-		)
+		t.Fatalf("expected forced break output %q, got %q", "a\\nb",
+			out)
 	}
 }

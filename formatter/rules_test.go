@@ -163,8 +163,8 @@ func TestMatchPrefixAt(t *testing.T) {
 
 func TestDefaultPatterns(t *testing.T) {
 	logPatterns := DefaultLogPatterns()
-	if len(logPatterns) != 5 {
-		t.Errorf("len(DefaultLogPatterns()) = %d, want 5",
+	if len(logPatterns) != 6 {
+		t.Errorf("len(DefaultLogPatterns()) = %d, want 6",
 			len(logPatterns))
 	}
 
@@ -175,8 +175,8 @@ func TestDefaultPatterns(t *testing.T) {
 	}
 
 	allPatterns := DefaultCallPatterns()
-	if len(allPatterns) != 8 {
-		t.Errorf("len(DefaultCallPatterns()) = %d, want 8",
+	if len(allPatterns) != 9 {
+		t.Errorf("len(DefaultCallPatterns()) = %d, want 9",
 			len(allPatterns))
 	}
 }

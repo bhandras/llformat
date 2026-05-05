@@ -1499,6 +1499,7 @@ func LegacyMultiLineScanRules(scanFunc LegacyMultiLineScanFunc) []Rule {
 // LegacyMultiLineScanRules.
 func LegacyMultiLineScanRulesWithOptions(opts MultiLineCallOptions,
 	scanFunc LegacyMultiLineScanFunc) []Rule {
+
 	return []Rule{
 		{
 			Name: "legacy_multiline_scan",
@@ -1539,6 +1540,7 @@ func LegacyCompactCallRules(formatFunc LegacyCompactCallFormatFunc) []Rule {
 // LegacyCommentRules delegates comment formatting to a legacy formatter.
 func LegacyCommentRules(formatFunc LegacyCommentFormatFunc,
 	moveInlineAbove bool) []Rule {
+
 	return []Rule{
 		{
 			Name: "legacy_comment_format",
@@ -1616,6 +1618,7 @@ func LegacyBlankLinesRules(formatFunc LegacyBlankLinesFormatFunc) []Rule {
 // source cannot be parsed, or as a last resort after native DSL rules).
 func LegacyBlankLinesFallbackRules(
 	formatFunc LegacyBlankLinesFormatFunc) []Rule {
+
 	return []Rule{
 		{
 			Name: "legacy_blank_lines_fallback",

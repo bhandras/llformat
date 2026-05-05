@@ -8,6 +8,7 @@ package formatter
 func DefaultMultilineExcludes() []string {
 	return []string{
 		"log.Infof", "log.Debugf", "log.Tracef", "log.Errorf", "log.Warnf",
+		"log.Fatalf",
 		"fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
 	}
 }

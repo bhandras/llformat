@@ -1187,10 +1187,8 @@ func requireNoLineLongerThan(t *testing.T, src string, limit int) {
 			continue
 		}
 		if got := NewBaseConfig(limit, 8).Width(line); got > limit {
-			t.Fatalf(
-				"line %d is %d columns, want <= %d:\n%s", idx+1,
-				got, limit, line,
-			)
+			t.Fatalf("line %d is %d columns, want <= %d:\n%s",
+				idx+1, got, limit, line)
 		}
 	}
 }

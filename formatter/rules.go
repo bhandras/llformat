@@ -141,7 +141,7 @@ var DefaultOperatorRules = []OperatorRule{
 func DefaultLogPatterns() []string {
 	return []string{
 		"log.Infof(", "log.Debugf(", "log.Tracef(",
-		"log.Errorf(", "log.Warnf(",
+		"log.Errorf(", "log.Warnf(", "log.Fatalf(",
 	}
 }
 

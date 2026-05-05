@@ -209,6 +209,7 @@ var skipGofmt = false
 func defaultTargets() []string {
 	return []string{
 		"log.Infof(", "log.Debugf(", "log.Tracef(", "log.Errorf(", "log.Warnf(",
+		"log.Fatalf(",
 		"fmt.Printf(", "fmt.Sprintf(", "fmt.Errorf(",
 	}
 }
@@ -2195,6 +2196,7 @@ func isDirectCompositeLiteralExpr(expr ast.Expr) bool {
 // at word boundaries when possible.
 func buildSplitQuoted(text string, startCol int, contIndent string,
 	width int) string {
+
 	return buildSplitQuotedWithOptions(
 		text, startCol, contIndent, width, false,
 	)
@@ -2205,6 +2207,7 @@ func buildSplitQuoted(text string, startCol int, contIndent string,
 // appears as a call argument that may have trailing arguments.
 func buildSplitQuotedForCallArg(text string, startCol int, contIndent string,
 	width int, hasTrailingArgs bool) string {
+
 	return buildSplitQuotedWithOptions(
 		text, startCol, contIndent, width, hasTrailingArgs,
 	)
@@ -4021,6 +4024,7 @@ func FormatCallPackedMultiLine(call []byte, wsIndent string, colLimit,
 // selected.
 func FormatCallPackedMultiLineNext(call []byte, wsIndent string, colLimit,
 	ts int) string {
+
 	return FormatCallPackedMultiLineNextWithPrefix(
 		call, wsIndent, wsIndent, colLimit, ts,
 	)

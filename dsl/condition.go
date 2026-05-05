@@ -1529,8 +1529,8 @@ func isLogPrintfName(name string, allowedNames []string) bool {
 	}
 
 	switch name {
-	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf",
-		"Sprintf":
+	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Fatalf",
+		"Printf", "Sprintf":
 		return true
 
 	default:
@@ -1542,7 +1542,8 @@ func isLogPrintfName(name string, allowedNames []string) bool {
 // as printf-style calls when suffix-only matching is enabled.
 func LogPrintfSelectorNames() []string {
 	return []string{
-		"Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf", "Sprintf",
+		"Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Fatalf",
+		"Printf", "Sprintf",
 	}
 }
 

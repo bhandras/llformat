@@ -68,10 +68,8 @@ func TestClassifyCase(t *testing.T) {
 					test.changed, 80, test.existingText,
 				)
 				if got != test.want {
-					t.Fatalf(
-						"got %q, want %q", got,
-						test.want,
-					)
+					t.Fatalf("got %q, want %q", got,
+						test.want)
 				}
 			},
 		)
@@ -125,18 +123,14 @@ func TestApplyProfileAdoptionAddsGeneratedExcludes(t *testing.T) {
 
 	for _, want := range []string{"custom", "generated", "gen"} {
 		if !containsString(cfg.ExcludeDirs, want) {
-			t.Fatalf(
-				"missing exclude dir %q in %#v", want,
-				cfg.ExcludeDirs,
-			)
+			t.Fatalf("missing exclude dir %q in %#v", want,
+				cfg.ExcludeDirs)
 		}
 	}
 	for _, want := range []string{".custom.go", ".pb.go", "_generated.go"} {
 		if !containsString(cfg.ExcludeSuffix, want) {
-			t.Fatalf(
-				"missing exclude suffix %q in %#v", want,
-				cfg.ExcludeSuffix,
-			)
+			t.Fatalf("missing exclude suffix %q in %#v", want,
+				cfg.ExcludeSuffix)
 		}
 	}
 }
@@ -156,22 +150,16 @@ func TestApplyProfileAllKeepsExplicitExcludesOnly(t *testing.T) {
 	}
 
 	if containsString(cfg.ExcludeDirs, "generated") {
-		t.Fatalf(
-			"unexpected generated dir exclude: %#v",
-			cfg.ExcludeDirs,
-		)
+		t.Fatalf("unexpected generated dir exclude: %#v",
+			cfg.ExcludeDirs)
 	}
 	if containsString(cfg.ExcludeSuffix, ".pb.go") {
-		t.Fatalf(
-			"unexpected generated suffix exclude: %#v",
-			cfg.ExcludeSuffix,
-		)
+		t.Fatalf("unexpected generated suffix exclude: %#v",
+			cfg.ExcludeSuffix)
 	}
 	if !containsString(cfg.ExcludeSuffix, ".custom.go") {
-		t.Fatalf(
-			"missing explicit suffix exclude: %#v",
-			cfg.ExcludeSuffix,
-		)
+		t.Fatalf("missing explicit suffix exclude: %#v",
+			cfg.ExcludeSuffix)
 	}
 }
 
@@ -249,9 +237,8 @@ func TestBuildClusters(t *testing.T) {
 		t.Fatalf("got max width %d, want 100", clusters[0].MaxWidth)
 	}
 	if clusters[0].AvgExcess != 15 {
-		t.Fatalf(
-			"got avg excess %.1f, want 15.0", clusters[0].AvgExcess,
-		)
+		t.Fatalf("got avg excess %.1f, want 15.0",
+			clusters[0].AvgExcess)
 	}
 }
 
@@ -263,9 +250,8 @@ func TestClassifyASTDiff(t *testing.T) {
 		[]byte("package p\nvar s = \"hello \" + \"world\"\n"),
 	)
 	if strict {
-		t.Fatalf(
-			"string concat rewrite should not be strict-equivalent",
-		)
+		t.Fatalf("string concat rewrite should not be " +
+			"strict-equivalent")
 	}
 	if !safe {
 		t.Fatalf("string concat rewrite should be safe-equivalent")

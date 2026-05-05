@@ -60,10 +60,8 @@ func TestStageOrder(t *testing.T) {
 	if ordered[0].Name != "stage1" || ordered[1].Name != "stage2" ||
 		ordered[2].Name != "stage3" {
 
-		t.Fatalf(
-			"unexpected order: %q, %q, %q", ordered[0].Name,
-			ordered[1].Name, ordered[2].Name,
-		)
+		t.Fatalf("unexpected order: %q, %q, %q", ordered[0].Name,
+			ordered[1].Name, ordered[2].Name)
 	}
 }
 

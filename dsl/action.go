@@ -4854,6 +4854,7 @@ func (a *BreakInterfaceMethodAction) Execute(caps Captures, ctx *Context) (
 		method, indent, ctx.ColumnLimit, ctx.TabStop, a.FormatFunc,
 		func(signature, indent string, colLimit, tabStop int) (string,
 			bool) {
+
 			return formatMethodSimple(
 				signature, indent, colLimit, tabStop,
 			), false

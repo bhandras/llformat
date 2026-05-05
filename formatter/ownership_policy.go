@@ -16,6 +16,7 @@ type OwnershipPolicy struct {
 
 func NewOwnershipPolicy(reg *OwnershipRegistry,
 	stageName string) OwnershipPolicy {
+
 	return OwnershipPolicy{
 		Registry:  reg,
 		StageName: stageName,
