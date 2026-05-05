@@ -1,171 +1,316 @@
 # llformat
 
-`llformat` is a focused Go source formatter that reflows comments and applies
-targeted, column-limit-aware formatting to:
+`llformat` is a focused Go source formatter for controlled adoption in large
+Go repositories. It does not try to become a general-purpose pretty printer.
+Instead, it applies a small set of column-limit-aware rewrites that are hard to
+get consistently from `gofmt` alone:
 
-- log/printf-style calls (including custom loggers like `rpcsLog.Infof(...)`)
-- multiline (non-log) calls and method chains
-- selected long expressions
-- function signatures (including function literals and interface methods)
-- blank-line hygiene rules that improve readability
+- conservative comment reflow
+- log/printf-style call formatting
+- structured logging key/value pair packing
+- multiline non-log call and method-chain formatting
+- selected long-expression breaks
+- function, function-literal, and interface-method signature formatting
+- vertical spacing rules around signatures, returns, cases, and control blocks
 
-It is intentionally **not** a general-purpose “pretty printer” that rewrites
-the whole file.
-
-Historically, it’s named `llformat` because it aims to implement the strict
-readability rules described in Lightning Labs / LND development documentation
-and other formatting conventions used across Lightning Labs projects:
+The project name comes from the Lightning Labs / LND readability conventions
+that originally motivated the formatter:
 
 - https://github.com/lightningnetwork/lnd/blob/master/docs/development_guidelines.md#code-spacing-and-formatting
 
-## Goals and Non-Goals
+## Goals
 
-Goals:
+- **Targeted changes only**: touch known formatting targets and preserve the
+  rest of the file.
+- **Idempotent output**: repeated runs should converge quickly.
+- **Parse-safe rewrites**: generated output must remain valid Go and is
+  normalized with `gofmt`.
+- **Conservative comments**: preserve comments that already fit, preserve
+  preformatted blocks, and avoid directives such as `//go:`, cgo pragmas, and
+  `//nolint`.
+- **Adoptable at repo scale**: provide diagnostics for finding formatter gaps
+  before introducing a large baseline commit.
 
-- **Targeted changes only**: only touch known formatting targets; preserve
-  everything else.
-- **Idempotent**: running `llformat` repeatedly should converge quickly.
-- **Parse-safe**: output must remain valid Go (final output is normalized by
-  `gofmt`).
-- **Conservative comments**: wrap overflowing prose comments by default while
-  preserving fitting and preformatted comment blocks; never break `//go:`
-  directives, `//nolint`, cgo pragmas, punctuation rulers, etc.
-
-Non-goals:
+## Non-Goals
 
 - Replacing `gofmt`.
-- Reflowing arbitrary code for style preferences (this repo prefers explicit
-  golden fixtures for spec).
+- Formatting generated files by default.
+- Guaranteeing every line fits under the column limit.
+- Rewriting arbitrary code for subjective style preferences.
+- Competing with unrelated whitespace linters that cannot express the same
+  policy. In target repos, let one formatter own vertical spacing.
 
-## How it Works (One Document)
+## Quick Start
 
-The formatter runs a **pipeline of stages** over the file, then runs `gofmt`:
-
-1. Comments (conservative, directive-safe reflow; optionally hoist inline
-   comments)
-2. Compact calls (log/printf/error string packing + string splitting)
-3. Expressions (selected long-expression splits)
-4. Multiline calls (non-log calls: pack args + layout selector chains)
-5. Signatures (func decls, func literals, interface methods)
-6. Blank lines (minimal readability rules)
-7. `gofmt` normalization
-
-Most of the pipeline is implemented via an internal **formatting DSL engine**
-that:
-
-- Applies one targeted rewrite at a time (deterministic ordering).
-- Avoids rewriting spans that are “owned” by later stages when ownership
-  boundaries are enabled (prevents stage fighting).
-- Uses rewrite budgets and cycle detection for safety.
-
-Where the AST printer would drop comments inside rewritten regions, rules are
-conservative and often skip edits if inline comments are present.
-
-For a detailed walkthrough of the pipeline and formatters, see `ARCHITECTURE.md`.
-
-## CLI Usage
-
-Build:
+Build the formatter:
 
 ```bash
 make build
 ```
 
-Format to stdout:
+Format one file to stdout:
 
 ```bash
 ./bin/llformat path/to/file.go
 ```
 
-Write in-place:
+Write one file in place:
 
 ```bash
 ./bin/llformat -w path/to/file.go
 ```
 
-Helpful flags:
+Format a repository recursively while skipping common generated files:
 
-- `--col N`: column limit (default `80`)
-- `--tab N`: tab stop width (default `8`)
-- `--comments MODE`: comment formatting mode: `overflow`, `prose`, or `off`
-  (default `overflow`)
+```bash
+find . -name '*.go' \
+  ! -name '*.pb.go' \
+  ! -name '*.pb.gw.go' \
+  ! -name '*.sql.go' \
+  ! -path './db/sqlc/*' \
+  -print0 |
+  xargs -0 -n 1 /path/to/llformat/bin/llformat -w
+```
+
+Most adopting repositories should wrap this in their own `make fmt` target so
+the generated-file excludes match the local codebase.
+
+## Default Style
+
+The CLI default is the current "next" profile. Important defaults include:
+
+- column limit `80`, tab stop `8`
+- comments mode `overflow`, which only wraps overflowing prose comments
+- fitting comment blocks are preserved as-is
+- Go example `// Output:` and `// Unordered output:` blocks are preserved
+- trailing inline comments are not hoisted unless `--wrap-inline-comments` is
+  set
+- log/printf calls are formatted with compact string splitting
+- structured logging calls keep the message/preamble compact, then pack
+  key/value arguments in pairs
+- multiline function signatures keep a blank separator before the body
+- collapsed single-line signatures do not keep an extra body separator
+- single-return control blocks stay compact
+- multiline control blocks with multiple statements keep a readability
+  separator
+
+### Structured Logging Example
+
+Input:
+
+```go
+func f(log Logger, sessionID string, count int, retry bool, reason string) {
+	log.InfoS("processed session with updated state", "session_id", sessionID, "count", count, "retry", retry, "reason", reason)
+}
+```
+
+Output:
+
+```go
+func f(log Logger, sessionID string, count int, retry bool, reason string) {
+	log.InfoS("processed session with updated state",
+		"session_id", sessionID, "count", count,
+		"retry", retry, "reason", reason)
+}
+```
+
+### Signature Spacing Example
+
+Multiline signatures keep a separator:
+
+```go
+func processBundle(
+	store Store,
+	bundle PackageBundle) error {
+
+	return store.Save(bundle)
+}
+```
+
+Collapsed signatures stay compact:
+
+```go
+func processBundle(store Store, bundle PackageBundle) error {
+	return store.Save(bundle)
+}
+```
+
+### Single-Return Control Blocks
+
+Single-return control blocks stay tight:
+
+```go
+if missingConfig &&
+	allowDefault {
+	return defaultConfig(), nil
+}
+```
+
+Blocks with additional work keep a separator after a multiline header:
+
+```go
+if missingConfig &&
+	allowDefault {
+
+	log.Debug("using default config")
+	return defaultConfig(), nil
+}
+```
+
+## CLI Flags
+
+```text
+llformat [-w] [--wrap-inline-comments] [--comments MODE] [--col N] [--tab N] [--multiline-exclude FUNCS] [--logcalls-min-tail-len N] [--logcalls-selector-names NAMES] [--logcalls-selector-prefixes PREFIXES] [--fixpoint-iters N] <path>
+llformat --print-plan
+llformat --print-logcalls-patterns
+```
+
+Useful flags:
+
+- `-w`, `--write`: write the formatted result back to the source file
+- `--col N`: column limit, default `80`
+- `--tab N`: tab stop width, default `8`
+- `--comments MODE`: `overflow`, `prose`, or `off`, default `overflow`
 - `--wrap-inline-comments`: hoist trailing inline comments above statements so
   they can be wrapped safely
-- `--multiline-exclude a,b,c`: exclude function names from generic multiline
-  call formatting
+- `--multiline-exclude a,b,c`: exclude function-name substrings from generic
+  multiline call formatting
 - `--logcalls-min-tail-len N`: avoid leaving tiny tails when splitting long
-  format strings (0 means default)
-- `--logcalls-selector-names n1,n2`: override the set of `*f` selector names to
-  treat as printf/log calls for compact formatting (default includes `Infof`,
-  `Errorf`, `Sprintf`, etc.)
-- `--logcalls-selector-prefixes p1,p2`: restrict compact log/printf call
-  formatting to specific selector receiver expression prefixes (e.g.
-  `rpcSLog,zap.L().Sugar()`)
-- `--fixpoint-iters N`: run the full pipeline repeatedly until stable (default
-  is `3` in the CLI)
-- `--print-plan`: print resolved stage plan and exit
-- `--print-logcalls-patterns`: print the currently recognized log/printf call
-  patterns and exit
+  printf/log strings
+- `--logcalls-selector-names n1,n2`: override selector or identifier names to
+  treat as printf/log calls
+- `--logcalls-selector-prefixes p1,p2`: restrict compact log/printf formatting
+  to matching receiver expression prefixes
+- `--fixpoint-iters N`: repeat the full pipeline until stable, default `3`
+- `--print-plan`: print the resolved stage plan and exit
+- `--print-logcalls-patterns`: print the active log/printf matching patterns
+  and exit
+- `--trace-dsl`: trace applied DSL edits to stderr
+- `--trace-dsl-reasons`: trace DSL skip/apply reasons to stderr
 
-## Tests
+## Adoption Workflow
 
-Unit tests:
+For a large repository, avoid starting with a blind formatting commit. A safer
+loop is:
 
-```bash
-make unit
-```
+1. Build `llformat`.
+2. Run corpus diagnostics against the target repo.
+3. Inspect overflows, AST diffs, non-idempotence, and changed-line clusters.
+4. Convert clear failures into small formatter rules with neutral regression
+   tests.
+5. Re-run diagnostics and compare reports.
+6. Once the remaining output is acceptable, introduce one mechanical baseline
+   commit in the target repo.
+7. Put formatter invocation and generated-file excludes behind the target
+   repo's normal `make fmt` / `make fmt-check` workflow.
 
-### Golden fixtures (spec)
+This loop is intentionally designed to keep target-repo source out of
+formatter tests and reports. Regression tests in this repo should use neutral,
+synthetic examples.
 
-Golden fixtures are authoritative and live at:
+## Corpus Diagnostics
 
-- `testdata/*/input.go` → `testdata/*/output_next.go`
-
-These fixtures define the intended behavior and are compared by tests. If a
-formatter change appears to require golden updates, treat that as a spec change
-and do it explicitly (ideally in a dedicated commit).
-
-### Generating next goldens (for local experimentation)
-
-The repository includes a helper for generating candidate `output_next.go`
-files into a scratch directory (not committed):
-
-```bash
-go run ./tools/gen_next_goldens --out .next_goldens
-```
-
-### Corpus diagnostics
-
-The corpus checker compares formatting results across one or more repositories
-and writes redacted Markdown/JSON reports:
+The corpus checker formats one or more repositories and writes redacted
+Markdown/JSON reports:
 
 ```bash
 go run ./tools/corpus_check -repo /path/to/repo -out .corpus_reports/latest
 ```
 
-By default it uses the `adoption` profile, which keeps the normal safety
-excludes and skips common generated-file suffixes so reports focus on
-hand-maintained source. Use `-profile all` when you intentionally want the
-broader scan.
+The default `adoption` profile keeps normal safety excludes and skips common
+generated-file suffixes so reports focus on hand-maintained source. Use
+`-profile all` only when you intentionally want a broader scan.
+
+The diagnostics are useful for:
+
+- finding new or moved long lines
+- identifying formatter-introduced overflows
+- spotting AST changes
+- finding non-idempotent formatting loops
+- ranking formatter bugs by frequency and review impact
+
+## How It Works
+
+The formatter runs a pipeline of targeted stages, then runs `gofmt`:
+
+1. Comments
+2. Compact log/printf and string calls
+3. Selected expression rewrites
+4. Multiline non-log calls and method chains
+5. Function signatures
+6. Blank-line rules
+7. `gofmt` normalization
+
+Most stages are implemented through an internal formatting DSL engine. The DSL
+applies deterministic AST-selected rewrites, tracks stage ownership boundaries,
+uses rewrite budgets, and detects cycles to avoid stage fighting.
+
+Rules are conservative around comments. If rewriting a span would risk dropping
+or moving comments incorrectly, the formatter usually skips the edit.
+
+For a deeper walkthrough, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Tests
+
+Run unit tests:
+
+```bash
+make unit
+```
+
+Run the full local check used before formatter commits:
+
+```bash
+make self-check
+make lint
+```
+
+### Golden Fixtures
+
+Golden fixtures are authoritative and live at:
+
+- `testdata/*/input.go` -> `testdata/*/output_next.go`
+
+Do not rewrite these fixtures as part of ordinary formatter work. If a behavior
+change appears to require golden updates, treat that as a spec change and get
+explicit maintainer direction first.
+
+### Candidate Goldens
+
+For local experiments, generate candidate next outputs into a scratch
+directory:
+
+```bash
+make gen-next-goldens
+```
+
+This writes to `.next_goldens/` and is not a substitute for reviewing or
+maintaining the authoritative golden fixtures.
 
 ## Code Layout
 
 - `cmd/llformat/main.go`: CLI
-- `formatter/`: pipeline + formatting stages
-- `dsl/`: DSL engine and rules
-- `testdata/`: golden fixtures
+- `formatter/`: pipeline and formatting stages
+- `dsl/`: DSL engine, AST conditions, and rewrite actions
+- `tools/corpus_check/`: adoption diagnostics
+- `tools/overflow_report/`: focused overflow reporting
+- `testdata/`: authoritative golden fixtures
 
 ## Status
 
-The repository is **next-only**: legacy modes and legacy goldens have been
-removed.
+The repository is next-only: legacy modes and legacy goldens have been removed.
+Behavior is specified through focused unit tests, corpus-derived regression
+tests, and golden fixtures.
+
+The formatter is intended for controlled rollout. Run it in CI, inspect the
+diffs, and keep target-repo lint rules aligned with the formatter's ownership
+of spacing.
 
 ## Disclaimer
 
-This project was entirely **vibe coded** with the assistance of AI. While it
-works well for its intended purpose, it is provided **as-is**, without warranty
-of any kind, express or implied. The author assumes no responsibility for any
-issues, bugs, or unintended behavior that may arise from using this software.
-Use at your own risk.
+This project was built with substantial AI assistance. It is provided as-is,
+without warranty of any kind, express or implied. The author assumes no
+responsibility for issues, bugs, or unintended behavior that may arise from
+using this software. Use at your own risk.
 
 See [LICENSE](LICENSE) for the full MIT license terms.
