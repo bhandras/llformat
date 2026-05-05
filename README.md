@@ -94,9 +94,103 @@ The CLI default is the current "next" profile. Important defaults include:
 - multiline control blocks with multiple statements keep a readability
   separator
 
-### Structured Logging Example
+These examples show the subset of Lightning Labs-style formatting that
+`llformat` owns. They are not a complete Go style guide.
 
-Input:
+### Comments
+
+Fitting comments are preserved:
+
+Before:
+
+```go
+// LoadStore opens the store and verifies the schema version.
+func LoadStore(path string) (*Store, error) {
+	return openStore(path)
+}
+```
+
+After:
+
+```go
+// LoadStore opens the store and verifies the schema version.
+func LoadStore(path string) (*Store, error) {
+	return openStore(path)
+}
+```
+
+Overflowing prose comments are wrapped:
+
+Before:
+
+```go
+// LoadStore opens the store, verifies the schema version, and prepares the background cache that is used by later request handlers.
+func LoadStore(path string) (*Store, error) {
+	return openStore(path)
+}
+```
+
+After:
+
+```go
+// LoadStore opens the store, verifies the schema version, and prepares the
+// background cache that is used by later request handlers.
+func LoadStore(path string) (*Store, error) {
+	return openStore(path)
+}
+```
+
+Preformatted output blocks are preserved:
+
+Before:
+
+```go
+func ExampleRouter() {
+	fmt.Println("ready")
+
+	// Output:
+	// ready
+}
+```
+
+After:
+
+```go
+func ExampleRouter() {
+	fmt.Println("ready")
+
+	// Output:
+	// ready
+}
+```
+
+### Log and Error Calls
+
+Long printf-style messages are split while keeping the call compact:
+
+Before:
+
+```go
+func loadSession(log Logger, sessionID string, attempt int, err error) error {
+	return fmt.Errorf("unable to load session %s on attempt %d from the primary store: %w", sessionID, attempt, err)
+}
+```
+
+After:
+
+```go
+func loadSession(log Logger, sessionID string, attempt int, err error) error {
+	return fmt.Errorf("unable to load session %s on attempt %d from "+
+		"the primary store: %w", sessionID, attempt, err)
+}
+```
+
+### Structured Logging
+
+Structured log calls keep the message/preamble compact, then pack key/value
+pairs:
+
+Before:
 
 ```go
 func f(log Logger, sessionID string, count int, retry bool, reason string) {
@@ -104,7 +198,7 @@ func f(log Logger, sessionID string, count int, retry bool, reason string) {
 }
 ```
 
-Output:
+After:
 
 ```go
 func f(log Logger, sessionID string, count int, retry bool, reason string) {
@@ -114,9 +208,53 @@ func f(log Logger, sessionID string, count int, retry bool, reason string) {
 }
 ```
 
-### Signature Spacing Example
+Error-style structured logs keep the error and message together:
+
+Before:
+
+```go
+func f(log Logger, err error, sessionID string, attempt int) {
+	log.ErrorS(err, "failed to process session", "session_id", sessionID, "attempt", attempt)
+}
+```
+
+After:
+
+```go
+func f(log Logger, err error, sessionID string, attempt int) {
+	log.ErrorS(err, "failed to process session",
+		"session_id", sessionID, "attempt", attempt)
+}
+```
+
+### Function Signatures
 
 Multiline signatures keep a separator:
+
+Before:
+
+```go
+func processBundle(store Store, bundle PackageBundle, policy ValidationPolicy, clock Clock) error {
+	return store.Save(bundle, policy, clock)
+}
+```
+
+After:
+
+```go
+func processBundle(
+	store Store,
+	bundle PackageBundle,
+	policy ValidationPolicy,
+	clock Clock) error {
+
+	return store.Save(bundle, policy, clock)
+}
+```
+
+Collapsed signatures stay compact:
+
+Before:
 
 ```go
 func processBundle(
@@ -127,7 +265,7 @@ func processBundle(
 }
 ```
 
-Collapsed signatures stay compact:
+After:
 
 ```go
 func processBundle(store Store, bundle PackageBundle) error {
@@ -135,9 +273,69 @@ func processBundle(store Store, bundle PackageBundle) error {
 }
 ```
 
+Small return lists stay inline when they fit:
+
+Before:
+
+```go
+func loadBundle(store Store, id BundleID) (
+	*PackageBundle,
+	error) {
+
+	return store.Load(id)
+}
+```
+
+After:
+
+```go
+func loadBundle(store Store, id BundleID) (*PackageBundle, error) {
+	return store.Load(id)
+}
+```
+
+### Function Literals
+
+Multiline function literal signatures also keep a body separator:
+
+Before:
+
+```go
+func register(runner Runner) {
+	runner.Run("session", func(ctx context.Context, req *Request) (*Result, error) {
+		return handle(ctx, req)
+	})
+}
+```
+
+After:
+
+```go
+func register(runner Runner) {
+	runner.Run("session", func(
+		ctx context.Context,
+		req *Request) (*Result, error) {
+
+		return handle(ctx, req)
+	})
+}
+```
+
 ### Single-Return Control Blocks
 
 Single-return control blocks stay tight:
+
+Before:
+
+```go
+if missingConfig &&
+	allowDefault {
+
+	return defaultConfig(), nil
+}
+```
+
+After:
 
 ```go
 if missingConfig &&
@@ -148,6 +346,18 @@ if missingConfig &&
 
 Blocks with additional work keep a separator after a multiline header:
 
+Before:
+
+```go
+if missingConfig &&
+	allowDefault {
+	log.Debug("using default config")
+	return defaultConfig(), nil
+}
+```
+
+After:
+
 ```go
 if missingConfig &&
 	allowDefault {
@@ -155,6 +365,80 @@ if missingConfig &&
 	log.Debug("using default config")
 	return defaultConfig(), nil
 }
+```
+
+### Calls and Chains
+
+Long calls are packed instead of forced into one-argument-per-line layout:
+
+Before:
+
+```go
+result := buildPackage(sessionID, requestID, previousState, nextState, retryPolicy, clock)
+```
+
+After:
+
+```go
+result := buildPackage(
+	sessionID, requestID, previousState, nextState,
+	retryPolicy, clock)
+```
+
+Method chains break at selector boundaries:
+
+Before:
+
+```go
+return client.Session(sessionID).WithPolicy(policy).WithClock(clock).Load(ctx)
+```
+
+After:
+
+```go
+return client.
+	Session(sessionID).
+	WithPolicy(policy).
+	WithClock(clock).
+	Load(ctx)
+```
+
+### Intentional No-Ops
+
+Directive comments and unsafe-to-reflow regions are preserved:
+
+Before:
+
+```go
+//go:generate go run ./internal/tool
+func generatedHook() {}
+```
+
+After:
+
+```go
+//go:generate go run ./internal/tool
+func generatedHook() {}
+```
+
+Comment-heavy expressions may be skipped rather than rewritten:
+
+Before:
+
+```go
+value := computeValue(
+	input, // keep attached to input
+	options,
+)
+```
+
+After:
+
+```go
+value := computeValue(
+	input, // keep attached to input
+	options,
+)
 ```
 
 ## CLI Flags
