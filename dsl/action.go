@@ -2211,16 +2211,6 @@ func trailingCommaSuffixWidth(src []byte, start, tabStop int) int {
 	return visualLen(suffix, tabStop)
 }
 
-func callHasReturnPrefix(src []byte, start int) bool {
-	lineStart := start
-	for lineStart > 0 && src[lineStart-1] != '\n' {
-		lineStart--
-	}
-	prefix := strings.TrimSpace(string(src[lineStart:start]))
-
-	return prefix == "return" || strings.HasPrefix(prefix, "return ")
-}
-
 // LeftFlowCallAction formats log/printf calls using left-flow packing with
 // string splitting. This action delegates to the legacy formatter to ensure
 // identical output behavior.
@@ -2270,8 +2260,9 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	// Find the base length (visual width from line start to call start).
 	baseLen := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 	effectiveLimit := ctx.ColumnLimit
-	if callHasReturnPrefix(ctx.Source, start) {
-		suffixWidth := trailingCommaSuffixWidth(
+	isPrintfStyle := isLogPrintfFuncName(getFuncName(call))
+	if isPrintfStyle {
+		suffixWidth := trailingCallCommaSuffixWidth(
 			ctx.Source, end, ctx.TabStop,
 		)
 		if suffixWidth > 0 && effectiveLimit > suffixWidth {
@@ -2291,7 +2282,16 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 		formatted = formatCallLeftFlowSimple(call, wsIndent, ctx)
 	}
 
-	if formatted == string(original) {
+	if formatted == string(original) && isPrintfStyle {
+		if fixed, ok := breakCallClosingParenBeforeTrailingSuffix(
+			ctx, start, end, string(original), wsIndent,
+		); ok {
+
+			formatted = fixed
+		} else {
+			return nil, false
+		}
+	} else if formatted == string(original) {
 		return nil, false
 	}
 
@@ -2302,10 +2302,20 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	origNorm := normalizeCallWithGofmt(string(original), wsIndent)
 	fmtNorm := normalizeCallWithGofmt(formatted, wsIndent)
 
-	if origNorm == fmtNorm {
+	if origNorm == fmtNorm && isPrintfStyle {
+		if fixed, ok := breakCallClosingParenBeforeTrailingSuffix(
+			ctx, start, end, string(original), wsIndent,
+		); ok {
 
-		// After gofmt normalization, both produce the same output. This
-		// means our change would be undone by gofmt - skip it.
+			formatted = fixed
+		} else {
+
+			// After gofmt normalization, both produce the same
+			// output. This means our change would be undone by
+			// gofmt - skip it.
+			return nil, false
+		}
+	} else if origNorm == fmtNorm {
 		return nil, false
 	}
 
@@ -2331,8 +2341,97 @@ func shouldPreserveFittingMultilineErrorf(ctx *Context, call *ast.CallExpr,
 		return false
 	}
 
-	return maxVisualLineLenInSpan(ctx.Source, start, end, ctx.TabStop) <=
-		ctx.ColumnLimit
+	maxLen := maxVisualLineLenInSpan(ctx.Source, start, end, ctx.TabStop)
+	suffixWidth := trailingCallCommaSuffixWidth(
+		ctx.Source, end, ctx.TabStop,
+	)
+	if suffixWidth > 0 {
+		lastLen := visualLen(
+			string(ctx.Source[lineStart(ctx.Source, end):end]),
+			ctx.TabStop,
+		)
+		if lastLen+suffixWidth > maxLen {
+			maxLen = lastLen + suffixWidth
+		}
+	}
+
+	return maxLen <= ctx.ColumnLimit
+}
+
+func breakCallClosingParenBeforeTrailingSuffix(ctx *Context, start, end int,
+	original string, wsIndent string) (string, bool) {
+
+	if !strings.Contains(original, "\n") {
+		return "", false
+	}
+	suffixWidth := trailingCallCommaSuffixWidth(
+		ctx.Source, end, ctx.TabStop,
+	)
+	if suffixWidth == 0 {
+		return "", false
+	}
+
+	lastLen := visualLen(
+		string(ctx.Source[lineStart(ctx.Source, end):end]), ctx.TabStop,
+	)
+	if lastLen+suffixWidth <= ctx.ColumnLimit {
+		return "", false
+	}
+
+	closeIdx := strings.LastIndex(original, ")")
+	if closeIdx < 0 && end < len(ctx.Source) && ctx.Source[end] == ')' {
+		before := strings.TrimRight(original, " \t")
+		if before == "" || strings.HasSuffix(before, ",") {
+			return "", false
+		}
+
+		return before + ",\n" + wsIndent, true
+	}
+	if closeIdx < 0 || strings.TrimSpace(original[closeIdx+1:]) != "" {
+		return "", false
+	}
+	lineStartIdx := strings.LastIndex(original[:closeIdx], "\n") + 1
+	if strings.TrimSpace(original[lineStartIdx:closeIdx]) == "" {
+		return "", false
+	}
+	before := strings.TrimRight(original[:closeIdx], " \t")
+	if strings.HasSuffix(before, ",") {
+		return "", false
+	}
+
+	return before + ",\n" + wsIndent + ")", true
+}
+
+func trailingCallCommaSuffixWidth(src []byte, start, tabStop int) int {
+	width := trailingCommaSuffixWidth(src, start, tabStop)
+	if width > 0 {
+		return width
+	}
+	if start >= len(src) || src[start] != ')' {
+		return 0
+	}
+
+	lineEnd := start
+	for lineEnd < len(src) && src[lineEnd] != '\n' {
+		lineEnd++
+	}
+	suffix := string(src[start:lineEnd])
+	if !strings.HasPrefix(strings.TrimSpace(suffix), "),") {
+		return 0
+	}
+
+	return visualLen(suffix, tabStop)
+}
+
+func isLogPrintfFuncName(name string) bool {
+	if isLogPrintfName(name, nil) {
+		return true
+	}
+	if dot := strings.LastIndex(name, "."); dot >= 0 {
+		return isLogPrintfName(name[dot+1:], nil)
+	}
+
+	return false
 }
 
 func callIsCompositeKeyValue(call *ast.CallExpr, ctx *Context) bool {

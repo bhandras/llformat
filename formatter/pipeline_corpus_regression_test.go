@@ -359,6 +359,39 @@ func f(client ClientAPI) Response {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_ReflowsErrorfWhenOuterCommaOverflows(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+type ConfResp struct{}
+
+var fn struct {
+	Err func(error) ConfResp
+}
+
+func f(err error) ConfResp {
+	if err != nil {
+		return fn.Err[ConfResp](
+			fmt.Errorf(
+				"failed to register for confirmations: %w", err),
+		)
+	}
+
+	return ConfResp{}
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.NotContains(
+		t, out, "\"failed to register for confirmations: %w\", err),",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestPipelineNext_Corpus_ExpandsCompositeInCallArgFuncBody(t *testing.T) {
 	const in = `package p
 
