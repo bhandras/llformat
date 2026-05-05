@@ -306,7 +306,6 @@ func shouldOwnMultilineCall(call *ast.CallExpr, opts StageOptions,
 	caps := dsl.Captures{"node": call}
 	if logCond.Eval(caps, nil) || nonFLogCond.Eval(caps, nil) ||
 		structuredLogCond.Eval(caps, nil) {
-
 		return false
 	}
 

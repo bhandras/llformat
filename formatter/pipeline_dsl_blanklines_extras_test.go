@@ -90,4 +90,83 @@ func doSomething() {}
 	require.NoError(t, err)
 }
 
+func TestDSLBlankLinesNative_NoBlankAfterMultilineIfWithSingleReturn(
+	t *testing.T) {
+
+	const in = `package p
+
+func f(first, second, third bool) int {
+	if first &&
+		second &&
+		third {
+
+		return 1
+	}
+
+	return 0
+}
+`
+
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	out := string(first)
+	require.Contains(t, out, "third {\n\t\treturn 1")
+	require.NotContains(t, out, "third {\n\n\t\treturn 1")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestDSLBlankLinesNative_BlankAfterMultilineIfWithMultipleStatements(
+	t *testing.T) {
+
+	const in = `package p
+
+func f(first, second, third bool) int {
+	if first &&
+		second &&
+		third {
+		record()
+		return 1
+	}
+
+	return 0
+}
+
+func record() {}
+`
+
+	p := NewPipeline(
+		PipelineConfig{
+			ColumnLimit:            80,
+			TabStop:                8,
+			UseDSLBlankLines:       true,
+			UseDSLBlankLinesNative: true,
+		},
+	)
+
+	first := p.Format([]byte(in))
+	second := p.Format(first)
+	require.Equal(t, string(first), string(second))
+
+	out := string(first)
+	require.Contains(t, out, "third {\n\n\t\trecord()")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "out.go", first, parser.AllErrors)
+	require.NoError(t, err)
+}
+
 // Note: legacy/parity profiles were removed; llformat is next-only.

@@ -176,7 +176,6 @@ func (c *IsInCallArgsCond) Eval(caps Captures, ctx *Context) bool {
 		parent := ctx.Parent(cur)
 		if call, ok := parent.(*ast.CallExpr); ok &&
 			isCallArg(call, cur) {
-
 			return true
 		}
 		cur = parent
@@ -224,7 +223,6 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 			if !stringInSlice(
 				callExprFuncName(call), c.CallArgsAllowlist,
 			) {
-
 				return false
 			}
 
@@ -241,7 +239,6 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 	}).Eval(caps,
 		ctx,
 	) {
-
 		return false
 	}
 	if (&IsAncestorTypeCond{
@@ -250,7 +247,6 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 	}).Eval(caps,
 		ctx,
 	) {
-
 		return false
 	}
 
@@ -258,7 +254,6 @@ func (c *ExprEditSafeCond) Eval(caps Captures, ctx *Context) bool {
 	// preserve them inside expressions/argument lists).
 	if hasLineComment(string(ctx.NodeSource(node))) ||
 		hasBlockComment(string(ctx.NodeSource(node))) {
-
 		return false
 	}
 
@@ -281,7 +276,6 @@ func enclosingCallForArg(node ast.Node, ctx *Context) *ast.CallExpr {
 		parent := ctx.Parent(cur)
 		if call, ok := parent.(*ast.CallExpr); ok &&
 			isCallArg(call, cur) {
-
 			return call
 		}
 		cur = parent
@@ -1391,7 +1385,6 @@ func (c *IsLogOrPrintfCallCond) Eval(caps Captures, ctx *Context) bool {
 		if isLogPrintfCallWithAllowedPrefixes(
 			call, c.SelectorPrefixes, c.SelectorNames,
 		) {
-
 			return true
 		}
 	}
@@ -1477,7 +1470,6 @@ func isLogPrintfCallWithAllowedPrefixes(call *ast.CallExpr,
 	case *ast.SelectorExpr:
 		if fun.Sel == nil ||
 			!isLogPrintfName(fun.Sel.Name, allowedNames) {
-
 			return false
 		}
 
@@ -1539,7 +1531,6 @@ func isLogPrintfName(name string, allowedNames []string) bool {
 	switch name {
 	case "Infof", "Debugf", "Tracef", "Errorf", "Warnf", "Printf",
 		"Sprintf":
-
 		return true
 
 	default:
@@ -1853,7 +1844,6 @@ func (c *HasMultilineFuncSignatureCond) Eval(caps Captures, ctx *Context) bool {
 	decl, ok := node.(*ast.FuncDecl)
 	if !ok || decl == nil || decl.Body == nil ||
 		!decl.Body.Lbrace.IsValid() {
-
 		return false
 	}
 
@@ -2077,7 +2067,6 @@ func (c *HasNestedMultilineTypeCond) Eval(caps Captures, ctx *Context) bool {
 	funcDecl, ok := node.(*ast.FuncDecl)
 	if !ok || funcDecl == nil || funcDecl.Type == nil ||
 		funcDecl.Type.Params == nil {
-
 		return false
 	}
 

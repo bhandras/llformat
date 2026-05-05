@@ -571,7 +571,6 @@ func resolveOutput(out string, now time.Time) (perBug bool, outDir string,
 	}
 	if strings.HasSuffix(out, ".md") ||
 		strings.HasSuffix(out, ".markdown") {
-
 		return false, "", nil
 	}
 	// Treat --out as a directory prefix.
@@ -656,7 +655,6 @@ func goFilesUnder(root string, excludes stringSliceFlag,
 						path,
 						ex+string(filepath.Separator),
 					) {
-
 						return filepath.SkipDir
 					}
 				}

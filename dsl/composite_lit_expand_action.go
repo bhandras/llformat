@@ -65,7 +65,6 @@ func (a *MoveCompositeTrailingCommentAction) Execute(caps Captures,
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
-
 		return nil, false
 	}
 
@@ -229,7 +228,6 @@ func (a *BreakCompositeKeyValueAction) Execute(caps Captures, ctx *Context) (
 		strings.Contains(keyText, "\n") ||
 		strings.Contains(valueText, "\n") ||
 		hasAnyComment(keyText) || hasAnyComment(valueText) {
-
 		return nil, false
 	}
 
@@ -255,7 +253,6 @@ func (a *BreakCompositeKeyValueAction) Execute(caps Captures, ctx *Context) (
 	)
 	if formatted == "" || formatted == orig ||
 		!strings.Contains(formatted, "\n") {
-
 		return nil, false
 	}
 
@@ -326,7 +323,6 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 		if out, changed := breakCompositeLitTypeArgs(
 			lit, ctx,
 		); changed {
-
 			return out, true
 		}
 	}
@@ -351,7 +347,6 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
-
 		return nil, false
 	}
 
@@ -515,7 +510,6 @@ func breakCompositeLitTypeArgs(lit *ast.CompositeLit,
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
-
 		return nil, false
 	}
 
@@ -527,7 +521,6 @@ func formatCompositeLitTypeArgs(lit *ast.CompositeLit, typeText,
 
 	if lit == nil || lit.Type == nil || typeText == "" ||
 		strings.Contains(typeText, "\n") || hasAnyComment(typeText) {
-
 		return "", false
 	}
 
@@ -559,7 +552,6 @@ func formatCompositeLitTypeArgs(lit *ast.CompositeLit, typeText,
 		indexText := renderNode(index, ctx.Fset)
 		if indexText == "" || strings.Contains(indexText, "\n") ||
 			hasAnyComment(indexText) {
-
 			return "", false
 		}
 		out.WriteString(typeIndent)

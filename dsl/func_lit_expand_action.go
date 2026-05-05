@@ -23,7 +23,6 @@ func (a *ExpandFuncLitBodyAction) Execute(caps Captures, ctx *Context) ([]byte,
 	fn, ok := node.(*ast.FuncLit)
 	if !ok || fn == nil || fn.Body == nil || !fn.Body.Lbrace.IsValid() ||
 		!fn.Body.Rbrace.IsValid() {
-
 		return nil, false
 	}
 
@@ -31,7 +30,6 @@ func (a *ExpandFuncLitBodyAction) Execute(caps Captures, ctx *Context) ([]byte,
 	rbrace := ctx.Fset.Position(fn.Body.Rbrace).Offset
 	if lbrace < 0 || rbrace < 0 || rbrace > len(ctx.Source) ||
 		lbrace >= rbrace {
-
 		return nil, false
 	}
 
@@ -93,7 +91,6 @@ func (a *ExpandFuncLitBodyAction) Execute(caps Captures, ctx *Context) ([]byte,
 	if _, err := parser.ParseFile(
 		fset, "out.go", newSrc, parser.AllErrors,
 	); err != nil {
-
 		return nil, false
 	}
 

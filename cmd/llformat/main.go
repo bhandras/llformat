@@ -353,12 +353,10 @@ func runPrintPlan(w io.Writer, cfg formatter.PipelineConfig) int {
 	if plan.DSLMultiLineStyle != "" && !emit(
 		"dsl_multiline_style=%s\n", plan.DSLMultiLineStyle,
 	) {
-
 		return 1
 	}
 	if plan.DSLSigsStyle != "" &&
 		!emit("dsl_sigs_style=%s\n", plan.DSLSigsStyle) {
-
 		return 1
 	}
 
@@ -372,7 +370,6 @@ func runPrintPlan(w io.Writer, cfg formatter.PipelineConfig) int {
 		"dsl_blank_lines_extra_if_err=%v\n",
 		plan.DSLBlankLinesExtraIfErrReturn,
 	) {
-
 		return 1
 	}
 	if !emit("dsl_expr_logical_style=%s\n", plan.DSLExprLogicalStyle) {
@@ -388,7 +385,6 @@ func runPrintPlan(w io.Writer, cfg formatter.PipelineConfig) int {
 		"dsl_expr_selector_chain_style=%s\n",
 		plan.DSLExprSelectorChainStyle,
 	) {
-
 		return 1
 	}
 	if !emit("dsl_call_args_allow=%v\n", plan.AllowDSLCallArgs) {

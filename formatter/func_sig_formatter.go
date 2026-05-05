@@ -273,13 +273,11 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 	if strings.Contains(signature, "\n") {
 		if hasMultilineGenericTypeArgList(signature) &&
 			signatureLinesFit(signature, indent, colLimit, tabStop) {
-
 			return indent + signature, true
 		}
 		if multilineSimpleReturnCloseLineAlreadyFits(
 			signature, indent, colLimit, tabStop,
 		) {
-
 			return indent + signature, true
 		}
 		if !strings.Contains(signature, "struct") &&
@@ -1172,7 +1170,6 @@ func (f *FuncSigFormatter) multilineSignatureNeedsFormatting(sig,
 	for _, line := range strings.Split(sig, "\n") {
 		if width.VisualLenWithTab(indent+line, f.cfg.TabStop) >
 			f.cfg.ColumnLimit {
-
 			return true
 		}
 	}
@@ -1372,13 +1369,11 @@ func (ctx *paramFormatContext) writeParamOnNewLine(i int, param string,
 		strings.TrimSpace(ctx.trailingMinimal),
 		") func(",
 	) && !ctx.allowLastParamTrailingBreak {
-
 		return currentLine
 	}
 	if width.VisualLenWithTab(
 		currentLine+ctx.trailingMinimal, ctx.f.cfg.TabStop,
 	) <= ctx.f.cfg.ColumnLimit {
-
 		return currentLine
 	}
 
@@ -1520,7 +1515,6 @@ func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
 	if !f.cfg.PreferInlineSmallReturnList || !hasParenReturns ||
 		len(paramList) <= 1 || !isSmallParenReturnList(returns) ||
 		hasSharedNameParamGroup(paramList) {
-
 		return false
 	}
 	trimmedSig := strings.TrimSpace(sig)
@@ -1576,7 +1570,6 @@ func (f *FuncSigFormatter) needsForceParamNewline(paramList []string) bool {
 	for _, p := range paramList {
 		if strings.Contains(p, "\n") ||
 			hasInlineStructWithSemicolons(p) {
-
 			return true
 		}
 	}
@@ -1741,7 +1734,6 @@ func isSmallParenReturnList(returns string) bool {
 	trimmed := strings.TrimSpace(returns)
 	if len(trimmed) < 2 || trimmed[0] != '(' ||
 		trimmed[len(trimmed)-1] != ')' {
-
 		return false
 	}
 	if strings.Contains(trimmed, "\n") {
@@ -1979,7 +1971,6 @@ func (f *FuncSigFormatter) splitFuncParamList(params string) []string {
 		if strings.HasPrefix(typePart, "*") && strings.Contains(
 			typePart, ".",
 		) {
-
 			return true
 		}
 
@@ -2151,7 +2142,6 @@ func (ctx *funcTypeParamContext) needsCanonicalBreak() bool {
 		}
 		if hasInlineStructWithSemicolons(p) ||
 			strings.Contains(p, "\n") {
-
 			return true
 		}
 	}
@@ -2431,7 +2421,6 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 	// signature formatter to keep behavior consistent across contexts.
 	if f.cfg.PreferInlineSmallReturnList || f.cfg.ReserveTrailingComma ||
 		f.cfg.CanonicalMultilineSigLists {
-
 		return f.breakSignature(sig, indent) + commentSuffix
 	}
 
@@ -2439,7 +2428,6 @@ func (f *FuncSigFormatter) breakInterfaceMethod(sig, indent string) string {
 	if width.VisualLenWithTab(indent+sig+commentSuffix, f.cfg.TabStop) <= f.
 		cfg.
 		ColumnLimit {
-
 		return indent + sig + commentSuffix
 	}
 
@@ -2692,7 +2680,6 @@ func FormatInterfaceMethodNext(method, indent string, colLimit,
 	if canon, ok := canonicalizeInterfaceMethodParenReturnList(
 		formatted, indent, tabStop,
 	); ok {
-
 		return canon
 	}
 

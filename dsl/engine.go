@@ -345,12 +345,10 @@ func (e *Engine) withinBudget(initialLen int, candidate []byte) bool {
 	}
 	if e.Budget.MaxOutputBytes > 0 &&
 		len(candidate) > e.Budget.MaxOutputBytes {
-
 		return false
 	}
 	if e.Budget.MaxBytesIncrease > 0 &&
 		len(candidate) > initialLen+e.Budget.MaxBytesIncrease {
-
 		return false
 	}
 
@@ -421,7 +419,6 @@ func (e *Engine) traceSkipFileRule(iter int, ctx *Context, rule Rule,
 
 	if !e.TraceReasons || reasonsPrinted == nil ||
 		*reasonsPrinted >= maxReasons {
-
 		return
 	}
 	*reasonsPrinted++
@@ -689,7 +686,6 @@ func ensureParseable(ctx *Context, src []byte,
 	if _, err := parser.ParseFile(
 		fset, "", src, parser.ParseComments,
 	); err != nil {
-
 		return false, actionLabel + "=parse_failed=" + err.Error()
 	}
 
@@ -769,7 +765,6 @@ func (e *Engine) traceSkipRule(iter int, ctx *Context, rule Rule, n ast.Node,
 
 	if !e.TraceReasons || reasonsPrinted == nil ||
 		*reasonsPrinted >= maxReasons {
-
 		return
 	}
 	*reasonsPrinted++

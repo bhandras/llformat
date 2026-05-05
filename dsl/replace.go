@@ -8,7 +8,6 @@ import "fmt"
 func replaceSpan(src []byte, start, end int, replace []byte) ([]byte, error) {
 	if start < 0 || end < 0 || start > len(src) || end > len(src) ||
 		start >= end {
-
 		return nil, fmt.Errorf("invalid span [%d:%d] (len=%d)", start,
 			end, len(src))
 	}

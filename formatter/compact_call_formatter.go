@@ -176,7 +176,6 @@ func (f *CompactCallFormatter) shouldOwnGenericCall(src []byte, start int,
 	}
 	if isSelectorChainCallStart(src, start) ||
 		strings.Contains(callee, ".") {
-
 		return false
 	}
 
@@ -718,7 +717,6 @@ func spanHasCommentOutsideStrings(b []byte) bool {
 		}
 		if scanner.IsLineCommentStart(b, i) ||
 			scanner.IsBlockCommentStart(b, i) {
-
 			return true
 		}
 		i++
@@ -1744,7 +1742,6 @@ func formatBinaryArgIfOverflowsNext(arg, contIndent string,
 	right := formatExprForPackedArg(fset, bin.Y)
 	if left == "" || right == "" || strings.Contains(left, "\n") ||
 		strings.Contains(right, "\n") {
-
 		return arg
 	}
 
@@ -1757,13 +1754,11 @@ func formatBinaryArgIfOverflowsNext(arg, contIndent string,
 		if candidate == "" ||
 			maxLineLenWithIndentAndComma(candidate, contIndent) >
 				lineWidth {
-
 			return arg
 		}
 	}
 	if maxLineLenWithIndentAndComma(candidate, contIndent) >=
 		maxLineLenWithIndentAndComma(arg, contIndent) {
-
 		return arg
 	}
 
@@ -2054,7 +2049,6 @@ func expandFuncLitArgBodyNext(arg string, argIndent string) (string, bool) {
 	fn, ok := expr.(*ast.FuncLit)
 	if !ok || fn == nil || fn.Body == nil || !fn.Body.Lbrace.IsValid() ||
 		!fn.Body.Rbrace.IsValid() {
-
 		return "", false
 	}
 
@@ -2829,7 +2823,6 @@ func normalizeCallArg(trimmed string, argIndex int, rawCount int,
 	if opts.PreserveStringConcatExpr &&
 		!isBasicStringLitExpr(e) &&
 		(rawCount <= 1 || !containsFormatVerb(str)) {
-
 		return arg{kind: argExpr, expr: trimmed}
 	}
 
@@ -3211,7 +3204,6 @@ func formatGreedyBinaryArgIfOverflows(expr, contIndent string, curLen,
 	right := formatExprForPackedArg(fset, bin.Y)
 	if left == "" || right == "" || strings.Contains(left, "\n") ||
 		strings.Contains(right, "\n") {
-
 		return expr
 	}
 
@@ -3225,13 +3217,11 @@ func formatGreedyBinaryArgIfOverflows(expr, contIndent string, curLen,
 			advanceCols(curLen, firstLineText(candidate)) > width ||
 			maxLineLenWithIndentAndComma(candidate, contIndent) >
 				width {
-
 			return expr
 		}
 	}
 	if maxLineLenWithIndentAndComma(candidate, contIndent) >=
 		advanceCols(curLen, expr) {
-
 		return expr
 	}
 
@@ -3253,7 +3243,6 @@ func computePreferredReserve(normArgs []arg, argIndex int, commaReserve int,
 
 	if !hasTrailingArgs || opts.ReserveTrailingExprArgs <= 0 ||
 		!containsFormatVerb {
-
 		return commaReserve
 	}
 	reserve := 0

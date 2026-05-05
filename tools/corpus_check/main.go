@@ -502,7 +502,6 @@ func classifySyntax(line string, ctx astContext) string {
 	trimmed := strings.TrimSpace(line)
 	if strings.HasPrefix(trimmed, "//") ||
 		strings.HasPrefix(trimmed, "/*") {
-
 		return "comment"
 	}
 	if strings.Contains(trimmed, "`") || strings.Contains(trimmed, "\"") {
@@ -511,12 +510,10 @@ func classifySyntax(line string, ctx astContext) string {
 	if strings.Contains(trimmed, ").") ||
 		strings.HasPrefix(trimmed, ".") ||
 		strings.Count(trimmed, ".") >= 3 {
-
 		return "method_chain"
 	}
 	if strings.Contains(trimmed, "func(") ||
 		strings.HasPrefix(trimmed, "func ") {
-
 		return "signature"
 	}
 	if strings.Contains(trimmed, "&&") || strings.Contains(trimmed, "||") {
@@ -637,7 +634,6 @@ func goFilesUnder(root string, excludeDirs,
 				if shouldSkipDir(
 					root, path, d.Name(), excludeDirs,
 				) {
-
 					return filepath.SkipDir
 				}
 
@@ -650,7 +646,6 @@ func goFilesUnder(root string, excludeDirs,
 				if suffix != "" && strings.HasSuffix(
 					path, suffix,
 				) {
-
 					return nil
 				}
 			}
@@ -1415,7 +1410,6 @@ func writeReport(outDir string, rep report) error {
 	if err := os.WriteFile(
 		filepath.Join(outDir, "cases.json"), casesJSON, 0o644,
 	); err != nil {
-
 		return err
 	}
 	if err := os.WriteFile(
@@ -1425,7 +1419,6 @@ func writeReport(outDir string, rep report) error {
 		),
 		0o644,
 	); err != nil {
-
 		return err
 	}
 	if err := os.WriteFile(
@@ -1435,7 +1428,6 @@ func writeReport(outDir string, rep report) error {
 		),
 		0o644,
 	); err != nil {
-
 		return err
 	}
 

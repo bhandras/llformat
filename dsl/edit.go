@@ -83,7 +83,6 @@ func validateEdits(src []byte, edits []Edit) error {
 	for i, e := range edits {
 		if e.Start < 0 || e.End < 0 || e.Start > srcLen ||
 			e.End > srcLen {
-
 			return fmt.Errorf("edit %d out of bounds: [%d:%d] "+
 				"(len=%d)", i, e.Start, e.End, srcLen)
 		}

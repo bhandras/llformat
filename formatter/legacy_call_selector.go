@@ -98,7 +98,6 @@ func legacyCallSpansFromAST(file *ast.File, fset *token.FileSet,
 			if start >= len(src) || lparen > len(src) || end > len(
 				src,
 			) {
-
 				return true
 			}
 			if start >= lparen || lparen >= end {

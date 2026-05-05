@@ -231,7 +231,6 @@ func stagePlanFromPipelineConfig(cfg PipelineConfig) StagePlan {
 		!cfg.UseDSLExpr &&
 		!cfg.UseDSLFuncSigs &&
 		!cfg.UseDSLBlankLines {
-
 		return allDSLStagePlan()
 	}
 

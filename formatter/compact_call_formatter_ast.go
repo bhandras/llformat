@@ -197,7 +197,6 @@ func fallbackCallPrefixAllowed(indentPrefix string, src []byte,
 		strings.HasSuffix(trimmedPrefix, "defer")
 	if !allowedByPrefix &&
 		isSelectorChainCallStartOnLine(src, callStart) {
-
 		return true
 	}
 
@@ -211,7 +210,6 @@ func fallbackCallCalleeAllowed(src []byte, c compactCallCandidate) bool {
 	if callNameContainsAny(
 		callee, fallbackNonTargetsExcludes,
 	) {
-
 		return false
 	}
 

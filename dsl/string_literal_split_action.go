@@ -99,7 +99,6 @@ func (a *SplitLongStringLiteralAction) Execute(caps Captures, ctx *Context) (
 	if _, err := parser.ParseFile(
 		fset, "out.go", out, parser.AllErrors,
 	); err != nil {
-
 		return nil, false
 	}
 

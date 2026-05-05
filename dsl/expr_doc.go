@@ -149,7 +149,6 @@ func callArgExprDoc(call *ast.CallExpr, ctx *Context) (exprDocInfo, bool) {
 	if doc, ok := methodChainDocWithKind(
 		call, ctx, exprDocKindCallArg,
 	); ok {
-
 		return exprDocInfo{
 			Doc:                     doc,
 			NeedsContinuationIndent: true,
@@ -920,7 +919,6 @@ func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context,
 	rightText := renderNode(bin.Y, ctx.Fset)
 	if strings.Contains(leftText, "\n") ||
 		strings.Contains(rightText, "\n") {
-
 		return nil, false
 	}
 	if hasAnyComment(leftText) || hasAnyComment(rightText) {
@@ -1063,7 +1061,6 @@ func indexListExprDoc(idx *ast.IndexListExpr, ctx *Context,
 		indexText := renderNode(index, ctx.Fset)
 		if strings.Contains(indexText, "\n") ||
 			hasAnyComment(indexText) {
-
 			return nil, false
 		}
 

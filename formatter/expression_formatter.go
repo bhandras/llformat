@@ -299,7 +299,6 @@ func formatSliceCompositeLiteral(arg, before, contIndent string, elems []string,
 	inline := strings.TrimSpace(arg)
 	if !forceExpand &&
 		visualLen(inline)+visualLen(contIndent) <= columnLimit {
-
 		return "", false
 	}
 

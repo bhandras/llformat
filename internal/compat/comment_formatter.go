@@ -282,7 +282,6 @@ func isDirectiveLineComment(s string) bool {
 	// ...`.
 	if strings.HasPrefix(rest, "// +build") ||
 		strings.HasPrefix(rest, "//+build") {
-
 		return true
 	}
 
@@ -309,27 +308,22 @@ func isDirectiveLineComment(s string) bool {
 	// wrapped.
 	if strings.HasPrefix(rest, "//nolint:") ||
 		strings.HasPrefix(rest, "// nolint:") {
-
 		return true
 	}
 	if strings.HasPrefix(rest, "//lint:") ||
 		strings.HasPrefix(rest, "// lint:") {
-
 		return true
 	}
 	if strings.HasPrefix(rest, "//staticcheck:") ||
 		strings.HasPrefix(rest, "// staticcheck:") {
-
 		return true
 	}
 	if strings.HasPrefix(rest, "//gosec:") ||
 		strings.HasPrefix(rest, "// gosec:") {
-
 		return true
 	}
 	if strings.HasPrefix(rest, "//revive:") ||
 		strings.HasPrefix(rest, "// revive:") {
-
 		return true
 	}
 
@@ -357,7 +351,6 @@ func isDirectiveBlockComment(block []string) bool {
 			strings.HasPrefix(trim, "#include") || strings.HasPrefix(
 			trim, "#define",
 		) {
-
 			return true
 		}
 	}
@@ -626,7 +619,6 @@ func commentBlockLooksPreformatted(block []string) bool {
 		}
 		if strings.HasPrefix(trimmed, "```") ||
 			strings.HasPrefix(trimmed, "~~~") {
-
 			return true
 		}
 		if strings.Contains(trimmed, "|") {
@@ -634,7 +626,6 @@ func commentBlockLooksPreformatted(block []string) bool {
 		}
 		if strings.Contains(trimmed, "http://") ||
 			strings.Contains(trimmed, "https://") {
-
 			return true
 		}
 		if hasAlignmentSpaces(content) {
@@ -687,7 +678,6 @@ func commentLineContent(line string) string {
 	trimmed := strings.TrimSpace(rest)
 	if strings.HasPrefix(trimmed, "/*") ||
 		strings.HasPrefix(trimmed, "*/") {
-
 		return ""
 	}
 	trimmed = strings.TrimPrefix(trimmed, "*")
