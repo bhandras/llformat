@@ -1293,13 +1293,20 @@ func (ctx *paramFormatContext) formatParam(i int, param string,
 	paramToWrite := param
 	needsFuncBreak := false
 	currentLineIndent := leadingWhitespace(ctx.currentLine)
+	funcParamIndent := currentLineIndent
+	if i > 0 {
+		funcParamIndent = ctx.contIndent
+	}
 	if strings.Contains(param, "func(") &&
-		ctx.f.funcParamNeedsBreaking(param, currentLineIndent) {
+		ctx.f.funcParamNeedsBreaking(param, funcParamIndent) {
 
-		needsFuncBreak = true
-		paramToWrite = ctx.f.formatFuncTypeParam(
-			param, currentLineIndent,
+		formatted := ctx.f.formatFuncTypeParam(
+			param, funcParamIndent,
 		)
+		if formatted != param {
+			needsFuncBreak = true
+			paramToWrite = formatted
+		}
 	}
 
 	testLine := ctx.currentLine
@@ -2055,47 +2062,17 @@ func (f *FuncSigFormatter) funcParamNeedsBreaking(param,
 	}
 
 	// In next-profile mode, allow breaking long function-typed parameters
-	// even when they do not contain nested struct types, but avoid breaking
-	// the inner parameter list for function types that already have
-	// explicit return types: those tend to look worse when we break both
-	// the inner params and the outer signature.
+	// even when they do not contain nested struct types. Function types
+	// with explicit return lists are still eligible: the formatter can
+	// often keep the nested parameter list compact and break only the
+	// nested return list.
 	if f.cfg.BreakLongFuncTypeParams {
-		// If the func type has explicit return types (e.g. `error` or
-		// `(T, error)`), don't break inner params unless forced by an
-		// inline struct (handled above).
-		if f.funcTypeHasExplicitReturns(param) {
-			return false
-		}
-
 		return true
 	}
 
 	// Legacy behavior: only break if it's a func type with complex params.
 	return strings.Contains(param, "func(") &&
 		strings.Contains(param, "struct")
-}
-
-// funcTypeHasExplicitReturns returns true if param contains a func type with
-// explicit return types after the parameter list.
-func (f *FuncSigFormatter) funcTypeHasExplicitReturns(param string) bool {
-	if !strings.Contains(param, "func(") {
-		return false
-	}
-	funcIdx := strings.Index(param, "func(")
-	if funcIdx < 0 {
-		return false
-	}
-	rest := param[funcIdx+4:] // starts with "("
-	if len(rest) == 0 || rest[0] != '(' {
-		return false
-	}
-	end := f.findMatchingParen(rest, 0)
-	if end < 0 || end+1 >= len(rest) {
-		return false
-	}
-	afterParams := strings.TrimSpace(rest[end+1:])
-
-	return afterParams != ""
 }
 
 // funcTypeParamContext holds state for formatting function-typed parameters.
@@ -2221,6 +2198,104 @@ func (ctx *funcTypeParamContext) formatPacked() string {
 	return result.String()
 }
 
+func (ctx *funcTypeParamContext) formatWithBrokenReturns() (string, bool) {
+	returns := strings.TrimSpace(ctx.afterParams)
+	if !strings.HasPrefix(returns, "(") {
+		return "", false
+	}
+	closeIdx := ctx.f.findMatchingParen(returns, 0)
+	if closeIdx < 0 {
+		return "", false
+	}
+	tail := strings.TrimSpace(returns[closeIdx+1:])
+	if tail != "" {
+		return "", false
+	}
+
+	retContent := returns[1:closeIdx]
+	retList := filterNonEmptyTrimmed(scanner.SplitTopLevelAny(retContent))
+	if len(retList) <= 1 {
+		return "", false
+	}
+	for _, ret := range retList {
+		if looksLikeNamedFuncReturn(ret) {
+			return "", false
+		}
+	}
+
+	innerParams := strings.Join(filterNonEmptyTrimmed(ctx.innerList), ", ")
+	head := ctx.prefix + "(" + innerParams + ") ("
+	if width.VisualLenWithTab(
+		ctx.baseIndent+head, ctx.f.cfg.TabStop,
+	) > ctx.f.cfg.ColumnLimit {
+		return "", false
+	}
+
+	contIndent := ctx.baseIndent + "\t"
+	var result strings.Builder
+	result.WriteString(head)
+
+	currentLine := ctx.baseIndent + head
+	for i, ret := range retList {
+		separator := ""
+		if i > 0 {
+			separator = ", "
+		}
+
+		testLine := currentLine + separator + ret
+		if i == len(retList)-1 {
+			testLine += ")"
+		} else if ctx.f.cfg.ReserveTrailingComma {
+			testLine += ","
+		}
+
+		if i == 0 &&
+			width.VisualLenWithTab(
+				testLine, ctx.f.cfg.TabStop,
+			) > ctx.f.cfg.ColumnLimit {
+
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(ret)
+			currentLine = contIndent + ret
+			continue
+		}
+
+		if i > 0 &&
+			width.VisualLenWithTab(
+				testLine, ctx.f.cfg.TabStop,
+			) > ctx.f.cfg.ColumnLimit {
+
+			result.WriteByte(',')
+			result.WriteByte('\n')
+			result.WriteString(contIndent)
+			result.WriteString(ret)
+			currentLine = contIndent + ret
+			continue
+		}
+
+		if i > 0 {
+			result.WriteString(", ")
+			currentLine += ", "
+		}
+		result.WriteString(ret)
+		currentLine += ret
+	}
+
+	result.WriteString(")")
+
+	return result.String(), true
+}
+
+func looksLikeNamedFuncReturn(ret string) bool {
+	fields := strings.Fields(strings.TrimSpace(ret))
+	if len(fields) < 2 {
+		return false
+	}
+
+	return token.IsIdentifier(fields[0])
+}
+
 // formatFuncTypeParam formats a function-typed parameter, breaking its inner
 // params if they exceed the column limit. Returns the formatted parameter text.
 // param should be like "handler func(cfg struct{ ... }) error" baseIndent is
@@ -2276,11 +2351,11 @@ func (f *FuncSigFormatter) formatFuncTypeParam(param,
 		return ctx.formatCanonical()
 	}
 
-	// If this function type already has explicit results, prefer keeping
-	// its inner parameter list intact. Breaking both the inner params and
-	// the outer signature often produces a noisier result than leaving the
-	// inner list packed and breaking only at the outer signature boundary.
 	if strings.TrimSpace(afterParams) != "" {
+		if formatted, ok := ctx.formatWithBrokenReturns(); ok {
+			return formatted
+		}
+
 		return param
 	}
 

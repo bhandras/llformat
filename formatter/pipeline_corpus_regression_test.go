@@ -590,6 +590,31 @@ func f(ref any) any {
 	requireNoLineLongerThan(t, out, 80)
 }
 
+func TestPipelineNext_Corpus_BreaksFuncTypedParamReturnList(t *testing.T) {
+	const in = `package p
+
+import (
+	"context"
+	"wire"
+)
+
+type Store struct{}
+type PackageBundle struct{}
+
+func resolveInput(ctx context.Context, q Store, input wire.OutPoint, loadCreated func(context.Context, Store, wire.OutPoint) (*PackageBundle, error)) (*PackageBundle, bool, error) {
+	return nil, false, nil
+}
+`
+
+	out := formatWithDefaultNext(t, in)
+
+	require.Contains(
+		t, out, "loadCreated func(context.Context, Store, "+
+			"wire.OutPoint) (*PackageBundle,\n		error)",
+	)
+	requireNoLineLongerThan(t, out, 80)
+}
+
 func TestPipelineNext_Corpus_PreservesMultilineGenericParamTypeArgs(
 	t *testing.T) {
 
