@@ -1234,7 +1234,7 @@ func (f *FuncSigFormatter) breakSignature(sig, indent string) string {
 
 	// In the "next" profile we prefer to keep short return lists inline.
 	if f.shouldUseInlineReturns(
-		sig, returns, hasParenReturns, len(paramList),
+		sig, returns, hasParenReturns, paramList,
 	) {
 
 		trailingMinimal = trailingFull
@@ -1515,10 +1515,11 @@ func sigHasBrace(afterReturns string) bool {
 // by treating trailingMinimal as trailingFull. This avoids awkward formats like
 // M(a, b) ([]T, error) and helps avoid edge cases with trailing commas.
 func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
-	hasParenReturns bool, paramCount int) bool {
+	hasParenReturns bool, paramList []string) bool {
 
 	if !f.cfg.PreferInlineSmallReturnList || !hasParenReturns ||
-		paramCount <= 1 || !isSmallParenReturnList(returns) {
+		len(paramList) <= 1 || !isSmallParenReturnList(returns) ||
+		hasSharedNameParamGroup(paramList) {
 
 		return false
 	}
@@ -1533,6 +1534,37 @@ func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
 	// prefer keeping their parameter list intact and breaking the return
 	// list instead (matching the "next" golden spec).
 	return (isFuncDeclNoRecv || isInterfaceMethod) && !isFuncLit
+}
+
+func hasSharedNameParamGroup(paramList []string) bool {
+	for _, param := range paramList {
+		if isSharedNameParamGroup(param) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isSharedNameParamGroup(param string) bool {
+	parts := filterNonEmptyTrimmed(scanner.SplitTopLevelAny(param))
+	if len(parts) < 2 {
+		return false
+	}
+
+	for i := 0; i < len(parts)-1; i++ {
+		if !token.IsIdentifier(strings.TrimSpace(parts[i])) {
+			return false
+		}
+	}
+
+	last := strings.TrimSpace(parts[len(parts)-1])
+	typeStart := strings.IndexAny(last, " \t\n")
+	if typeStart <= 0 {
+		return false
+	}
+
+	return token.IsIdentifier(strings.TrimSpace(last[:typeStart]))
 }
 
 // needsForceParamNewline returns true if any param contains multiline content
@@ -1904,7 +1936,7 @@ func (f *FuncSigFormatter) splitParams(params string) []string {
 }
 
 func (f *FuncSigFormatter) splitFuncParamList(params string) []string {
-	parts := filterNonEmptyTrimmed(scanner.SplitTopLevel(params))
+	parts := filterNonEmptyTrimmed(scanner.SplitTopLevelAny(params))
 	if len(parts) <= 1 {
 		return parts
 	}
@@ -1975,7 +2007,16 @@ func (f *FuncSigFormatter) splitFuncParamList(params string) []string {
 			); typeStart >= 0 {
 
 				typePart := next[typeStart:]
-				if isComplexSharedType(typePart) {
+				startsTwoNameGroup := i == 0 ||
+					!isBareName(parts[i-1]) ||
+					strings.ContainsAny(
+						strings.TrimSpace(parts[i-1]),
+						" 	\n",
+					)
+				if startsTwoNameGroup &&
+					(strings.Contains(typePart, ".") ||
+						isComplexSharedType(typePart)) {
+
 					merged = append(
 						merged, cur+", "+next,
 					)
