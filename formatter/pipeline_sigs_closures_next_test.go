@@ -67,6 +67,87 @@ func f(r *rpcServer) {
 	)
 }
 
+func TestPipelineNext_Signatures_RemovesBlankAfterCollapsedClosureSignature(
+	t *testing.T) {
+
+	const in = `package p
+
+type OpenChannelRequest struct{}
+type InitFundingMsg struct{}
+
+func f() {
+	rp := func(req *OpenChannelRequest) (
+		*InitFundingMsg,
+		error) {
+
+		_ = req
+	}
+
+	_ = rp
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other stages off to make this test focused.
+		UseDSLLogCalls:       false,
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "rp := func(req *OpenChannelRequest) "+
+			"(*InitFundingMsg, error) {\n		_ = req",
+	)
+	require.NotContains(
+		t, out, "rp := func(req *OpenChannelRequest) "+
+			"(*InitFundingMsg, error) {\n\n",
+	)
+}
+
+func TestPipelineNext_Signatures_BlankAfterMultilineClosureWithComment(
+	t *testing.T) {
+
+	const in = `package p
+
+func run(name string, fn func(*VeryLongTestTypeName)) {}
+type VeryLongTestTypeName struct{}
+
+func f() {
+	run("case", func(
+		t *VeryLongTestTypeName) { //nolint:ll
+		t.Helper()
+	})
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          40,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other stages off to make this test focused.
+		UseDSLLogCalls:       false,
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, "{ //nolint:ll\n\n\t\tt.Helper()")
+}
+
 func TestPipelineNext_Signatures_BreaksClosureSignatureWhenPrefixOverflowsColumnLimit(
 	t *testing.T) {
 

@@ -578,7 +578,6 @@ func formatCompositeLitTypeArgs(lit *ast.CompositeLit, typeText,
 }
 
 func writeCompositeElement(out *strings.Builder, elemIndent, eltText string) {
-
 	lines := strings.Split(eltText, "\n")
 	for i, line := range lines {
 		line = strings.TrimRight(line, " \t")

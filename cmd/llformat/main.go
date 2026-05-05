@@ -263,7 +263,6 @@ func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {
 }
 
 func runPrintLogCallsPatterns(w io.Writer, cfg formatter.PipelineConfig) int {
-
 	fmt.Fprintln(w, "log/printf call matching patterns:")
 	fmt.Fprintln(w)
 

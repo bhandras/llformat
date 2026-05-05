@@ -237,6 +237,15 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 				Priority: 89,
 				Action:   funcAction,
 			},
+			dsl.Rule{
+				Name:    "blank_after_func_header",
+				Pattern: &dsl.NodePattern{Type: "FuncDecl"},
+				When: &dsl.HasBlankAfterFuncHeaderCond{
+					Target: "node",
+				},
+				Priority: 89,
+				Action:   funcAction,
+			},
 		)
 		if methodAction != nil {
 			rules = append(
@@ -265,6 +274,7 @@ func dslRulesForSignatures(opts StageOptions) []dsl.Rule {
 					Conds: []dsl.Condition{
 						&dsl.AnyLineWidthFuncLitSignatureCond{Target: "node", Op: ">", Value: 0},
 						&dsl.HasMultilineFuncLitSignatureCond{Target: "node"},
+						&dsl.HasBlankAfterFuncHeaderCond{Target: "node"},
 					},
 				},
 				Priority: 89,

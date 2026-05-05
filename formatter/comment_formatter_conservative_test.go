@@ -53,7 +53,6 @@ func f() {}
 }
 
 func TestCommentFormatterOverflowModePreservesPreformattedBlocks(t *testing.T) {
-
 	in := []byte(`package p
 
 // Name      Value      Meaning

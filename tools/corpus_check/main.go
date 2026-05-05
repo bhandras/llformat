@@ -1248,7 +1248,6 @@ func astContextForPos(fset *token.FileSet, file *ast.File,
 }
 
 func enclosingRange(f *ast.File, pos token.Pos) (token.Pos, token.Pos, string) {
-
 	if fd := findEnclosingFuncDecl(f, pos); fd != nil {
 		start := fd.Pos()
 		if fd.Doc != nil {

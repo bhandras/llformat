@@ -3447,13 +3447,13 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	// Check for an existing newline after the signature's opening brace,
 	// and if the following line contains code, insert an additional blank
 	// line to separate a multiline signature header from the body.
-	pos := skipHorizontalWhitespace(ctx.Source, afterBrace)
-	if pos >= len(ctx.Source) || ctx.Source[pos] != '\n' {
+	newline, ok := signatureHeaderLineEnd(ctx.Source, afterBrace)
+	if !ok {
 		return nil, false, nil
 	}
 
 	// There's already a newline after brace; check the next line.
-	pos++
+	pos := newline + 1
 	lineContentStart := pos
 	pos = skipHorizontalWhitespace(ctx.Source, pos)
 	if pos >= len(ctx.Source) || ctx.Source[pos] == '\n' ||
@@ -3485,6 +3485,54 @@ func tryInsertBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
 	}
 
 	return out, true, nil
+}
+
+func tryRemoveBlankLineAfterBrace(ctx *Context, lineStart, afterBrace int,
+	formatted string, signatureUnchanged bool) ([]byte, bool, error) {
+
+	newline, ok := signatureHeaderLineEnd(ctx.Source, afterBrace)
+	if !ok {
+		return nil, false, nil
+	}
+
+	blankStart := newline + 1
+	pos := skipHorizontalWhitespace(ctx.Source, blankStart)
+	if pos >= len(ctx.Source) || ctx.Source[pos] != '\n' {
+		return nil, false, nil
+	}
+
+	var b EditBuilder
+	if !signatureUnchanged {
+		b.Replace(lineStart, afterBrace, []byte(formatted))
+	}
+	b.Delete(blankStart, pos+1)
+
+	out, changed, err := b.Apply(ctx.Source)
+	if err != nil {
+		return nil, false, err
+	}
+	if !changed {
+		return nil, false, nil
+	}
+	if !parseCheckOK(out) {
+		return nil, false, nil
+	}
+
+	return out, true, nil
+}
+
+func signatureHeaderLineEnd(src []byte, afterBrace int) (int, bool) {
+	pos := skipHorizontalWhitespace(src, afterBrace)
+	if pos+1 < len(src) && src[pos] == '/' && src[pos+1] == '/' {
+		for pos < len(src) && src[pos] != '\n' {
+			pos++
+		}
+	}
+	if pos >= len(src) || src[pos] != '\n' {
+		return 0, false
+	}
+
+	return pos, true
 }
 
 // Execute implements Action for BreakFuncLitSignatureAction.
@@ -3645,6 +3693,18 @@ func (a *BreakFuncLitSignatureAction) Execute(caps Captures, ctx *Context) (
 			return out, true
 		}
 	}
+	if !needsBlank {
+		out, changed, err := tryRemoveBlankLineAfterBrace(
+			ctx, lineStart, afterBrace, formatted,
+			signatureUnchanged,
+		)
+		if err != nil {
+			return nil, false
+		}
+		if changed {
+			return out, true
+		}
+	}
 
 	if signatureUnchanged {
 		return nil, false
@@ -3782,6 +3842,18 @@ func (a *BreakFuncSignatureAction) Execute(caps Captures, ctx *Context) ([]byte,
 	// for readability.
 	if needsBlank {
 		out, changed, err := tryInsertBlankLineAfterBrace(
+			ctx, lineStart, afterBrace, formatted,
+			signatureUnchanged,
+		)
+		if err != nil {
+			return nil, false
+		}
+		if changed {
+			return out, true
+		}
+	}
+	if !needsBlank {
+		out, changed, err := tryRemoveBlankLineAfterBrace(
 			ctx, lineStart, afterBrace, formatted,
 			signatureUnchanged,
 		)

@@ -8,7 +8,6 @@ import (
 )
 
 func TestPipelineNext_Corpus_DoesNotWrapTRunWhenHeaderAndBodyFit(t *testing.T) {
-
 	const in = `package p
 
 import "testing"
@@ -130,7 +129,6 @@ func f(cfg PublisherConfig) *Actor {
 }
 
 func TestPipelineNext_Corpus_DoesNotPackTestifyMessagePastLimit(t *testing.T) {
-
 	const in = `package p
 
 type T struct{}
@@ -177,7 +175,6 @@ func f(t *T, h Harness, victim Client) {
 }
 
 func TestPipelineNext_Corpus_DoesNotMergeFunctionReturnPastLimit(t *testing.T) {
-
 	const in = `package p
 
 import (
@@ -213,7 +210,6 @@ func (s *Server) buildEventDispatchers(
 }
 
 func TestPipelineNext_Corpus_DoesNotHardSplitShortFormatString(t *testing.T) {
-
 	const in = `package p
 
 import "fmt"
@@ -283,7 +279,6 @@ func f(i int) (string, bool) {
 }
 
 func TestPipelineNext_Corpus_ReservesCommaAfterPackedStringArg(t *testing.T) {
-
 	const in = `package p
 
 import "context"
@@ -366,7 +361,6 @@ func f(client ClientAPI) Response {
 }
 
 func TestPipelineNext_Corpus_ExpandsCompositeInCallArgFuncBody(t *testing.T) {
-
 	const in = `package p
 
 type T struct{}
@@ -511,7 +505,6 @@ func (p *Processor) observeItem(ctx context.Context, requestFingerprint external
 }
 
 func TestPipelineNext_Corpus_PreservesInlineNolintHeaderComment(t *testing.T) {
-
 	const in = `package p
 
 type Router struct{}
@@ -745,7 +738,6 @@ type Receiver[T any] struct{}
 }
 
 func TestPipelineNext_Corpus_BreaksGenericCompositeCallArgType(t *testing.T) {
-
 	const in = `package p
 
 func handle(err error) Result {
@@ -903,7 +895,6 @@ func validate(expectedRecordSummaries []int, actualRecordSummaries []int) (
 }
 
 func TestPipelineNext_Corpus_DoesNotSplitIndentedShellFlagPrefix(t *testing.T) {
-
 	const in = `package p
 
 import "fmt"
@@ -1014,7 +1005,6 @@ func f(item Item, primaryValue any, secondaryValue any, tertiaryValue any) {
 }
 
 func TestPipelineNext_Corpus_BreaksGenericCompositeLiteralHead(t *testing.T) {
-
 	const in = `package p
 
 type Result[A, B, C any] struct {
@@ -1047,7 +1037,6 @@ func f() *Result[InputEventWithLongName, OutputEventWithLongName, *RuntimeEnviro
 }
 
 func TestPipelineNext_Corpus_MovesCompositeTrailingComment(t *testing.T) {
-
 	const in = `package p
 
 type Handler struct{}
@@ -1105,7 +1094,6 @@ func f(handler Handler) Config {
 }
 
 func TestPipelineNext_Corpus_BreaksAssignmentTypeAssertRHS(t *testing.T) {
-
 	const in = `package p
 
 type RuntimeEnvelope[A, B any] struct{}
@@ -1133,7 +1121,6 @@ func f(value any) bool {
 }
 
 func TestPipelineNext_Corpus_BreaksValueSpecGenericConversion(t *testing.T) {
-
 	const in = `package p
 
 type VeryLongInterfaceName[A, B any] interface{}

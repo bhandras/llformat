@@ -47,7 +47,6 @@ func (h *Harness) newActor(id string, beh Behavior[*message, string], mailboxSiz
 }
 
 func TestPipelineNext_Signatures_KeepsSharedTypeNamePairsPacked(t *testing.T) {
-
 	t.Parallel()
 
 	const in = `package p

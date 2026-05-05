@@ -50,6 +50,47 @@ func (r *rpcServer) getChainSyncInfo() (
 	)
 }
 
+func TestPipelineNext_Signatures_RemovesBlankAfterCollapsedSignature(
+	t *testing.T) {
+
+	const in = `package p
+
+type chainSyncInfo struct{}
+
+func getChainSyncInfo() (
+	*chainSyncInfo,
+	error) {
+
+	return nil, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other DSL stages off so this test stays focused.
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		UseDSLExpr:             false,
+		UseDSLComments:         false,
+		UseDSLBlankLines:       false,
+		UseDSLBlankLinesNative: false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "func getChainSyncInfo() (*chainSyncInfo, error) "+
+			"{\n	return nil, nil",
+	)
+	require.NotContains(
+		t, out, "func getChainSyncInfo() (*chainSyncInfo, error) {\n\n",
+	)
+}
+
 func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineSignature(
 	t *testing.T) {
 

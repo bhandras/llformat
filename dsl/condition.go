@@ -1868,6 +1868,44 @@ func (c *HasMultilineFuncSignatureCond) Eval(caps Captures, ctx *Context) bool {
 	return strings.Contains(sig, "\n")
 }
 
+// HasBlankAfterFuncHeaderCond checks whether a function declaration or
+// function literal has an empty line immediately after its opening brace.
+type HasBlankAfterFuncHeaderCond struct {
+	Target string
+}
+
+// Eval implements Condition for HasBlankAfterFuncHeaderCond.
+func (c *HasBlankAfterFuncHeaderCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+
+	var braceOffset int
+	switch n := node.(type) {
+	case *ast.FuncDecl:
+		if n == nil || n.Body == nil || !n.Body.Lbrace.IsValid() {
+			return false
+		}
+		braceOffset = ctx.Fset.Position(n.Body.Lbrace).Offset
+
+	case *ast.FuncLit:
+		if n == nil || n.Body == nil || !n.Body.Lbrace.IsValid() {
+			return false
+		}
+		braceOffset = ctx.Fset.Position(n.Body.Lbrace).Offset
+
+	default:
+		return false
+	}
+
+	newline, ok := signatureHeaderLineEnd(ctx.Source, braceOffset+1)
+	if !ok {
+		return false
+	}
+
+	pos := skipHorizontalWhitespace(ctx.Source, newline+1)
+
+	return pos < len(ctx.Source) && ctx.Source[pos] == '\n'
+}
+
 // AnyLineWidthFuncLitSignatureCond checks if ANY line of a function literal
 // signature exceeds a threshold (defaults to ctx.ColumnLimit).
 //
