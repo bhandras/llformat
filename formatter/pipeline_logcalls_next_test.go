@@ -555,7 +555,7 @@ func f(t *Tree) (*Path, error) {
 	require.NotContains(t, out, "fmt.Errorf(\n")
 }
 
-func TestPipelineNext_LogCalls_PreservesFittingMultilineErrorf(t *testing.T) {
+func TestPipelineNext_LogCalls_CompactsFittingMultilineErrorf(t *testing.T) {
 	const in = `package p
 
 import "fmt"
@@ -565,7 +565,7 @@ const maxTreeDepth = 32
 func nodeMaxDepth(depth int) (int, error) {
 	if depth > maxTreeDepth {
 		return 0, fmt.Errorf(
-			"tree depth exceeds limit %d",
+			"depth %d",
 			maxTreeDepth,
 		)
 	}
@@ -589,11 +589,11 @@ func nodeMaxDepth(depth int) (int, error) {
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "\"tree depth exceeds limit "+
-			"%d\",\n			maxTreeDepth,",
+		t, out, `return 0, fmt.Errorf("depth %d", maxTreeDepth)`,
 	)
 	require.NotContains(
-		t, out, "\"tree depth exceeds limit %d\", maxTreeDepth,",
+		t, out,
+		"return 0, fmt.Errorf(\n",
 	)
 }
 

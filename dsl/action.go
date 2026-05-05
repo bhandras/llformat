@@ -2253,9 +2253,6 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 
 	original := ctx.Source[start:end]
 	wsIndent := ctx.IndentAt(call)
-	if shouldPreserveFittingMultilineErrorf(ctx, call, start, end, original) {
-		return nil, false
-	}
 
 	// Find the base length (visual width from line start to call start).
 	baseLen := prefixWidthAt(ctx.Source, start, ctx.TabStop)
@@ -2326,36 +2323,6 @@ func (a *LeftFlowCallAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	return out, true
-}
-
-func shouldPreserveFittingMultilineErrorf(ctx *Context, call *ast.CallExpr,
-	start int, end int, original []byte) bool {
-
-	if callExprFuncNameFromExpr(call.Fun) != "fmt.Errorf" {
-		return false
-	}
-	if len(call.Args) < 2 {
-		return false
-	}
-	if !strings.Contains(string(original), "\n") {
-		return false
-	}
-
-	maxLen := maxVisualLineLenInSpan(ctx.Source, start, end, ctx.TabStop)
-	suffixWidth := trailingCallCommaSuffixWidth(
-		ctx.Source, end, ctx.TabStop,
-	)
-	if suffixWidth > 0 {
-		lastLen := visualLen(
-			string(ctx.Source[lineStart(ctx.Source, end):end]),
-			ctx.TabStop,
-		)
-		if lastLen+suffixWidth > maxLen {
-			maxLen = lastLen + suffixWidth
-		}
-	}
-
-	return maxLen <= ctx.ColumnLimit
 }
 
 func breakCallClosingParenBeforeTrailingSuffix(ctx *Context, start, end int,
