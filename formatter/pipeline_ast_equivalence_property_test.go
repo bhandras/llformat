@@ -68,7 +68,8 @@ func f() {
 	_ = outerFunctionNameThatIsVeryLong(%s, 42)
 	_ = outerFunctionNameThatIsVeryLong(outerFunctionNameThatIsVeryLong(%s, 1), 42)
 }
-`, expr, expr, expr)
+`,
+						expr, expr, expr)
 
 					out := p.Format([]byte(in))
 					require.NotEmpty(t, out)

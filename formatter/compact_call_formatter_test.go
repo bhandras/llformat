@@ -27,6 +27,22 @@ func TestBuildSplitQuoted_DoesNotEmitDanglingPlusWhenIndentTooDeep(
 	)
 }
 
+func TestBuildSplitQuoted_DoesNotShardWordsWhenIndentLeavesNoUsefulRoom(
+	t *testing.T) {
+
+	out := buildSplitQuotedForCallArg(
+		"batch %s in expiry index but not in batches map", 72,
+		"							"+
+			"	", 80, true,
+	)
+
+	require.Equal(
+		t, `"batch %s in expiry index but not in batches map"`, out,
+	)
+	require.NotContains(t, out, `"exp"+`)
+	require.NotContains(t, out, `"iry"+`)
+}
+
 func TestBuildSplitQuoted_UsesGofmtCompatibleSpacingAroundPlus(t *testing.T) {
 	t.Run(
 		"space_split",

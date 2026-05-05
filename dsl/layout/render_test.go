@@ -49,7 +49,8 @@ func TestRenderAlignIndentsToCurrentColumn(t *testing.T) {
 				C(
 					T("a,"), L(), T("b,"), L(), T("c"),
 				),
-			), T(")"),
+			),
+			T(")"),
 		),
 	)
 	out := Render(doc, 7, 8, "")

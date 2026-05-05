@@ -287,6 +287,191 @@ func f(numDeletedPayments int, failedHTLCsOnly bool) {
 	)
 }
 
+func TestPipelineNext_LogCalls_PreserveExplicitStringConcat(t *testing.T) {
+	const in = `package p
+
+import "testing"
+
+func f(t *testing.T, id string) {
+	for _, group := range [][]string{{id}} {
+		for _, item := range group {
+			for _, candidate := range []string{item} {
+				if candidate == "" {
+					t.Fatalf("record %s in "+
+						"expiry index "+
+						"but not in "+
+						"records map",
+						candidate)
+				}
+			}
+		}
+	}
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, "\"expiry index \"+")
+	require.Contains(t, out, "\"records map\",")
+	require.NotContains(t, out, "\"exp\"")
+	require.NotContains(t, out, "\"iry\"")
+}
+
+func TestPipelineNext_LogCalls_DoesNotShardSingleStringUnderDeepIndent(
+	t *testing.T) {
+
+	const in = `package p
+
+import "testing"
+
+func f(t *testing.T, id string) {
+	for _, group := range [][]string{{id}} {
+		for _, item := range group {
+			for _, candidate := range []string{item} {
+				if candidate == "" {
+					t.Fatalf("record %s in expiry index but not in records map",
+						candidate)
+				}
+			}
+		}
+	}
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "\"record %s in expiry index but not in records map\"",
+	)
+	require.NotContains(t, out, "\"exp\"")
+	require.NotContains(t, out, "\"iry\"")
+	require.NotContains(t, out, "\" rec\"")
+}
+
+func TestPipelineNext_LogCalls_CollapsesShortExplicitConcat(t *testing.T) {
+	const in = `package p
+
+import "fmt"
+
+func f() error {
+	return fmt.Errorf("nil Message in " +
+		"SendServerEventRequest")
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out,
+		`return fmt.Errorf("nil Message in SendServerEventRequest")`,
+	)
+	require.NotContains(t, out, `"nil Message in " +`)
+}
+
+func TestPipelineNext_LogCalls_FormatCompositeArgAsBlock(t *testing.T) {
+	const in = `package p
+
+type eventLog struct{}
+
+func (eventLog) Printf(string, map[string]any, string, ...any) {}
+
+func f(events eventLog, name string, addr string) {
+	events.Printf("client_ready", map[string]any{
+		"client": name,
+		"rpc":    addr,
+	}, "client %s ready rpc=%s", name, addr)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(t, out, "map[string]any{\n")
+	require.Contains(t, out, "\n\t\t\"client\": name,")
+	require.Contains(t, out, "\n\t\t\"rpc\":    addr,")
+	require.Contains(t, out, "\n\t},\n\t\t\"client %s ready")
+	require.NotContains(t, out, "\"rpc\": addr},")
+}
+
+func TestPipelineNext_LogCalls_CollapsesSingleStringWhenCallFits(t *testing.T) {
+	const in = `package p
+
+import "fmt"
+
+func f() error {
+	return fmt.Errorf(
+		"nil message in request",
+	)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, `return fmt.Errorf("nil message in request")`,
+	)
+	require.NotContains(t, out, `"nil message in " +`)
+}
+
 func TestPipelineNext_LogCalls_AvoidHangingParenAfterSignature(t *testing.T) {
 	// Regression: for printf-style calls, avoid breaking immediately after
 	// the callee/paren (hanging paren) and instead keep the call "packed"

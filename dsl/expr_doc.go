@@ -558,7 +558,8 @@ func methodChainSegmentDoc(seg segment, ctx *Context,
 				layout.L(), layout.C(brokenArgs...),
 				layout.T(","),
 			),
-		), layout.L(),
+		),
+		layout.L(),
 	)
 
 	// In flat mode, keep args inline. In broken mode, put each arg on its
@@ -690,7 +691,8 @@ func parenExprDoc(p *ast.ParenExpr, ctx *Context) (layout.Doc, bool) {
 						layout.SL(), inner,
 					),
 				),
-			), layout.T(")"),
+			),
+			layout.T(")"),
 		),
 	), true
 }
@@ -889,7 +891,8 @@ func logicalBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context,
 			left, layout.T(" "),
 			layout.T(
 				bin.Op.String(),
-			), layout.L(),
+			),
+			layout.L(),
 			right,
 		),
 	), true
@@ -941,7 +944,8 @@ func comparisonBinaryExprDoc(bin *ast.BinaryExpr, ctx *Context,
 			leftDoc, layout.T(" "),
 			layout.T(
 				bin.Op.String(),
-			), layout.SL(),
+			),
+			layout.SL(),
 			rightDoc,
 		),
 	), true
@@ -1034,7 +1038,8 @@ func indexExprDoc(idx *ast.IndexExpr, ctx *Context,
 						layout.SL(), indexDoc,
 					),
 				),
-			), layout.T("]"),
+			),
+			layout.T("]"),
 		),
 	), true
 }
@@ -1189,7 +1194,8 @@ func typeAssertExprDoc(t *ast.TypeAssertExpr, ctx *Context,
 						layout.SL(), typeDoc,
 					),
 				),
-			), layout.T(")"),
+			),
+			layout.T(")"),
 		),
 	), true
 }
@@ -1271,7 +1277,8 @@ func sliceExprDoc(s *ast.SliceExpr, ctx *Context,
 						layout.SL(), inner,
 					),
 				),
-			), layout.T("]"),
+			),
+			layout.T("]"),
 		),
 	), true
 }

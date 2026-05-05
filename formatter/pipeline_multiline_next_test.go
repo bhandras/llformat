@@ -51,3 +51,52 @@ func f(chanBackupsProtos struct{ ChanBackups []int }) {
 			"when it can remain flat",
 	)
 }
+
+func TestPipelineNext_MultiLineCalls_BreaksAfterMultilineCallArg(t *testing.T) {
+	const in = `package p
+
+func record(...any) {}
+
+func primitive(int, *int, func() error) any { return nil }
+func dynamic(int, *int, func() error, func() error) any { return nil }
+
+func f(a, b int, av, bv *int) {
+	record(
+		primitive(
+			a,
+			av,
+			func() error {
+				return nil
+			},
+		),
+		dynamic(
+			b,
+			bv,
+			func() error {
+				return nil
+			},
+			func() error {
+				return nil
+			},
+		),
+	)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          72,
+		TabStop:              8,
+		UseDSLMultiLineCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLLogCalls:   false,
+		UseDSLExpr:       false,
+		UseDSLComments:   false,
+		UseDSLFuncSigs:   false,
+		UseDSLBlankLines: false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.NotContains(t, out, "), dynamic(")
+	require.Contains(t, out, "\t\t),\n\t\tdynamic(")
+}

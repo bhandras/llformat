@@ -971,7 +971,7 @@ func formatCallPackedMultiLine(call []byte, wsIndent, fullPrefix string,
 		// []string{" in Configure)
 		shouldBreakAfterCall := seenMultilineCall
 		shouldBreakAfterComposite := seenMultilineComposite &&
-			!seenMultilineCall && !argIsMultiline
+			!seenMultilineCall
 		shouldBreak := curLen+need > lineWidth || forcedBreak ||
 			shouldBreakAfterCall || shouldBreakAfterComposite
 		if shouldBreak {
@@ -1531,13 +1531,14 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 
 		// Handle call expression arguments with potential nesting.
 		callState := &callExprArgNextState{
-			b:                      &b,
-			contIndent:             contIndent,
-			contIndentLen:          contIndentLen,
-			lineWidth:              lineWidth,
-			curLen:                 curLen,
-			first:                  first,
-			forcedBreak:            forcedBreak,
+			b:             &b,
+			contIndent:    contIndent,
+			contIndentLen: contIndentLen,
+			lineWidth:     lineWidth,
+			curLen:        curLen,
+			first:         first,
+			forcedBreak: forcedBreak || (!first &&
+				(seenMultilineCall || seenMultilineComposite)),
 			seenMultilineCall:      seenMultilineCall,
 			seenMultilineComposite: seenMultilineComposite,
 		}
@@ -1955,6 +1956,10 @@ func (s *callExprArgNextState) writeArgSimple(a string) {
 		s.b.WriteString(s.contIndent)
 		s.b.WriteString(a)
 		s.curLen = s.contIndentLen + firstLineLen(a)
+		if strings.Contains(a, "\n") {
+			s.curLen = lastLineLen(a)
+			s.seenMultilineCall = true
+		}
 		s.first = false
 
 		return
@@ -1970,6 +1975,10 @@ func (s *callExprArgNextState) writeArgSimple(a string) {
 	}
 	s.b.WriteString(a)
 	s.curLen = advanceCols(s.curLen+2, a)
+	if strings.Contains(a, "\n") {
+		s.curLen = lastLineLen(a)
+		s.seenMultilineCall = true
+	}
 }
 
 func formatSelectorCallArgIfOverflowsNext(arg, contIndent string,
@@ -2206,6 +2215,10 @@ func buildSplitQuotedForCallArg(text string, startCol int, contIndent string,
 func buildSplitQuotedWithOptions(text string, startCol int, contIndent string,
 	width int, hasTrailingArgs bool) string {
 
+	if !hasUsefulStringSplitBudget(contIndent, width) {
+		return quoteGoString(text)
+	}
+
 	var out strings.Builder
 	rest := text
 	curStart := startCol
@@ -2421,7 +2434,7 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 
 	// No pre-scan; we will attach leading comments of the next arg (// or
 	// /* */) to the previous argument inline when emitting.
-	rawArgs := scanner.SplitTopLevel(argsBody)
+	rawArgs := scanner.SplitTopLevelAny(argsBody)
 	hasInlineComment := strings.Contains(argsBody, "/*") ||
 		strings.Contains(argsBody, "//")
 	normArgs := normalizeCallArgs(rawArgs, opts)
@@ -2432,6 +2445,15 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 	b.WriteByte('(')
 	curLen := baseLen + visualLen(head) + 1
 	contIndent := wsIndent + "\t"
+	prevArgMultiline := false
+
+	if len(normArgs) == 1 && normArgs[0].kind == argText {
+		q := quoteGoString(normArgs[0].text)
+		candidate := head + "(" + q + ")"
+		if advanceCols(baseLen, candidate) <= width {
+			return candidate
+		}
+	}
 
 	writeSplit := func(seg string, hasTrailingArgs bool) {
 		q := quoteGoString(seg)
@@ -2474,7 +2496,12 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 					a.expr,
 				)
 			}
-			if hasInlineComment {
+			if prevArgMultiline {
+				curLen = emitBreakWithComments(
+					&b, prefixes, contIndent,
+				)
+				justBroke = true
+			} else if hasInlineComment {
 				// Separator on same line; attach trailing line
 				// comment to previous arg, then place any block
 				// comment before next arg.
@@ -2541,10 +2568,19 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			curLen = writeExprArg(
 				&b, a.expr, wsIndent, curLen, opts,
 			)
+			prevArgMultiline = strings.Contains(a.expr, "\n")
 			continue
 		}
 
 		// String arg: split greedily
+		if shouldPreserveExplicitStringConcat(a, contIndent, width) {
+			b.WriteString(a.raw)
+			curLen = advanceCols(curLen, a.raw)
+			prevArgMultiline = strings.Contains(a.raw, "\n")
+
+			continue
+		}
+
 		rest := a.text
 		hasTrailingArgs := i < len(normArgs)-1
 		avoidTinyVerbTail := opts.AvoidTinyFormatVerbTail &&
@@ -2639,6 +2675,18 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 					rest = ""
 					break
 				}
+			}
+
+			if !hasUsefulStringSplitBudget(contIndent, width) {
+				if curLen != contStart {
+					b.WriteByte('\n')
+					b.WriteString(contIndent)
+					curLen = contStart
+				}
+				b.WriteString(q)
+				curLen = advanceCols(curLen, q)
+				rest = ""
+				break
 			}
 
 			// Choose the last ASCII space whose QUOTED prefix fits,
@@ -2746,6 +2794,7 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			writeSplit(seg, hasTrailingArgs)
 			rest = rest[cut+1:]
 		}
+		prevArgMultiline = false
 	}
 	b.WriteByte(')')
 
@@ -2827,11 +2876,49 @@ func normalizeCallArg(trimmed string, argIndex int, rawCount int,
 	}
 
 	return arg{
-		kind:               argText,
-		text:               str,
-		raw:                trimmed,
-		containsFormatVerb: containsFormatVerb(str),
+		kind:                 argText,
+		text:                 str,
+		raw:                  trimmed,
+		containsFormatVerb:   containsFormatVerb(str),
+		explicitStringConcat: !isBasicStringLitExpr(e),
 	}
+}
+
+func shouldPreserveExplicitStringConcat(a arg, contIndent string,
+	width int) bool {
+
+	if !a.explicitStringConcat {
+		return false
+	}
+	if isShortFlattenableConcat(a.text) {
+		return false
+	}
+	if strings.Contains(a.text, "\n") {
+		return true
+	}
+
+	// Deeply indented calls can leave too little room for useful word
+	// splits. In that case, keep the author's concatenation boundaries
+	// instead of hard-cutting tiny string fragments.
+	return !hasUsefulStringSplitBudget(contIndent, width)
+}
+
+func isShortFlattenableConcat(text string) bool {
+	if strings.Contains(text, "\n") {
+		return false
+	}
+
+	return visualLen(quoteGoString(text)) <= 48
+}
+
+func hasUsefulStringSplitBudget(contIndent string, width int) bool {
+	const minUsefulTextCols = 24
+
+	if width < 60 {
+		return true
+	}
+
+	return width-visualLen(contIndent)-4 >= minUsefulTextCols
 }
 
 type argKind int
@@ -2847,7 +2934,8 @@ type arg struct {
 	text string
 	raw  string
 
-	containsFormatVerb bool
+	containsFormatVerb   bool
+	explicitStringConcat bool
 }
 
 // commentPrefixes holds extracted comment prefixes from an argument.
@@ -3162,6 +3250,19 @@ func tryMoveStringToCont(b *strings.Builder, q, contIndent string, curLen *int,
 func writeExprArg(b *strings.Builder, expr, wsIndent string, curLen int,
 	opts greedyCallOptions) int {
 
+	if shouldPreserveRawStringConcatExpr(expr, wsIndent+"\t") {
+		b.WriteString(expr)
+
+		return advanceCols(curLen, expr)
+	}
+	if formatted, ok := FormatCompositeLiteralArg(
+		expr, wsIndent+"\t",
+	); ok && strings.Contains(formatted, "\n") {
+
+		b.WriteString(formatted)
+
+		return lastLineLen(formatted)
+	}
 	if isTargetedCallStart(expr) {
 		formatted := formatCallGreedyWithOptions(
 			[]byte(expr), wsIndent, curLen, opts,
@@ -3181,6 +3282,18 @@ func writeExprArg(b *strings.Builder, expr, wsIndent string, curLen int,
 	b.WriteString(expr)
 
 	return advanceCols(curLen, expr)
+}
+
+func shouldPreserveRawStringConcatExpr(expr, contIndent string) bool {
+	if !strings.Contains(expr, "\n") ||
+		!strings.Contains(expr, "+") ||
+		!strings.Contains(expr, `"`) {
+		return false
+	}
+
+	const minUsefulTextCols = 24
+
+	return columnLimit-visualLen(contIndent)-4 < minUsefulTextCols
 }
 
 func formatGreedyBinaryArgIfOverflows(expr, contIndent string, curLen,

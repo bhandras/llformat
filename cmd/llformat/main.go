@@ -127,27 +127,47 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runPrintLogCallsPatterns(stdout, cfg)
 	}
 
-	if fs.NArg() != 1 {
+	if fs.NArg() == 0 {
 		fs.Usage()
 
 		return 2
 	}
 
-	path := fs.Arg(0)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Fprintf(stderr, "read %s: %v\n", path, err)
+	paths := fs.Args()
+	if !f.write && len(paths) != 1 {
+		fmt.Fprintln(
+			stderr, "llformat: multiple paths require -w/--write",
+		)
+		fs.Usage()
 
-		return 1
+		return 2
 	}
 
-	out := formatter.NewPipeline(cfg).Format(data)
+	p := formatter.NewPipeline(cfg)
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(stderr, "read %s: %v\n", path, err)
 
-	if f.write {
-		return writeOutputToFile(path, out, stderr)
+			return 1
+		}
+
+		out := p.Format(data)
+
+		if f.write {
+			if code := writeOutputToFile(
+				path, out, stderr,
+			); code != 0 {
+				return code
+			}
+
+			continue
+		}
+
+		return writeOutputToWriter(out, stdout)
 	}
 
-	return writeOutputToWriter(out, stdout)
+	return 0
 }
 
 func printUsage(w io.Writer) {
@@ -160,7 +180,7 @@ func printUsage(w io.Writer) {
 			"FUNCS] [--logcalls-min-tail-len N] "+
 			"[--logcalls-selector-names NAMES] "+
 			"[--logcalls-selector-prefixes PREFIXES] "+
-			"[--fixpoint-iters N] <path>",
+			"[--fixpoint-iters N] <path> [path ...]",
 	)
 	fmt.Fprintln(w, "  llformat --print-plan")
 	fmt.Fprintln(w, "  llformat --print-logcalls-patterns")

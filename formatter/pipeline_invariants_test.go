@@ -107,15 +107,7 @@ func f(xs []int, i, j int) int {
 							require.Equalf(
 								t, string(out1),
 								string(out2),
-								"not "+
-									"ide"+
-									"mpo"+
-									"ten"+
-									"t "+
-									"for"+
-									" co"+
-									"nfi"+
-									"g=%s",
+								"not idempotent for config=%s",
 								cfg.name,
 							)
 							requireASTEquivalent(

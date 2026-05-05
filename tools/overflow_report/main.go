@@ -370,20 +370,11 @@ func main() {
 					report.WriteString("```\n\n")
 					if s.Reproduces {
 						report.WriteString(
-							"Repro check: ✅ " +
-								"overflow " +
-								"reproduces " +
-								"after " +
-								"llformat\n\n",
+							"Repro check: ✅ overflow reproduces after llformat\n\n",
 						)
 					} else {
 						report.WriteString(
-							"Repro check: ❌ " +
-								"overflow " +
-								"did not " +
-								"reproduce " +
-								"after " +
-								"llformat\n\n",
+							"Repro check: ❌ overflow did not reproduce after llformat\n\n",
 						)
 					}
 					if s.ReproWhy != "" {

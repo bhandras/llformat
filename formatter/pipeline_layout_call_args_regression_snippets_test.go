@@ -370,7 +370,8 @@ func TestPipelineDSLMultiLineLayoutArgs_RegressionSnippets(t *testing.T) {
 func f() {
 	_ = outerFunctionNameThatIsVeryLong(%s, 42)
 }
-`, c.expr)
+`,
+				c.expr)
 
 			out := p.Format([]byte(in))
 			outStr := string(out)

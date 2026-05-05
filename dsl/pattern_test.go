@@ -115,9 +115,9 @@ func TestNodePatternMatchBinaryExpr(t *testing.T) {
 					for name, wantSrc := range tt.wantCap {
 						node := caps[name]
 						require.NotNil(
-							t, node, "capture "+
-								"%q should "+
-								"exist", name,
+							t, node,
+							"capture %q should exist",
+							name,
 						)
 						gotSrc := renderNode(node, fset)
 						require.Equal(

@@ -209,10 +209,7 @@ func f() {
 							require.Equal(
 								t, string(out1),
 								string(out2),
-								"not "+
-									"ide"+
-									"mpo"+
-									"tent",
+								"not idempotent",
 							)
 							requireASTEquivalent(
 								t, []byte(in),
@@ -232,8 +229,7 @@ func f() {
 									string(
 										out1,
 									),
-									"kee"+
-										"p me",
+									"keep me",
 								)
 							}
 						})
