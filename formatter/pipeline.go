@@ -290,7 +290,18 @@ func (p *Pipeline) Format(src []byte) []byte {
 	}
 
 	out := src
-	seen := make(map[[32]byte]struct{}, maxIters+1)
+	seen := make(map[[32]byte]int, maxIters+1)
+	states := make([][]byte, 0, maxIters+1)
+
+	recordState := func(state []byte) {
+		sum := sha256.Sum256(state)
+		if _, ok := seen[sum]; ok {
+			return
+		}
+		seen[sum] = len(states)
+		states = append(states, bytes.Clone(state))
+	}
+	recordState(out)
 
 	for iter := 0; iter < maxIters; iter++ {
 		before := out
@@ -309,17 +320,36 @@ func (p *Pipeline) Format(src []byte) []byte {
 		}
 
 		sum := sha256.Sum256(out)
-		if _, ok := seen[sum]; ok {
+		if idx, ok := seen[sum]; ok {
 			// Cycle detected (e.g. two stages fight). Stop at the
-			// last produced output to avoid an infinite loop.
-			// Subsequent runs will repeat the same trajectory and
-			// land in the same stable stopping point.
+			// deterministic minimum state in the cycle to avoid an
+			// infinite loop. Choosing a canonical member makes
+			// repeated llformat invocations stable even if the
+			// starting point is a different member of the same
+			// cycle.
+			out = minByteState(states[idx:])
+
 			break
 		}
-		seen[sum] = struct{}{}
+		recordState(out)
 	}
 
 	return out
+}
+
+func minByteState(states [][]byte) []byte {
+	if len(states) == 0 {
+		return nil
+	}
+
+	min := states[0]
+	for _, state := range states[1:] {
+		if bytes.Compare(state, min) < 0 {
+			min = state
+		}
+	}
+
+	return bytes.Clone(min)
 }
 
 func (p *Pipeline) applyStages(src []byte) []byte {
