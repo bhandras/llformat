@@ -2454,6 +2454,12 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 			return candidate
 		}
 	}
+	if candidate, ok := formatCallSingleLineCandidate(
+		head, normArgs, hasInlineComment,
+	); ok &&
+		advanceCols(baseLen, candidate) <= width {
+		return candidate
+	}
 	if head == "fmt.Errorf" {
 		if formatted, ok := formatCallArgsOnContinuationLine(
 			head, normArgs, wsIndent, contIndent, width,
@@ -2807,6 +2813,34 @@ func formatCallGreedyWithOptions(call []byte, wsIndent string, baseLen int,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+func formatCallSingleLineCandidate(head string, args []arg,
+	hasInlineComment bool) (string, bool) {
+
+	if hasInlineComment {
+		return "", false
+	}
+
+	parts := make([]string, 0, len(args))
+	for _, a := range args {
+		switch a.kind {
+		case argText:
+			parts = append(parts, quoteGoString(a.text))
+
+		case argExpr:
+			expr := strings.TrimSpace(a.expr)
+			if expr == "" || strings.Contains(expr, "\n") {
+				return "", false
+			}
+			parts = append(parts, expr)
+
+		default:
+			return "", false
+		}
+	}
+
+	return head + "(" + strings.Join(parts, ", ") + ")", true
 }
 
 func formatCallArgsOnContinuationLine(head string, args []arg, wsIndent,

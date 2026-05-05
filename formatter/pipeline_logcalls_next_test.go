@@ -455,7 +455,9 @@ import "fmt"
 
 func f(err error) (any, error) {
 	if err != nil {
-		return nil, fmt.Errorf("control block to bytes: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("control block to bytes: %w", err)
+		}
 	}
 	return nil, nil
 }
@@ -477,10 +479,46 @@ func f(err error) (any, error) {
 
 	require.Contains(
 		t, out, "return nil, "+
-			"fmt.Errorf(\n			\"control block to "+
-			"bytes: %w\", err,\n		)",
+			"fmt.Errorf(\n				\"control "+
+			"block to bytes: %w\", err,\n			)",
 	)
 	require.NotContains(t, out, `"control block to bytes: %w",`+"\n")
+}
+
+func TestPipelineNext_LogCalls_ShortErrorfArgsStaySingleLineWhenTheyFit(
+	t *testing.T) {
+
+	const in = `package p
+
+import "fmt"
+
+func f(t *Tree) (*Path, error) {
+	tp, err := TreePathFromTree(t)
+	if err != nil {
+		return nil, fmt.Errorf("flatten tree: %w", err)
+	}
+	return tp, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:    80,
+		TabStop:        8,
+		UseDSLLogCalls: true,
+		// Keep other DSL stages off to make this test focused.
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, `return nil, fmt.Errorf("flatten tree: %w", err)`,
+	)
+	require.NotContains(t, out, "fmt.Errorf(\n")
 }
 
 func TestPipelineNext_LogCalls_FormatCompositeArgAsBlock(t *testing.T) {

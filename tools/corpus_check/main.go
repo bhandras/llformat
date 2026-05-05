@@ -284,9 +284,7 @@ func analyzeRepo(root string, cfg reportConfig) (repoSummary, []caseRecord,
 
 	files, err := goFilesUnder(root, cfg.ExcludeDirs, cfg.ExcludeSuffix)
 	if err != nil {
-		return repoSummary{}, nil, fmt.Errorf(
-			"scan %s: %w", root, err,
-		)
+		return repoSummary{}, nil, fmt.Errorf("scan %s: %w", root, err)
 	}
 
 	summary := repoSummary{
@@ -323,9 +321,7 @@ func analyzeFile(root, path string, cfg reportConfig) fileAnalysis {
 
 	original, err := os.ReadFile(path)
 	if err != nil {
-		analysis.llformatErr = fmt.Errorf(
-			"read: %w", err,
-		)
+		analysis.llformatErr = fmt.Errorf("read: %w", err)
 
 		return analysis
 	}
