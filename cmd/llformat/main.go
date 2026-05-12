@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -18,6 +19,7 @@ func main() {
 
 type cliFlags struct {
 	write              bool
+	version            bool
 	colLimit           int
 	tabStop            int
 	moveInline         bool
@@ -49,6 +51,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(
 		&f.write, "write", false,
 		"write result to (source) file instead of stdout",
+	)
+	fs.BoolVar(
+		&f.version, "version", false,
+		"print version information and exit",
 	)
 	fs.IntVar(&f.colLimit, "col", 80, "column limit for formatting")
 	fs.IntVar(
@@ -110,6 +116,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 		// The flag package already printed an error message to stderr.
 		return 2
+	}
+
+	if f.version || isVersionCommand(fs.Args()) {
+		return runVersion(stdout)
 	}
 
 	cfg, err := buildPipelineConfig(f)
@@ -184,6 +194,7 @@ func printUsage(w io.Writer) {
 	)
 	fmt.Fprintln(w, "  llformat --print-plan")
 	fmt.Fprintln(w, "  llformat --print-logcalls-patterns")
+	fmt.Fprintln(w, "  llformat version")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "flags:")
 	fmt.Fprintln(
@@ -237,6 +248,10 @@ func printUsage(w io.Writer) {
 			"patterns and exit",
 	)
 	fmt.Fprintln(
+		w, "  --version                 print version information "+
+			"and exit",
+	)
+	fmt.Fprintln(
 		w, "  --trace-dsl               trace applied DSL edits to "+
 			"stderr",
 	)
@@ -244,6 +259,77 @@ func printUsage(w io.Writer) {
 		w, "  --trace-dsl-reasons       trace DSL rule skip/apply "+
 			"reasons to stderr",
 	)
+}
+
+func isVersionCommand(args []string) bool {
+	return len(args) == 1 && args[0] == "version"
+}
+
+func runVersion(w io.Writer) int {
+	info := versionInfo()
+	fmt.Fprintf(w, "llformat version %s\n", info.Version)
+	fmt.Fprintf(w, "commit %s\n", info.Commit)
+
+	return 0
+}
+
+type versionDetails struct {
+	Version string
+	Commit  string
+}
+
+var (
+	buildVersion = ""
+	buildCommit  = ""
+)
+
+func versionInfo() versionDetails {
+	version := buildVersion
+	commit := buildCommit
+
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if version == "" && bi.Main.Version != "" &&
+			bi.Main.Version != "(devel)" {
+
+			version = bi.Main.Version
+		}
+
+		for _, setting := range bi.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if commit == "" {
+					commit = shortCommit(setting.Value)
+				}
+
+			case "vcs.modified":
+				if setting.Value == "true" && version != "" &&
+					!strings.HasSuffix(version, "-dirty") {
+
+					version += "-dirty"
+				}
+			}
+		}
+	}
+
+	if version == "" {
+		version = "dev"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+
+	return versionDetails{
+		Version: version,
+		Commit:  commit,
+	}
+}
+
+func shortCommit(commit string) string {
+	if len(commit) <= 12 {
+		return commit
+	}
+
+	return commit[:12]
 }
 
 func buildPipelineConfig(f cliFlags) (formatter.PipelineConfig, error) {

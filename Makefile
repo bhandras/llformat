@@ -1,6 +1,9 @@
 GO       ?= go
 BIN_DIR  ?= bin
 BIN      := $(BIN_DIR)/llformat
+VERSION  ?= $(shell git describe --tags --dirty --always 2>/dev/null || echo dev)
+COMMIT   ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+LDFLAGS  ?= -X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT)
 
 .PHONY: all build install unit test clean
 .PHONY: fmt fmt-check lint self-check
@@ -10,13 +13,16 @@ all: build
 # Build the llformat CLI
 build: $(BIN)
 
-$(BIN): $(shell find formatter -name '*.go') $(shell find cmd -name '*.go') go.mod go.sum
+$(BIN): FORCE $(shell find formatter -name '*.go') $(shell find cmd -name '*.go') go.mod go.sum Makefile
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -o $@ ./cmd/llformat
+	$(GO) build -ldflags "$(LDFLAGS)" -o $@ ./cmd/llformat
+
+.PHONY: FORCE
+FORCE:
 
 # Install llformat to GOPATH/bin
 install: build
-	$(GO) install ./cmd/llformat
+	$(GO) install -ldflags "$(LDFLAGS)" ./cmd/llformat
 
 # Run unit tests
 unit test:
@@ -38,7 +44,7 @@ fmt-check: build
 self-binary-check: build
 	@tmp=$$(mktemp -t llformat_bin.XXXXXX); \
 	cp $(BIN) $$tmp; \
-	$(GO) build -o $(BIN) ./cmd/llformat; \
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/llformat; \
 	cmp -s $$tmp $(BIN); \
 	rm -f $$tmp; \
 	echo "Self-binary-check ok: reproducible build."

@@ -64,3 +64,44 @@ func TestRunMultiplePathsRequireWrite(t *testing.T) {
 		"multiple paths require -w/--write",
 	)
 }
+
+func TestRunVersionCommand(t *testing.T) {
+	oldVersion, oldCommit := buildVersion, buildCommit
+	buildVersion, buildCommit = "v1.2.3-test", "abcdef123456"
+	t.Cleanup(func() {
+		buildVersion, buildCommit = oldVersion, oldCommit
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"version"}, &stdout, &stderr)
+
+	require.Equal(t, 0, code)
+	require.Empty(t, stderr.String())
+	require.Equal(
+		t, "llformat version v1.2.3-test\ncommit abcdef123456\n",
+		stdout.String(),
+	)
+}
+
+func TestRunVersionFlag(t *testing.T) {
+	oldVersion, oldCommit := buildVersion, buildCommit
+	buildVersion, buildCommit = "v1.2.3-test", "abcdef123456"
+	t.Cleanup(func() {
+		buildVersion, buildCommit = oldVersion, oldCommit
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"--version"}, &stdout, &stderr)
+
+	require.Equal(t, 0, code)
+	require.Empty(t, stderr.String())
+	require.Equal(
+		t, "llformat version v1.2.3-test\ncommit abcdef123456\n",
+		stdout.String(),
+	)
+}
+
+func TestShortCommit(t *testing.T) {
+	require.Equal(t, "abcdef123456", shortCommit("abcdef1234567890"))
+	require.Equal(t, "abc", shortCommit("abc"))
+}
