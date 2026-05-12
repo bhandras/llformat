@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/printer"
+	stdscanner "go/scanner"
 	"go/token"
 	"strings"
 	"unicode"
@@ -529,6 +530,14 @@ type BreakLogicalChainLayoutAction struct {
 	Target string
 }
 
+// BreakLogicalChainPackedAction breaks long &&/|| chains while preserving the
+// compact packed style. It edits only whitespace after logical operators and
+// can continue fixing already-multiline chains whose later physical lines still
+// overflow.
+type BreakLogicalChainPackedAction struct {
+	Target string
+}
+
 // BreakArithmeticChainLayoutAction breaks long arithmetic chains for a single
 // operator (e.g. `a + b + c + d`) using the layout engine.
 //
@@ -901,6 +910,280 @@ func selectBestOp(ops []opInfo, colLimit int) *opInfo {
 	}
 
 	return bestOp
+}
+
+// Execute implements Action for BreakLogicalChainPackedAction.
+func (a *BreakLogicalChainPackedAction) Execute(caps Captures, ctx *Context) (
+	[]byte, bool) {
+
+	edits, changed, err := a.ExecuteEdits(caps, ctx)
+	if err != nil || !changed {
+		return nil, false
+	}
+
+	out, err := ApplyEdits(ctx.Source, edits)
+	if err != nil {
+		return nil, false
+	}
+
+	return out, true
+}
+
+// ExecuteEdits implements EditAction for BreakLogicalChainPackedAction.
+func (a *BreakLogicalChainPackedAction) ExecuteEdits(caps Captures,
+	ctx *Context) ([]Edit, bool, error) {
+
+	node := resolveTarget(caps, a.Target)
+	binExpr, ok := node.(*ast.BinaryExpr)
+	if !ok || binExpr == nil {
+		return nil, false, nil
+	}
+	if binExpr.Op != token.LAND && binExpr.Op != token.LOR {
+		return nil, false, nil
+	}
+
+	start := ctx.Fset.Position(binExpr.Pos()).Offset
+	end := ctx.Fset.Position(binExpr.End()).Offset
+	if start < 0 || end < 0 || start >= end || end > len(ctx.Source) {
+		return nil, false, nil
+	}
+	if maxVisualFullLineLenInSpan(ctx.Source, start, end,
+		ctx.TabStop) <= ctx.ColumnLimit {
+		return nil, false, nil
+	}
+
+	original := string(ctx.Source[start:end])
+	if !isSafeStandaloneExprSpan(original) {
+		return nil, false, nil
+	}
+
+	candidates := collectLogicalBreakCandidates(
+		ctx.Source[start:end], start,
+	)
+	if len(candidates) == 0 {
+		return nil, false, nil
+	}
+
+	indent := ctx.IndentAt(binExpr)
+	replacement := continuationIndentBytes(indent)
+
+	for _, line := range overlongLinesInSpan(
+		ctx.Source, start, end, ctx.TabStop, ctx.ColumnLimit,
+	) {
+		candidate := selectPackedLogicalBreak(
+			ctx.Source, candidates, line, ctx.ColumnLimit,
+			ctx.TabStop,
+		)
+		if candidate == nil {
+			continue
+		}
+
+		opEnd := candidate.offset + candidate.length
+		wsEnd := skipHorizontalWhitespace(ctx.Source, opEnd)
+		if wsEnd < len(ctx.Source) && ctx.Source[wsEnd] == '\n' {
+			continue
+		}
+		if bytes.Equal(ctx.Source[opEnd:wsEnd], replacement) {
+			continue
+		}
+
+		return []Edit{
+			{
+				Start:   opEnd,
+				End:     wsEnd,
+				Replace: replacement,
+			},
+		}, true, nil
+	}
+
+	return nil, false, nil
+}
+
+type logicalBreakCandidate struct {
+	offset int
+	length int
+	op     token.Token
+	depth  int
+}
+
+type spanLine struct {
+	start int
+	end   int
+}
+
+func collectLogicalBreakCandidates(src []byte,
+	baseOffset int) []logicalBreakCandidate {
+
+	fset := token.NewFileSet()
+	file := fset.AddFile("expr.go", -1, len(src))
+
+	var s stdscanner.Scanner
+	s.Init(file, src, nil, 0)
+
+	var candidates []logicalBreakCandidate
+	depth := 0
+	for {
+		pos, tok, _ := s.Scan()
+		if tok == token.EOF {
+			break
+		}
+
+		switch tok {
+		case token.RPAREN, token.RBRACK, token.RBRACE:
+			if depth > 0 {
+				depth--
+			}
+
+		case token.LAND, token.LOR:
+			rel := file.Offset(pos)
+			candidates = append(
+				candidates,
+				logicalBreakCandidate{
+					offset: baseOffset + rel,
+					length: len(tok.String()),
+					op:     tok,
+					depth:  depth,
+				},
+			)
+
+		case token.LPAREN, token.LBRACK, token.LBRACE:
+			depth++
+		}
+	}
+
+	return candidates
+}
+
+func overlongLinesInSpan(src []byte, start, end, tabStop,
+	colLimit int) []spanLine {
+
+	var lines []spanLine
+	for lineStartOff := lineStart(src, start); lineStartOff < end; {
+		lineEnd := lineStartOff
+		for lineEnd < len(src) && src[lineEnd] != '\n' {
+			lineEnd++
+		}
+
+		spanStart := lineStartOff
+		if spanStart < start {
+			spanStart = start
+		}
+		spanEnd := lineEnd
+		if spanEnd > end {
+			spanEnd = end
+		}
+		if spanStart < spanEnd &&
+			visualLen(string(src[lineStartOff:lineEnd]),
+				tabStop) > colLimit {
+
+			lines = append(
+				lines, spanLine{
+					start: lineStartOff,
+					end:   lineEnd,
+				},
+			)
+		}
+
+		if lineEnd >= len(src) || lineEnd >= end {
+			break
+		}
+		lineStartOff = lineEnd + 1
+	}
+
+	return lines
+}
+
+func selectPackedLogicalBreak(src []byte, candidates []logicalBreakCandidate,
+	line spanLine, colLimit, tabStop int) *logicalBreakCandidate {
+
+	var onLine []logicalBreakCandidate
+	for _, candidate := range candidates {
+		if candidate.offset >= line.start &&
+			candidate.offset < line.end {
+
+			onLine = append(onLine, candidate)
+		}
+	}
+	if len(onLine) == 0 {
+		return nil
+	}
+
+	if candidate := bestFittingLogicalBreak(
+		src, onLine, line.start, colLimit, tabStop,
+	); candidate != nil {
+		return candidate
+	}
+
+	return fallbackLogicalBreak(onLine)
+}
+
+func bestFittingLogicalBreak(src []byte, candidates []logicalBreakCandidate,
+	lineStartOff, colLimit, tabStop int) *logicalBreakCandidate {
+
+	var best *logicalBreakCandidate
+	for i := range candidates {
+		candidate := &candidates[i]
+		opEnd := candidate.offset + candidate.length
+		if visualLen(string(src[lineStartOff:opEnd]), tabStop) > colLimit {
+			continue
+		}
+		if best == nil || logicalBreakLess(best, candidate) {
+			best = candidate
+		}
+	}
+
+	return best
+}
+
+func fallbackLogicalBreak(
+	candidates []logicalBreakCandidate) *logicalBreakCandidate {
+
+	var best *logicalBreakCandidate
+	for i := range candidates {
+		candidate := &candidates[i]
+		if best == nil || logicalBreakFallbackLess(candidate, best) {
+			best = candidate
+		}
+	}
+
+	return best
+}
+
+func logicalBreakLess(current, candidate *logicalBreakCandidate) bool {
+	if candidate.depth != current.depth {
+		return candidate.depth < current.depth
+	}
+	if logicalBreakOpRank(candidate.op) != logicalBreakOpRank(current.op) {
+		return logicalBreakOpRank(candidate.op) <
+			logicalBreakOpRank(current.op)
+	}
+
+	return candidate.offset > current.offset
+}
+
+func logicalBreakFallbackLess(candidate, current *logicalBreakCandidate) bool {
+	if candidate.depth != current.depth {
+		return candidate.depth < current.depth
+	}
+	if logicalBreakOpRank(candidate.op) != logicalBreakOpRank(current.op) {
+		return logicalBreakOpRank(candidate.op) <
+			logicalBreakOpRank(current.op)
+	}
+
+	return candidate.offset < current.offset
+}
+
+func logicalBreakOpRank(op token.Token) int {
+	switch op {
+	case token.LOR:
+		return 0
+
+	case token.LAND:
+		return 1
+
+	default:
+		return 2
+	}
 }
 
 func flattenSameOpBinaryChain(expr ast.Expr, op token.Token,

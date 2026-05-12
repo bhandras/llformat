@@ -94,6 +94,42 @@ func testFn(param1, param2 string) (string, int, error) {
 	return param1 + param2, 0, nil
 }
 
+// Example 14: Already-multiline logical chain with overflowing continuation
+func example14(itemType string) {
+	for {
+		if itemType != "" && itemType != "text" &&
+			itemType != "allowed_input_text" && itemType != "allowed_output_text" {
+			doSomething()
+		}
+	}
+}
+
+// Example 15: Parenthesized logical groups should stay packed
+func example15(firstConditionName, secondConditionName, thirdConditionName, fourthConditionName, fallbackEnabled bool) {
+	if (firstConditionName && secondConditionName) || (thirdConditionName && fourthConditionName) || fallbackEnabled {
+		doSomething()
+	}
+}
+
+// Example 16: If init statement with packed logical condition
+func example16(val interface{}) {
+	if result, ok := val.(map[string]interface{}); ok && len(result) > 0 && result["enabled"] == true {
+		doSomething()
+	}
+}
+
+// Example 17: For condition with packed logical chain
+func example17(items []int, stopRequested bool, ctx context.Context, retryCount, maxRetries int) {
+	for i := 0; i < len(items) && !stopRequested && ctx.Err() == nil && retryCount < maxRetries; i++ {
+		process(items[i])
+	}
+}
+
+// Example 18: Return statement with packed logical chain
+func example18(x, y, z, w int, enabled, active bool) bool {
+	return x > 0 && y > 0 && z > 0 && w > 0 && x < 100 && y < 100 && z < 100 && w < 100 && enabled && active
+}
+
 // Stubs to make the file compile
 type formatter struct{}
 

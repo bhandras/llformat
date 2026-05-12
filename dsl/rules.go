@@ -1677,8 +1677,8 @@ type LongExprOptions struct {
 	CallArgsAllowlist []string
 
 	// LogicalChainStyle controls how long &&/|| chains are broken.
-	// Supported: "legacy" (BreakAtOpAction) and "layout" (layout engine).
-	// Empty defaults to "legacy".
+	// Supported: "legacy" (packed source edits) and "layout" (layout
+	// engine). Empty defaults to "legacy".
 	LogicalChainStyle string
 
 	// ArithmeticChainStyle controls how long arithmetic chains are broken.
@@ -1862,7 +1862,7 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -1882,16 +1882,14 @@ func LongExprRulesWithOptions(opts LongExprOptions) []Rule {
 						Try: &BreakLogicalChainLayoutAction{
 							Target: "node",
 						},
-						Else: &BreakAtOpAction{
-							Target:     "node",
-							BreakAfter: true,
+						Else: &BreakLogicalChainPackedAction{
+							Target: "node",
 						},
 					}
 
 				default:
-					return &BreakAtOpAction{
-						Target:     "node",
-						BreakAfter: true,
+					return &BreakLogicalChainPackedAction{
+						Target: "node",
 					}
 				}
 			}(),

@@ -68,6 +68,40 @@ func maxVisualLineLenInSpan(src []byte, start, end int, tabStop int) int {
 	return max
 }
 
+// maxVisualFullLineLenInSpan returns the maximum visual width of each full
+// physical line touched by [start:end). This is useful for expression rewrites
+// where suffix syntax outside the expression span, such as " {" after an if
+// condition, still contributes to the actual line width.
+func maxVisualFullLineLenInSpan(src []byte, start, end int, tabStop int) int {
+	if start < 0 {
+		start = 0
+	}
+	if end > len(src) {
+		end = len(src)
+	}
+	if start >= end {
+		return 0
+	}
+
+	max := 0
+	for lineStartOff := lineStart(src, start); lineStartOff < end; {
+		lineEnd := lineStartOff
+		for lineEnd < len(src) && src[lineEnd] != '\n' {
+			lineEnd++
+		}
+		updateMaxVisualLineLen(
+			&max, src, lineStartOff, lineEnd, tabStop,
+		)
+
+		if lineEnd >= len(src) || lineEnd >= end {
+			break
+		}
+		lineStartOff = lineEnd + 1
+	}
+
+	return max
+}
+
 func updateMaxVisualLineLen(max *int, src []byte, start, end int, tabStop int) {
 	if start >= end {
 		return

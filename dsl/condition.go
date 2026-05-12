@@ -527,6 +527,39 @@ func (c *LineWidthCond) Eval(caps Captures, ctx *Context) bool {
 	return compareInt(width, c.Op, threshold)
 }
 
+// MaxLineWidthInSpanCond checks the maximum visual width of any physical line
+// touched by a node's source span. Unlike LineWidthCond, this catches already
+// multiline expressions whose first line fits but later continuation lines do
+// not.
+type MaxLineWidthInSpanCond struct {
+	Target string
+	Op     string
+	Value  int // If 0, uses ctx.ColumnLimit
+}
+
+// Eval implements Condition for MaxLineWidthInSpanCond.
+func (c *MaxLineWidthInSpanCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	if node == nil || ctx == nil {
+		return false
+	}
+
+	start := ctx.Fset.Position(node.Pos()).Offset
+	end := ctx.Fset.Position(node.End()).Offset
+	if start < 0 || end < 0 || start >= end || end > len(ctx.Source) {
+		return false
+	}
+
+	width := maxVisualFullLineLenInSpan(ctx.Source, start, end,
+		ctx.TabStop)
+	threshold := c.Value
+	if threshold == 0 {
+		threshold = ctx.ColumnLimit
+	}
+
+	return compareInt(width, c.Op, threshold)
+}
+
 // NodeWidthCond checks if a node's total width exceeds a threshold.
 type NodeWidthCond struct {
 	Target string
