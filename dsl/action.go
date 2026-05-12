@@ -524,8 +524,8 @@ type BreakAtOpAction struct {
 // engine. It prefers breaking after each operator (Go style) and uses the
 // standard continuation indent (newline + indent + one tab).
 //
-// This action is intended for opt-in "modern" formatting; legacy/parity rules
-// should generally use BreakAtOpAction to match historical behavior.
+// This action is intended for opt-in layout formatting; the default packed
+// logical-chain style should use BreakLogicalChainPackedAction.
 type BreakLogicalChainLayoutAction struct {
 	Target string
 }
@@ -617,14 +617,14 @@ type StructuredLogCallAction struct {
 }
 
 // BreakBinaryExprLayoutAction tries to break a binary expression using the
-// layout engine, based on configured style toggles.
+// configured operator-specific formatter.
 //
 // This provides a single entry point for contexts that capture a BinaryExpr
 // (e.g. `for` conditions or `return` statements) without duplicating operator-
 // specific rule logic.
 type BreakBinaryExprLayoutAction struct {
 	Target          string
-	LogicalStyle    string // "legacy"|"layout"
+	LogicalStyle    string // ""|"legacy" => packed, "layout" => layout engine
 	ArithmeticStyle string // "legacy"|"layout"
 }
 
@@ -2163,6 +2163,12 @@ func (a *BreakBinaryExprLayoutAction) Execute(caps Captures, ctx *Context) (
 				ctx,
 			)
 		}
+
+		return (&BreakLogicalChainPackedAction{
+			Target: a.Target,
+		}).Execute(caps,
+			ctx,
+		)
 
 	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM:
 		if a.ArithmeticStyle == "layout" {

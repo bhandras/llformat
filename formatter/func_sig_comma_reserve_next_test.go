@@ -48,9 +48,10 @@ func f(abcdefghijklm int, b int) {}
 	var sigLines []string
 	for _, line := range lines {
 		if strings.HasPrefix(line, "func f(") ||
-			strings.HasPrefix(line, "\tabcdefghijklm int") || strings.HasPrefix(
-			line, "	b int",
-		) {
+			strings.HasPrefix(line, "\tabcdefghijklm int") ||
+			strings.HasPrefix(
+				line, "	b int",
+			) {
 
 			sigLines = append(sigLines, line)
 		}

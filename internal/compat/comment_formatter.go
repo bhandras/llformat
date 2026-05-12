@@ -348,9 +348,10 @@ func isDirectiveBlockComment(block []string) bool {
 	for _, line := range block {
 		trim := strings.TrimSpace(line)
 		if strings.HasPrefix(trim, "#cgo") ||
-			strings.HasPrefix(trim, "#include") || strings.HasPrefix(
-			trim, "#define",
-		) {
+			strings.HasPrefix(trim, "#include") ||
+			strings.HasPrefix(
+				trim, "#define",
+			) {
 			return true
 		}
 	}
@@ -783,7 +784,8 @@ func hoistInlineComments(src []byte) []byte {
 	for _, line := range lines {
 		// Quick checks: skip pure comment lines
 		if isStandaloneLineComment(line) ||
-			isStandaloneBlockStart(line) || strings.TrimSpace(line) == "" {
+			isStandaloneBlockStart(line) ||
+			strings.TrimSpace(line) == "" {
 
 			out = append(out, line)
 			continue

@@ -107,7 +107,7 @@ func expressionOnlyRules() []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -123,9 +123,8 @@ func expressionOnlyRules() []Rule {
 					Target:   "node",
 					Strategy: StrategyOnePerLine,
 				},
-				Else: &BreakAtOpAction{
-					Target:     "node",
-					BreakAfter: true,
+				Else: &BreakLogicalChainPackedAction{
+					Target: "node",
 				},
 			},
 		},
@@ -146,7 +145,7 @@ func expressionOnlyRules() []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -159,9 +158,8 @@ func expressionOnlyRules() []Rule {
 				},
 			},
 			Priority: 30,
-			Action: &BreakAtOpAction{
-				Target:     "node",
-				BreakAfter: true,
+			Action: &BreakLogicalChainPackedAction{
+				Target: "node",
 			},
 		},
 
@@ -229,9 +227,14 @@ func expressionOnlyRules() []Rule {
 				Value:  0,
 			},
 			Priority: 45,
-			Action: &BreakAtOpAction{
-				Target:     "cond",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "cond",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "cond",
+					BreakAfter: true,
+				},
 			},
 		},
 
@@ -265,9 +268,14 @@ func expressionOnlyRules() []Rule {
 				},
 			},
 			Priority: 35,
-			Action: &BreakAtOpAction{
-				Target:     "expr",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "expr",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "expr",
+					BreakAfter: true,
+				},
 			},
 		},
 
@@ -609,7 +617,7 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -625,9 +633,8 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 					Target:   "node",
 					Strategy: StrategyOnePerLine,
 				},
-				Else: &BreakAtOpAction{
-					Target:     "node",
-					BreakAfter: true,
+				Else: &BreakLogicalChainPackedAction{
+					Target: "node",
 				},
 			},
 		},
@@ -648,7 +655,7 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -661,9 +668,8 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 				},
 			},
 			Priority: 30,
-			Action: &BreakAtOpAction{
-				Target:     "node",
-				BreakAfter: true,
+			Action: &BreakLogicalChainPackedAction{
+				Target: "node",
 			},
 		},
 
@@ -772,9 +778,14 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 				Value:  0,
 			},
 			Priority: 45,
-			Action: &BreakAtOpAction{
-				Target:     "cond",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "cond",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "cond",
+					BreakAfter: true,
+				},
 			},
 		},
 
@@ -808,9 +819,14 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 				},
 			},
 			Priority: 35,
-			Action: &BreakAtOpAction{
-				Target:     "expr",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "expr",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "expr",
+					BreakAfter: true,
+				},
 			},
 		},
 
@@ -860,9 +876,14 @@ func expressionRules(formatFunc LeftFlowFormatFunc) []Rule {
 				},
 			},
 			Priority: 32,
-			Action: &BreakAtOpAction{
-				Target:     "expr",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "expr",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "expr",
+					BreakAfter: true,
+				},
 			},
 		},
 	}
@@ -2452,9 +2473,14 @@ func ExpressionRules() []Rule {
 				Value:  0,
 			},
 			Priority: 45,
-			Action: &BreakAtOpAction{
-				Target:     "cond",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "cond",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "cond",
+					BreakAfter: true,
+				},
 			},
 		},
 
@@ -2536,7 +2562,7 @@ func ExpressionRules() []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -2552,9 +2578,8 @@ func ExpressionRules() []Rule {
 					Target:   "node",
 					Strategy: StrategyOnePerLine,
 				},
-				Else: &BreakAtOpAction{
-					Target:     "node",
-					BreakAfter: true,
+				Else: &BreakLogicalChainPackedAction{
+					Target: "node",
 				},
 			},
 		},
@@ -2589,9 +2614,14 @@ func ExpressionRules() []Rule {
 				},
 			},
 			Priority: 35,
-			Action: &BreakAtOpAction{
-				Target:     "expr",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "expr",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "expr",
+					BreakAfter: true,
+				},
 			},
 		},
 
@@ -2628,7 +2658,7 @@ func ExpressionRules() []Rule {
 			},
 			When: &AndCond{
 				Conds: []Condition{
-					&LineWidthCond{
+					&MaxLineWidthInSpanCond{
 						Target: "node",
 						Op:     ">",
 						Value:  0,
@@ -2641,9 +2671,8 @@ func ExpressionRules() []Rule {
 				},
 			},
 			Priority: 30,
-			Action: &BreakAtOpAction{
-				Target:     "node",
-				BreakAfter: true,
+			Action: &BreakLogicalChainPackedAction{
+				Target: "node",
 			},
 		},
 
@@ -2676,9 +2705,14 @@ func ExpressionRules() []Rule {
 				},
 			},
 			Priority: 32,
-			Action: &BreakAtOpAction{
-				Target:     "expr",
-				BreakAfter: true,
+			Action: &TryElseAction{
+				Try: &BreakBinaryExprLayoutAction{
+					Target: "expr",
+				},
+				Else: &BreakAtOpAction{
+					Target:     "expr",
+					BreakAfter: true,
+				},
 			},
 		},
 
