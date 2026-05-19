@@ -319,6 +319,19 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	if strings.Contains(orig, "\n") {
+		if formatted, ok := formatElidedCompositeLitValue(
+			lit, ctx, start, end,
+		); ok {
+
+			out, err := ApplySingleEdit(
+				ctx.Source, start, end, []byte(formatted),
+			)
+			if err != nil || !parseCheckOK(out) {
+				return nil, false
+			}
+
+			return out, true
+		}
 		if out, changed := breakAdjacentCompositeLitElements(
 			lit, ctx,
 		); changed {
@@ -567,6 +580,65 @@ func isCompactElidedCompositeLit(lit *ast.CompositeLit,
 	}
 
 	return strings.TrimSpace(string(ctx.NodeSource(lit))) == formatted
+}
+
+func formatElidedCompositeLitValue(lit *ast.CompositeLit, ctx *Context, start,
+	end int) (string, bool) {
+
+	if lit == nil || ctx == nil || lit.Type != nil || len(lit.Elts) == 0 {
+		return "", false
+	}
+
+	kv, ok := ctx.Parent(lit).(*ast.KeyValueExpr)
+	if !ok || kv == nil || kv.Value != lit {
+		return "", false
+	}
+
+	for _, elt := range lit.Elts {
+		eltLit, ok := elt.(*ast.CompositeLit)
+		if !ok || eltLit == nil || eltLit.Type != nil ||
+			isCompactElidedCompositeLit(eltLit, ctx) {
+
+			return "", false
+		}
+	}
+
+	formatted := formatElidedCompositeLitValueMultiline(lit, ctx)
+	if formatted == "" || formatted == string(ctx.Source[start:end]) {
+		return "", false
+	}
+
+	return formatted, true
+}
+
+func formatElidedCompositeLitValueMultiline(lit *ast.CompositeLit,
+	ctx *Context) string {
+
+	wsIndent := ctx.IndentAt(lit)
+	elemIndent := wsIndent + "\t"
+	fieldIndent := elemIndent + "\t"
+
+	var out strings.Builder
+	out.WriteString("{\n")
+	for _, elt := range lit.Elts {
+		eltLit := elt.(*ast.CompositeLit)
+		out.WriteString(elemIndent)
+		out.WriteString("{\n")
+		for _, inner := range eltLit.Elts {
+			eltText := strings.TrimSpace(string(ctx.NodeSource(inner)))
+			if eltText == "" {
+				return ""
+			}
+			writeCompositeElement(&out, fieldIndent, eltText)
+			out.WriteString(",\n")
+		}
+		out.WriteString(elemIndent)
+		out.WriteString("},\n")
+	}
+	out.WriteString(wsIndent)
+	out.WriteString("}")
+
+	return out.String()
 }
 
 func hasVarOrConstParent(lit *ast.CompositeLit, ctx *Context) bool {

@@ -173,6 +173,24 @@ func example21PackedElidedElements() {
 	_, _ = hops, preimages
 }
 
+// Example 22: Elided composite keyed values should expand outer braces
+func example22ElidedCompositeKeyedValues() {
+	requiredOps := map[string][]PermissionOp{
+		"/service/Action": {{
+			Entity: "swap",
+			Action: "execute",
+		}, {
+			Entity: "service",
+			Action: "read",
+		}},
+		"/service/Read": {{
+			Entity: "swap",
+			Action: "read",
+		}},
+	}
+	_ = requiredOps
+}
+
 // Stubs to make the file compile
 type formatter struct{}
 
@@ -199,6 +217,10 @@ type requestResponse struct {
 type sampleMarker []string
 type RouteHop struct{}
 type SamplePreimage [32]byte
+type PermissionOp struct {
+	Entity string
+	Action string
+}
 type ReservationID struct{}
 type ReservationRequest struct {
 	ID ReservationID
