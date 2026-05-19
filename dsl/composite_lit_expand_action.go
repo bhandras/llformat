@@ -319,6 +319,24 @@ func (a *ExpandCompositeLitAction) Execute(caps Captures, ctx *Context) ([]byte,
 	}
 
 	if strings.Contains(orig, "\n") {
+		if out, changed := breakAdjacentCompositeLitElements(
+			lit, ctx,
+		); changed {
+			return out, true
+		}
+		if formatted, ok := collapseSimpleCompositeLit(
+			lit, ctx, start, end,
+		); ok {
+
+			out, err := ApplySingleEdit(
+				ctx.Source, start, end, []byte(formatted),
+			)
+			if err != nil || !parseCheckOK(out) {
+				return nil, false
+			}
+
+			return out, true
+		}
 		if out, changed := breakCompositeLitTypeArgs(
 			lit, ctx,
 		); changed {
@@ -375,6 +393,10 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 		return false
 	}
 
+	if compositeLitCompactSingleUnkeyedFits(lit, ctx) {
+		return false
+	}
+
 	if ctx.LineWidth(lit) > ctx.ColumnLimit {
 		return true
 	}
@@ -389,6 +411,113 @@ func shouldExpandCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 	}
 
 	return false
+}
+
+func breakAdjacentCompositeLitElements(lit *ast.CompositeLit,
+	ctx *Context) ([]byte, bool) {
+
+	if lit == nil || ctx == nil || len(lit.Elts) < 2 {
+		return nil, false
+	}
+
+	elemIndent := ctx.IndentAt(lit) + "\t"
+	var b EditBuilder
+	changed := false
+	for i := 1; i < len(lit.Elts); i++ {
+		prev, ok := lit.Elts[i-1].(*ast.CompositeLit)
+		if !ok || prev == nil {
+			continue
+		}
+		next, ok := lit.Elts[i].(*ast.CompositeLit)
+		if !ok || next == nil {
+			continue
+		}
+
+		prevEnd := ctx.Fset.Position(prev.End()).Offset
+		nextStart := ctx.Fset.Position(next.Pos()).Offset
+		if prevEnd < 0 || nextStart <= prevEnd ||
+			nextStart > len(ctx.Source) {
+
+			continue
+		}
+		if lineStart(ctx.Source, prevEnd) !=
+			lineStart(ctx.Source, nextStart) {
+
+			continue
+		}
+		if strings.TrimSpace(
+			string(ctx.Source[prevEnd:nextStart]),
+		) != "," {
+
+			continue
+		}
+
+		b.Replace(prevEnd, nextStart, []byte(",\n"+elemIndent))
+		changed = true
+	}
+	if !changed {
+		return nil, false
+	}
+
+	out, changed, err := b.Apply(ctx.Source)
+	if err != nil || !changed || !parseCheckOK(out) {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func collapseSimpleCompositeLit(lit *ast.CompositeLit, ctx *Context, start,
+	end int) (string, bool) {
+
+	formatted, ok := compactSingleUnkeyedCompositeLit(lit, ctx)
+	if !ok || formatted == string(ctx.Source[start:end]) {
+		return "", false
+	}
+	if !replacementLinesFitWithinLimit(ctx, start, end, formatted) {
+		return "", false
+	}
+
+	return formatted, true
+}
+
+func compositeLitCompactSingleUnkeyedFits(lit *ast.CompositeLit,
+	ctx *Context) bool {
+
+	formatted, ok := compactSingleUnkeyedCompositeLit(lit, ctx)
+	if !ok {
+		return false
+	}
+
+	start := ctx.Fset.Position(lit.Pos()).Offset
+	end := ctx.Fset.Position(lit.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return false
+	}
+
+	return replacementLinesFitWithinLimit(ctx, start, end, formatted)
+}
+
+func compactSingleUnkeyedCompositeLit(lit *ast.CompositeLit,
+	ctx *Context) (string, bool) {
+
+	if lit == nil || ctx == nil || lit.Type == nil || len(lit.Elts) != 1 {
+		return "", false
+	}
+	if _, ok := lit.Elts[0].(*ast.KeyValueExpr); ok {
+		return "", false
+	}
+
+	typeText := strings.TrimSpace(renderNode(lit.Type, ctx.Fset))
+	eltText := strings.TrimSpace(renderNode(lit.Elts[0], ctx.Fset))
+	if typeText == "" || eltText == "" ||
+		strings.Contains(typeText, "\n") ||
+		strings.Contains(eltText, "\n") ||
+		hasAnyComment(typeText) || hasAnyComment(eltText) {
+		return "", false
+	}
+
+	return typeText + "{" + eltText + "}", true
 }
 
 func hasVarOrConstParent(lit *ast.CompositeLit, ctx *Context) bool {

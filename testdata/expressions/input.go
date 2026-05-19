@@ -130,6 +130,36 @@ func example18(x, y, z, w int, enabled, active bool) bool {
 	return x > 0 && y > 0 && z > 0 && w > 0 && x < 100 && y < 100 && z < 100 && w < 100 && enabled && active
 }
 
+// Example 19: Single-element composite literals should stay compact
+func example19SingleElementCompositeLiteral(swapRequest SwapRequest) {
+	expectedOut := []requestResponse{
+		{
+			request: swapRequest,
+			response: &SwapInfo{
+				SwapHash: lntypes.Hash{
+					1,
+				},
+				Marker: sampleMarker{
+					"ready",
+				},
+			},
+		},
+	}
+	_ = expectedOut
+}
+
+// Example 20: Keyed composite elements should not share a line
+func example20KeyedElements(resId1, resId2 ReservationID) {
+	requests := []ReservationRequest{
+		{
+			ID: resId1,
+		}, {
+			ID: resId2,
+		},
+	}
+	_ = requests
+}
+
 // Stubs to make the file compile
 type formatter struct{}
 
@@ -143,6 +173,21 @@ func someVeryLongFunctionName(int, int) int               { return 0 }
 func anotherLongFunction(int, int) int                    { return 0 }
 func someCheck(int) bool                                  { return false }
 func anotherCheck(int) bool                               { return false }
+
+type SwapRequest struct{}
+type SwapInfo struct {
+	SwapHash interface{}
+	Marker   interface{}
+}
+type requestResponse struct {
+	request  SwapRequest
+	response *SwapInfo
+}
+type sampleMarker []string
+type ReservationID struct{}
+type ReservationRequest struct {
+	ID ReservationID
+}
 
 type clientType struct{}
 
