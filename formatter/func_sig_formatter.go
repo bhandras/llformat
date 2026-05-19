@@ -325,17 +325,15 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 			if formatted, ok := formatPartialSplitReturnsByBreakingParam(
 				f, signature, indent, colLimit, tabStop,
 			); ok {
-
 				return formatted, true
 			}
 			if signatureLinesFit(
 				signature, indent, colLimit, tabStop,
 			) && !isFuncLitSignature(signature) &&
 				!shouldRebreakFailedMultilineSigCollapse(
-					f, signature, collapsed, indent, colLimit,
-					tabStop,
+					f, signature, collapsed, indent,
+					colLimit, tabStop,
 				) {
-
 				return indent + signature,
 					hasNewlineOutsideBraces(signature)
 			}
@@ -380,14 +378,14 @@ func formatPartialSplitReturnsByBreakingParam(f *FuncSigFormatter, signature,
 
 	if !hasPartialSplitReturnList(signature) ||
 		isFuncLitSignature(signature) {
-
 		return "", false
 	}
 
-	sigAtFunc, hasFuncKeyword := signatureAtFunc(strings.TrimSpace(signature))
+	sigAtFunc, hasFuncKeyword := signatureAtFunc(
+		strings.TrimSpace(signature),
+	)
 	if !hasFuncKeyword || !strings.HasPrefix(sigAtFunc, "func ") ||
 		strings.HasPrefix(sigAtFunc, "func (") {
-
 		return "", false
 	}
 
@@ -405,7 +403,6 @@ func formatPartialSplitReturnsByBreakingParam(f *FuncSigFormatter, signature,
 	if len(paramList) != 1 || strings.Contains(paramList[0], "\n") ||
 		!hasSingleNamedParam(paramList) ||
 		hasSharedNameParamGroup(paramList) {
-
 		return "", false
 	}
 
@@ -429,7 +426,6 @@ func formatPartialSplitReturnsByBreakingParam(f *FuncSigFormatter, signature,
 
 	if width.VisualLenWithTab(firstLine, tabStop) > colLimit ||
 		width.VisualLenWithTab(secondLine, tabStop) > colLimit {
-
 		return "", false
 	}
 
@@ -458,7 +454,6 @@ func collapseSmallParenReturns(returns string) (string, bool) {
 	trimmed := strings.TrimSpace(returns)
 	if len(trimmed) < 2 || trimmed[0] != '(' ||
 		trimmed[len(trimmed)-1] != ')' {
-
 		return "", false
 	}
 
@@ -468,7 +463,6 @@ func collapseSmallParenReturns(returns string) (string, bool) {
 	}
 	if strings.ContainsAny(content, "{}") ||
 		strings.Contains(content, "func(") {
-
 		return "", false
 	}
 
@@ -1827,7 +1821,8 @@ func (f *FuncSigFormatter) parseSigReturns(afterParams string) (returns,
 		// Simple return type (no parens) - find where it ends
 		braceIdx := strings.Index(afterParams, "{")
 		if braceIdx != -1 {
-			return strings.TrimSpace(afterParams[:braceIdx]), afterParams[braceIdx:]
+			return strings.TrimSpace(afterParams[:braceIdx]),
+				afterParams[braceIdx:]
 		}
 
 		return strings.TrimSpace(afterParams), ""

@@ -419,11 +419,9 @@ func reflowLineCommentBlock(block []string, indent string) []string {
 			flushList()
 			itemText := strings.TrimSpace(afterLead[2:])
 			curList = &para{
-				kind: paraListItem,
-				lead: lead,
-				lines: []string{
-					itemText,
-				},
+				kind:  paraListItem,
+				lead:  lead,
+				lines: []string{itemText},
 			}
 			continue
 		}
@@ -534,11 +532,9 @@ func reflowBlockComment(block []string, indent string) []string {
 			flushList()
 			itemText := strings.TrimSpace(afterLead[2:])
 			curList = &para{
-				kind: paraListItem,
-				lead: lead,
-				lines: []string{
-					itemText,
-				},
+				kind:  paraListItem,
+				lead:  lead,
+				lines: []string{itemText},
 			}
 			continue
 		}

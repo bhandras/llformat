@@ -63,16 +63,22 @@ func (c *CallArgCountCond) Eval(caps Captures, ctx *Context) bool {
 	switch c.Op {
 	case ">":
 		return got > c.Value
+
 	case ">=":
 		return got >= c.Value
+
 	case "<":
 		return got < c.Value
+
 	case "<=":
 		return got <= c.Value
+
 	case "==":
 		return got == c.Value
+
 	case "!=":
 		return got != c.Value
+
 	default:
 		return false
 	}

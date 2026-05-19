@@ -584,16 +584,13 @@ func compactElidedCompositeLit(lit *ast.CompositeLit,
 	eltText := strings.TrimSpace(renderNode(lit.Elts[0], ctx.Fset))
 	if eltText == "" || strings.Contains(eltText, "\n") ||
 		hasAnyComment(eltText) {
-
 		return "", false
 	}
 
 	return "{" + eltText + "}", true
 }
 
-func isCompactElidedCompositeLit(lit *ast.CompositeLit,
-	ctx *Context) bool {
-
+func isCompactElidedCompositeLit(lit *ast.CompositeLit, ctx *Context) bool {
 	formatted, ok := compactElidedCompositeLit(lit, ctx)
 	if !ok {
 		return false
@@ -607,7 +604,6 @@ func packSimpleElidedCompositeLitElements(lit *ast.CompositeLit,
 
 	if lit == nil || ctx == nil || len(lit.Elts) < 2 ||
 		hasPackedElidedCompositeLitElements(lit, ctx) {
-
 		return "", false
 	}
 
@@ -652,7 +648,6 @@ func hasPackedElidedCompositeLitElements(lit *ast.CompositeLit,
 		if prevEnd >= 0 && nextStart > prevEnd &&
 			lineStart(ctx.Source, prevEnd) ==
 				lineStart(ctx.Source, nextStart) {
-
 			return true
 		}
 	}
@@ -671,7 +666,6 @@ func formatSimpleElidedCompositeLitElements(lit *ast.CompositeLit,
 		typeText = strings.TrimSpace(renderNode(lit.Type, ctx.Fset))
 		if typeText == "" || strings.Contains(typeText, "\n") ||
 			hasAnyComment(typeText) {
-
 			return "", false
 		}
 	}
@@ -727,7 +721,6 @@ func formatElidedCompositeLitValue(lit *ast.CompositeLit, ctx *Context, start,
 		eltLit, ok := elt.(*ast.CompositeLit)
 		if !ok || eltLit == nil || eltLit.Type != nil ||
 			isCompactElidedCompositeLit(eltLit, ctx) {
-
 			return "", false
 		}
 	}
@@ -754,7 +747,11 @@ func formatElidedCompositeLitValueMultiline(lit *ast.CompositeLit,
 		out.WriteString(elemIndent)
 		out.WriteString("{\n")
 		for _, inner := range eltLit.Elts {
-			eltText := strings.TrimSpace(string(ctx.NodeSource(inner)))
+			eltText := strings.TrimSpace(
+				string(
+					ctx.NodeSource(inner),
+				),
+			)
 			if eltText == "" {
 				return ""
 			}

@@ -27,18 +27,14 @@ func TestIsLogOrPrintfCallCond_SelectorPrefixes_RestrictsWhenMatchAnyEnabled(
 	condAllowed := &IsLogOrPrintfCallCond{
 		Target:                 "node",
 		MatchAnySelectorPrefix: true,
-		SelectorPrefixes: []string{
-			"rpcSLog",
-		},
+		SelectorPrefixes:       []string{"rpcSLog"},
 	}
 	require.True(t, condAllowed.Eval(Captures{"node": call}, &Context{}))
 
 	condDenied := &IsLogOrPrintfCallCond{
 		Target:                 "node",
 		MatchAnySelectorPrefix: true,
-		SelectorPrefixes: []string{
-			"otherLog",
-		},
+		SelectorPrefixes:       []string{"otherLog"},
 	}
 	require.False(t, condDenied.Eval(Captures{"node": call}, &Context{}))
 }
@@ -61,9 +57,7 @@ func TestIsLogOrPrintfCallCond_SelectorPrefixes_ExpandWhenMatchAnyDisabled(
 	cond := &IsLogOrPrintfCallCond{
 		Target:                 "node",
 		MatchAnySelectorPrefix: false,
-		SelectorPrefixes: []string{
-			"rpcSLog",
-		},
+		SelectorPrefixes:       []string{"rpcSLog"},
 	}
 	require.True(t, cond.Eval(Captures{"node": call}, &Context{}))
 }
@@ -86,9 +80,7 @@ func TestIsLogOrPrintfCallCond_SelectorPrefixes_DoNotBlockCanonicalMatches(
 	cond := &IsLogOrPrintfCallCond{
 		Target:                 "node",
 		MatchAnySelectorPrefix: true,
-		SelectorPrefixes: []string{
-			"rpcSLog",
-		},
+		SelectorPrefixes:       []string{"rpcSLog"},
 	}
 	require.True(t, cond.Eval(Captures{"node": call}, &Context{}))
 }
@@ -109,9 +101,7 @@ func TestIsLogOrPrintfCallCond_SelectorNamesOverride(t *testing.T) {
 	cond := &IsLogOrPrintfCallCond{
 		Target:                 "node",
 		MatchAnySelectorPrefix: true,
-		SelectorNames: []string{
-			"Noticef",
-		},
+		SelectorNames:          []string{"Noticef"},
 	}
 	require.True(t, cond.Eval(Captures{"node": call}, &Context{}))
 

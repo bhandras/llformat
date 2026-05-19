@@ -121,7 +121,7 @@ func unmarshalFixedPoint(
 	out := string(p.Format([]byte(in)))
 
 	require.Contains(
-		t, out, "func unmarshalFixedPoint(\n\tfp "+
+		t, out, "func unmarshalFixedPoint(\n	fp "+
 			"*looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, "+
 			"error) {",
 	)

@@ -1122,10 +1122,14 @@ func LogPrintfRulesWithOptions(opts LogPrintfOptions,
 					&NotCond{
 						Cond: &AndCond{
 							Conds: []Condition{
-								&IsCallArgCond{Target: "node"},
+								&IsCallArgCond{
+									Target: "node",
+								},
 								&IsCallFuncInListCond{
 									Target: "node",
-									Names:  []string{"fmt.Errorf"},
+									Names: []string{
+										"fmt.Errorf",
+									},
 								},
 								&CallArgCountCond{
 									Target: "node",
@@ -1330,9 +1334,7 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 
 	var rules []Rule
 	rules = append(
-		rules,
-		collapseSimpleCallArgsRule(),
-		packReturnStmtRule(),
+		rules, collapseSimpleCallArgsRule(), packReturnStmtRule(),
 	)
 
 	// Method chain rule - higher priority, handles chains specially.

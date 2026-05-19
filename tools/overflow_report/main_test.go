@@ -21,9 +21,7 @@ func TestGoFilesUnder_ExcludeSuffix(t *testing.T) {
 		t.Fatalf("goFilesUnder returned error: %v", err)
 	}
 
-	want := []string{
-		filepath.Join(root, "a.go"),
-	}
+	want := []string{filepath.Join(root, "a.go")}
 	if !equalStrings(got, want) {
 		t.Fatalf("unexpected files:\n got: %#v\nwant: %#v", got, want)
 	}
@@ -44,9 +42,7 @@ func TestGoFilesUnder_ExcludeDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("goFilesUnder returned error: %v", err)
 	}
-	want := []string{
-		filepath.Join(root, "keep.go"),
-	}
+	want := []string{filepath.Join(root, "keep.go")}
 	if !equalStrings(got, want) {
 		t.Fatalf("unexpected files:\n got: %#v\nwant: %#v", got, want)
 	}

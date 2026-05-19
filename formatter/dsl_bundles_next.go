@@ -111,8 +111,8 @@ func dslRulesForExpr(opts StageOptions) []dsl.Rule {
 	return exprRules
 }
 
-func dslRulesForMultiLineCalls(opts StageOptions) (rules []dsl.Rule,
-	nodeOrder dsl.NodeOrder) {
+func dslRulesForMultiLineCalls(
+	opts StageOptions) (rules []dsl.Rule, nodeOrder dsl.NodeOrder) {
 
 	style := opts.Style.DSLMultiLineStyle
 	if style == "" {

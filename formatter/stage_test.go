@@ -67,9 +67,7 @@ func TestStageOrder(t *testing.T) {
 
 func TestStageOrderMissingDep(t *testing.T) {
 	formatter := NoopFormatter{}
-	stages := []Stage{
-		NewStage("stage1", formatter).WithRequires("missing"),
-	}
+	stages := []Stage{NewStage("stage1", formatter).WithRequires("missing")}
 	_, err := StageOrder(stages)
 	if err == nil {
 		t.Fatalf("expected error")

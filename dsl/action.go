@@ -3199,7 +3199,6 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 	}
 	if compact, ok := compactSingleArgCallText(ctx, call, start, end); ok &&
 		replacementLinesFitWithinLimit(ctx, start, end, compact) {
-
 		return nil, false
 	}
 
@@ -3294,7 +3293,6 @@ func (a *CollapseSimpleCallArgsAction) Execute(caps Captures, ctx *Context) (
 	}
 	if formatted == original ||
 		!replacementLinesFitWithinLimit(ctx, start, end, formatted) {
-
 		return nil, false
 	}
 
@@ -3313,7 +3311,6 @@ func compactSingleArgCallText(ctx *Context, call *ast.CallExpr, start,
 
 	if ctx == nil || call == nil || len(call.Args) != 1 ||
 		!isSimpleCallArg(call.Args[0]) {
-
 		return "", false
 	}
 
@@ -3371,7 +3368,6 @@ func (a *PackReturnStmtAction) Execute(caps Captures, ctx *Context) ([]byte,
 	)
 	if formatted == original ||
 		!replacementLinesFitWithinLimit(ctx, start, end, formatted) {
-
 		return nil, false
 	}
 

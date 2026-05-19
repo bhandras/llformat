@@ -1393,7 +1393,8 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 }
 
 func formatCallPackedMultiLineNextInternal(call []byte, wsIndent,
-	fullPrefix string, trailingComma bool, firstStringArgInline bool) string {
+	fullPrefix string, trailingComma bool,
+	firstStringArgInline bool) string {
 
 	s := string(call)
 	open := strings.IndexByte(s, '(')

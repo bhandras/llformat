@@ -286,16 +286,11 @@ func (e *Engine) estimateMaxIterations(src []byte) int {
 			if n == nil {
 				return true
 			}
-			rt := reflect.TypeOf(n)
-			if rt == nil {
+			v := reflect.Indirect(reflect.ValueOf(n))
+			if !v.IsValid() {
 				return true
 			}
-			if rt.Kind() == reflect.Ptr {
-				rt = rt.Elem()
-			}
-			if rt == nil {
-				return true
-			}
+			rt := v.Type()
 			if _, ok := nodeTypes[rt.Name()]; ok {
 				candidates++
 			}
@@ -692,8 +687,8 @@ func ensureParseable(ctx *Context, src []byte,
 	return true, ""
 }
 
-func collectNodesAndParents(file *ast.File) ([]ast.Node,
-	map[ast.Node]ast.Node) {
+func collectNodesAndParents(
+	file *ast.File) ([]ast.Node, map[ast.Node]ast.Node) {
 
 	// We need parent links for conditions like parent()/scope(). Capture
 	// parents while traversing the AST once to avoid repeated reflection-
@@ -833,7 +828,8 @@ func (e *Engine) executeEditAction(editAction EditAction, caps Captures,
 
 	applied, err := ApplyEdits(ctx.Source, edits)
 	if err != nil {
-		return nil, false, false, "edit_action=apply_edits_error=" + err.Error()
+		return nil, false, false,
+			"edit_action=apply_edits_error=" + err.Error()
 	}
 
 	// Never accept a transformation that produces syntactically invalid Go

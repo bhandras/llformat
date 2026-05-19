@@ -207,9 +207,8 @@ type I interface {
 	// Even when the first return type is long, prefer keeping a two-item
 	// return list inline by breaking the single parameter first.
 	require.Contains(
-		t, out, "FetchPendingInvoices(\n"+
-			"		ctx context.Context) "+
-			"(map[lntypes.Hash]Invoice, error)",
+		t, out, "FetchPendingInvoices(\n		ctx "+
+			"context.Context) (map[lntypes.Hash]Invoice, error)",
 		"expected params to break before forcing a multiline "+
 			"two-item return list",
 	)

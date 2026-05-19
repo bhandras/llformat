@@ -196,9 +196,7 @@ func ExportedName(x C.int) C.int {
 //line generated.go:123
 func f() int { return 1 }
 `,
-			wantContains: []string{
-				"//line generated.go:123\n",
-			},
+			wantContains: []string{"//line generated.go:123\n"},
 		},
 		{
 			name: "parenthesized_composite_and_func_lits",

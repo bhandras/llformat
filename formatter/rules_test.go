@@ -56,10 +56,8 @@ func TestCallRuleMatch(t *testing.T) {
 
 func TestCallRuleName(t *testing.T) {
 	rule := &CallRule{
-		Patterns: []string{
-			"log.Infof(",
-		},
-		Breaker: NewLeftFlowBreaker(),
+		Patterns: []string{"log.Infof("},
+		Breaker:  NewLeftFlowBreaker(),
 	}
 	if rule.Name() != "call:log.Infof(" {
 		t.Errorf("Name() = %q, want %q", rule.Name(), "call:log.Infof(")
@@ -74,10 +72,8 @@ func TestCallRuleName(t *testing.T) {
 
 func TestCallRuleApply(t *testing.T) {
 	rule := &CallRule{
-		Patterns: []string{
-			"log.Infof(",
-		},
-		Breaker: NewLeftFlowBreaker(),
+		Patterns: []string{"log.Infof("},
+		Breaker:  NewLeftFlowBreaker(),
 	}
 	cfg := NewBaseConfig(80, 8)
 
@@ -95,10 +91,8 @@ func TestCallRuleApply(t *testing.T) {
 
 func TestCallRuleApplyNoMatch(t *testing.T) {
 	rule := &CallRule{
-		Patterns: []string{
-			"log.Infof(",
-		},
-		Breaker: NewLeftFlowBreaker(),
+		Patterns: []string{"log.Infof("},
+		Breaker:  NewLeftFlowBreaker(),
 	}
 	cfg := NewBaseConfig(80, 8)
 
@@ -183,16 +177,12 @@ func TestDefaultPatterns(t *testing.T) {
 
 func TestRuleMatcherMatchAt(t *testing.T) {
 	rule1 := &CallRule{
-		Patterns: []string{
-			"log.Infof(",
-		},
-		Breaker: NewLeftFlowBreaker(),
+		Patterns: []string{"log.Infof("},
+		Breaker:  NewLeftFlowBreaker(),
 	}
 	rule2 := &CallRule{
-		Patterns: []string{
-			"fmt.Printf(",
-		},
-		Breaker: NewLeftFlowBreaker(),
+		Patterns: []string{"fmt.Printf("},
+		Breaker:  NewLeftFlowBreaker(),
 	}
 
 	matcher := NewRuleMatcher([]Rule{rule1, rule2}, NewBaseConfig(80, 8))
@@ -225,10 +215,8 @@ func TestRuleMatcherMatchAt(t *testing.T) {
 
 func TestRuleMatcherApplyAt(t *testing.T) {
 	rule := &CallRule{
-		Patterns: []string{
-			"log.Infof(",
-		},
-		Breaker: NewLeftFlowBreaker(),
+		Patterns: []string{"log.Infof("},
+		Breaker:  NewLeftFlowBreaker(),
 	}
 	matcher := NewRuleMatcher([]Rule{rule}, NewBaseConfig(80, 8))
 
