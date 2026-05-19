@@ -2771,6 +2771,18 @@ type PackedMultiLineCallAction struct {
 	OnlyIfSingleLine bool
 }
 
+// CollapseSimpleCallArgsAction collapses over-expanded single-argument calls
+// when the compact argument list fits at the call's current line position.
+type CollapseSimpleCallArgsAction struct {
+	Target string
+}
+
+// PackReturnStmtAction greedily packs multi-result return statements while
+// keeping simple nested calls on one line when they fit.
+type PackReturnStmtAction struct {
+	Target string
+}
+
 // BreakSelectorCallArgsAction breaks only the argument list of a selector call
 // whose callee head should remain flat, such as `make(x).Check(...)`.
 type BreakSelectorCallArgsAction struct {
@@ -3185,6 +3197,11 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 	if hasAnyComment(string(original)) {
 		return nil, false
 	}
+	if compact, ok := compactSingleArgCallText(ctx, call, start, end); ok &&
+		replacementLinesFitWithinLimit(ctx, start, end, compact) {
+
+		return nil, false
+	}
 
 	wsIndent := ctx.IndentAt(call)
 	callText := string(original)
@@ -3246,6 +3263,218 @@ func (a *PackedMultiLineCallAction) Execute(caps Captures, ctx *Context) (
 	}
 
 	return out, true
+}
+
+// Execute implements Action for CollapseSimpleCallArgsAction.
+func (a *CollapseSimpleCallArgsAction) Execute(caps Captures, ctx *Context) (
+	[]byte, bool) {
+
+	node := resolveTarget(caps, a.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok || call == nil || len(call.Args) != 1 {
+		return nil, false
+	}
+
+	start, end, ok := callSpanOffsets(ctx, call)
+	if !ok {
+		return nil, false
+	}
+
+	original := string(ctx.Source[start:end])
+	if !strings.Contains(original, "\n") || hasAnyComment(original) {
+		return nil, false
+	}
+	if !isSimpleCallArg(call.Args[0]) {
+		return nil, false
+	}
+
+	formatted, ok := compactSingleArgCallText(ctx, call, start, end)
+	if !ok {
+		return nil, false
+	}
+	if formatted == original ||
+		!replacementLinesFitWithinLimit(ctx, start, end, formatted) {
+
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(
+		ctx.Source, start, end, []byte(formatted),
+	)
+	if err != nil || !parseCheckOK(out) {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func compactSingleArgCallText(ctx *Context, call *ast.CallExpr, start,
+	end int) (string, bool) {
+
+	if ctx == nil || call == nil || len(call.Args) != 1 ||
+		!isSimpleCallArg(call.Args[0]) {
+
+		return "", false
+	}
+
+	lparen := ctx.Fset.Position(call.Lparen).Offset
+	rparen := ctx.Fset.Position(call.Rparen).Offset
+	if lparen < start || rparen <= lparen || rparen > end {
+		return "", false
+	}
+
+	head := string(ctx.Source[start:lparen])
+	if strings.Contains(head, "[\n") {
+		return "", false
+	}
+
+	arg := strings.TrimSpace(renderNode(call.Args[0], ctx.Fset))
+	if arg == "" || strings.Contains(arg, "\n") || hasAnyComment(arg) {
+		return "", false
+	}
+
+	return head + "(" + arg + ")", true
+}
+
+// Execute implements Action for PackReturnStmtAction.
+func (a *PackReturnStmtAction) Execute(caps Captures, ctx *Context) ([]byte,
+	bool) {
+
+	node := resolveTarget(caps, a.Target)
+	ret, ok := node.(*ast.ReturnStmt)
+	if !ok || ret == nil || len(ret.Results) < 2 {
+		return nil, false
+	}
+
+	start := ctx.Fset.Position(ret.Pos()).Offset
+	end := ctx.Fset.Position(ret.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return nil, false
+	}
+
+	original := string(ctx.Source[start:end])
+	if hasAnyComment(original) {
+		return nil, false
+	}
+
+	exprs := make([]string, 0, len(ret.Results))
+	for _, expr := range ret.Results {
+		text, ok := compactReturnExprText(ctx, expr)
+		if !ok {
+			return nil, false
+		}
+		exprs = append(exprs, text)
+	}
+
+	formatted := formatReturnResultsPacked(
+		exprs, ctx.IndentAt(ret), ctx.ColumnLimit, ctx.TabStop,
+	)
+	if formatted == original ||
+		!replacementLinesFitWithinLimit(ctx, start, end, formatted) {
+
+		return nil, false
+	}
+
+	out, err := ApplySingleEdit(
+		ctx.Source, start, end, []byte(formatted),
+	)
+	if err != nil || !parseCheckOK(out) {
+		return nil, false
+	}
+
+	return out, true
+}
+
+func compactReturnExprText(ctx *Context, expr ast.Expr) (string, bool) {
+	start := ctx.Fset.Position(expr.Pos()).Offset
+	end := ctx.Fset.Position(expr.End()).Offset
+	if start < 0 || end > len(ctx.Source) || start >= end {
+		return "", false
+	}
+
+	orig := string(ctx.Source[start:end])
+	if hasAnyComment(orig) {
+		return "", false
+	}
+	if call, ok := expr.(*ast.CallExpr); ok {
+		if compact, ok := compactSingleArgCallText(
+			ctx, call, start, end,
+		); ok {
+			return compact, true
+		}
+	}
+	if strings.Contains(orig, "\n") {
+		return "", false
+	}
+
+	text := strings.TrimSpace(renderNode(expr, ctx.Fset))
+	if text == "" || strings.Contains(text, "\n") || hasAnyComment(text) {
+		return "", false
+	}
+
+	return text, true
+}
+
+func formatReturnResultsPacked(exprs []string, indent string, colLimit,
+	tabStop int) string {
+
+	contIndent := indent + "\t"
+	var b strings.Builder
+	b.WriteString("return ")
+	current := indent + "return "
+	for i, expr := range exprs {
+		sep := ""
+		if i > 0 {
+			sep = ", "
+		}
+		candidate := current + sep + expr
+		if i < len(exprs)-1 {
+			candidate += ","
+		}
+		if i > 0 && visualLen(candidate, tabStop) > colLimit {
+			b.WriteString(",\n")
+			b.WriteString(contIndent)
+			b.WriteString(expr)
+			current = contIndent + expr
+			continue
+		}
+
+		b.WriteString(sep)
+		b.WriteString(expr)
+		current += sep + expr
+	}
+
+	return b.String()
+}
+
+func replacementLinesFitWithinLimit(ctx *Context, start, end int,
+	replacement string) bool {
+
+	if ctx == nil {
+		return false
+	}
+	prefix := string(ctx.Source[lineStart(ctx.Source, start):start])
+	suffix := string(ctx.Source[end:lineEnd(ctx.Source, end)])
+	lines := strings.Split(replacement, "\n")
+	if len(lines) == 0 {
+		return true
+	}
+	if len(lines) == 1 {
+		return visualLen(prefix+lines[0]+suffix, ctx.TabStop) <=
+			ctx.ColumnLimit
+	}
+
+	if visualLen(prefix+lines[0], ctx.TabStop) > ctx.ColumnLimit {
+		return false
+	}
+	for _, line := range lines[1 : len(lines)-1] {
+		if visualLen(line, ctx.TabStop) > ctx.ColumnLimit {
+			return false
+		}
+	}
+
+	return visualLen(lines[len(lines)-1]+suffix, ctx.TabStop) <=
+		ctx.ColumnLimit
 }
 
 func callAlreadyAcceptableWithMultilineLiteralArg(ctx *Context,

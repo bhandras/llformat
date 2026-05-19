@@ -1309,6 +1309,11 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 	}
 
 	var rules []Rule
+	rules = append(
+		rules,
+		collapseSimpleCallArgsRule(),
+		packReturnStmtRule(),
+	)
 
 	// Method chain rule - higher priority, handles chains specially.
 	//
@@ -1388,6 +1393,34 @@ func MultiLineCallRulesWithOptions(opts MultiLineCallOptions,
 	return rules
 }
 
+func collapseSimpleCallArgsRule() Rule {
+	return Rule{
+		Name: "collapse_simple_call_args",
+		Pattern: &NodePattern{
+			Type: "CallExpr",
+		},
+		When:     TrueCond{},
+		Priority: 70,
+		Action: &CollapseSimpleCallArgsAction{
+			Target: "node",
+		},
+	}
+}
+
+func packReturnStmtRule() Rule {
+	return Rule{
+		Name: "pack_return_stmt",
+		Pattern: &NodePattern{
+			Type: "ReturnStmt",
+		},
+		When:     TrueCond{},
+		Priority: 69,
+		Action: &PackReturnStmtAction{
+			Target: "node",
+		},
+	}
+}
+
 // PackedMultiLineOnlyRules returns multiline call rules that format only
 // non-method-chain call expressions using packed multiline formatting.
 //
@@ -1431,48 +1464,51 @@ func PackedMultiLineOnlyRulesWithOptions(opts MultiLineCallOptions,
 		)
 	}
 
-	return []Rule{
-		{
-			Name: "long_call_expr_packed",
-			Pattern: &NodePattern{
-				Type: "CallExpr",
-			},
-			When: &AndCond{
-				Conds: []Condition{
-					&OrCond{
-						Conds: spanWidthConds,
+	rules := []Rule{
+		collapseSimpleCallArgsRule(),
+		packReturnStmtRule(),
+	}
+
+	return append(rules, Rule{
+		Name: "long_call_expr_packed",
+		Pattern: &NodePattern{
+			Type: "CallExpr",
+		},
+		When: &AndCond{
+			Conds: []Condition{
+				&OrCond{
+					Conds: spanWidthConds,
+				},
+				&NotCond{
+					Cond: &IsLogOrPrintfCallCond{
+						Target:                 "node",
+						MatchAnySelectorPrefix: true,
+						SelectorNames:          opts.LogCallSelectorNames,
+						SelectorPrefixes:       opts.LogCallSelectorPrefixes,
 					},
-					&NotCond{
-						Cond: &IsLogOrPrintfCallCond{
-							Target:                 "node",
-							MatchAnySelectorPrefix: true,
-							SelectorNames:          opts.LogCallSelectorNames,
-							SelectorPrefixes:       opts.LogCallSelectorPrefixes,
-						},
+				},
+				&NotCond{
+					Cond: &IsMethodChainCond{
+						Target:   "node",
+						MinCalls: 2,
 					},
-					&NotCond{
-						Cond: &IsMethodChainCond{
-							Target:   "node",
-							MinCalls: 2,
-						},
+				},
+				&NotCond{
+					Cond: &IsCallFuncContainsAnyCond{
+						Target: "node",
+						Names:  opts.Excludes,
 					},
-					&NotCond{
-						Cond: &IsCallFuncContainsAnyCond{
-							Target: "node",
-							Names:  opts.Excludes,
-						},
-					},
-					&NotCond{
-						Cond: &HasAnyCommentCond{
-							Target: "node",
-						},
+				},
+				&NotCond{
+					Cond: &HasAnyCommentCond{
+						Target: "node",
 					},
 				},
 			},
-			Priority: 50,
-			Action:   action,
 		},
-	}
+		Priority: 50,
+		Action:   action,
+	})
 }
 
 // LegacyMultiLineCallRules returns a rule set intended to match the legacy
