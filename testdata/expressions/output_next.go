@@ -236,7 +236,12 @@ func example22ElidedCompositeKeyedValues() {
 			},
 		},
 	}
-	_ = requiredOps
+	simpleIDs := map[SampleHash][]DepositID{
+		sampleHashA: {
+			depositID1,
+		},
+	}
+	_, _ = requiredOps, simpleIDs
 }
 
 // Stubs to make the file compile
@@ -265,6 +270,8 @@ type requestResponse struct {
 type sampleMarker []string
 type RouteHop struct{}
 type SamplePreimage [32]byte
+type SampleHash [32]byte
+type DepositID int
 type PermissionOp struct {
 	Entity string
 	Action string

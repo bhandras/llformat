@@ -163,7 +163,9 @@ func example20KeyedElements(resId1, resId2 ReservationID) {
 // Example 21: Simple elided composite elements should stay packed
 func example21PackedElidedElements() {
 	hops := []*RouteHop{
-		{}, {}, {},
+		{},
+		{},
+		{},
 	}
 	preimages := []SamplePreimage{
 		{1}, {2}, {3},
@@ -188,7 +190,12 @@ func example22ElidedCompositeKeyedValues() {
 			Action: "read",
 		}},
 	}
-	_ = requiredOps
+	simpleIDs := map[SampleHash][]DepositID{
+		sampleHashA: {
+			depositID1,
+		},
+	}
+	_, _ = requiredOps, simpleIDs
 }
 
 // Stubs to make the file compile
@@ -217,6 +224,8 @@ type requestResponse struct {
 type sampleMarker []string
 type RouteHop struct{}
 type SamplePreimage [32]byte
+type SampleHash [32]byte
+type DepositID int
 type PermissionOp struct {
 	Entity string
 	Action string
