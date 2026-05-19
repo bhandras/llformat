@@ -1110,12 +1110,32 @@ func LogPrintfRulesWithOptions(opts LogPrintfOptions,
 			// Only check if this is a log/printf call - the action
 			// will normalize the format and skip if already in
 			// correct format.
-			When: &IsLogOrPrintfCallCond{
-				Target:                 "node",
-				MatchAnySelectorPrefix: opts.MatchAnySelectorPrefix,
-				SelectorNames:          opts.SelectorNames,
-				SelectorPrefixes:       opts.SelectorPrefixes,
-				IncludeNonFStringCalls: opts.IncludeNonFStringCalls,
+			When: &AndCond{
+				Conds: []Condition{
+					&IsLogOrPrintfCallCond{
+						Target:                 "node",
+						MatchAnySelectorPrefix: opts.MatchAnySelectorPrefix,
+						SelectorNames:          opts.SelectorNames,
+						SelectorPrefixes:       opts.SelectorPrefixes,
+						IncludeNonFStringCalls: opts.IncludeNonFStringCalls,
+					},
+					&NotCond{
+						Cond: &AndCond{
+							Conds: []Condition{
+								&IsCallArgCond{Target: "node"},
+								&IsCallFuncInListCond{
+									Target: "node",
+									Names:  []string{"fmt.Errorf"},
+								},
+								&CallArgCountCond{
+									Target: "node",
+									Op:     ">=",
+									Value:  3,
+								},
+							},
+						},
+					},
+				},
 			},
 			Priority: 75,
 			Action:   action,

@@ -419,3 +419,26 @@ func example45SpacesTabs() {
 	log.Infof("one   two		three    four     five with a long " +
 		"sentence that ensures wrapping")
 }
+
+// example46: fmt.Errorf nested in an outer error handler.
+// - Exercises keeping the format string attached to fmt.Errorf when possible.
+func example46HandleError(preimage Preimage, payReq PayReq) error {
+	return f.HandleError(
+		fmt.Errorf("invalid swap invoice hash: expected %x got %x",
+			preimage.Hash(), payReq.Hash),
+	)
+}
+
+type Preimage struct{}
+
+func (Preimage) Hash() string { return "" }
+
+type PayReq struct {
+	Hash string
+}
+
+var f sampleErrorHandler
+
+type sampleErrorHandler struct{}
+
+func (sampleErrorHandler) HandleError(error) error { return nil }
