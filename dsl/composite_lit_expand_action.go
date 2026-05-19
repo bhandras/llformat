@@ -451,6 +451,11 @@ func breakAdjacentCompositeLitElements(lit *ast.CompositeLit,
 
 			continue
 		}
+		if isCompactElidedCompositeLit(prev, ctx) &&
+			isCompactElidedCompositeLit(next, ctx) {
+
+			continue
+		}
 
 		b.Replace(prevEnd, nextStart, []byte(",\n"+elemIndent))
 		changed = true
@@ -501,7 +506,13 @@ func compositeLitCompactSingleUnkeyedFits(lit *ast.CompositeLit,
 func compactSingleUnkeyedCompositeLit(lit *ast.CompositeLit,
 	ctx *Context) (string, bool) {
 
-	if lit == nil || ctx == nil || lit.Type == nil || len(lit.Elts) != 1 {
+	if lit == nil || ctx == nil {
+		return "", false
+	}
+	if lit.Type == nil {
+		return compactElidedCompositeLit(lit, ctx)
+	}
+	if len(lit.Elts) != 1 {
 		return "", false
 	}
 	if _, ok := lit.Elts[0].(*ast.KeyValueExpr); ok {
@@ -518,6 +529,44 @@ func compactSingleUnkeyedCompositeLit(lit *ast.CompositeLit,
 	}
 
 	return typeText + "{" + eltText + "}", true
+}
+
+func compactElidedCompositeLit(lit *ast.CompositeLit,
+	ctx *Context) (string, bool) {
+
+	if lit == nil || ctx == nil || lit.Type != nil {
+		return "", false
+	}
+	if len(lit.Elts) == 0 {
+		return "{}", true
+	}
+	if len(lit.Elts) != 1 {
+		return "", false
+	}
+	switch lit.Elts[0].(type) {
+	case *ast.KeyValueExpr, *ast.CompositeLit:
+		return "", false
+	}
+
+	eltText := strings.TrimSpace(renderNode(lit.Elts[0], ctx.Fset))
+	if eltText == "" || strings.Contains(eltText, "\n") ||
+		hasAnyComment(eltText) {
+
+		return "", false
+	}
+
+	return "{" + eltText + "}", true
+}
+
+func isCompactElidedCompositeLit(lit *ast.CompositeLit,
+	ctx *Context) bool {
+
+	formatted, ok := compactElidedCompositeLit(lit, ctx)
+	if !ok {
+		return false
+	}
+
+	return strings.TrimSpace(string(ctx.NodeSource(lit))) == formatted
 }
 
 func hasVarOrConstParent(lit *ast.CompositeLit, ctx *Context) bool {

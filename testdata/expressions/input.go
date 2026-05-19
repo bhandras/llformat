@@ -160,6 +160,19 @@ func example20KeyedElements(resId1, resId2 ReservationID) {
 	_ = requests
 }
 
+// Example 21: Simple elided composite elements should stay packed
+func example21PackedElidedElements() {
+	hops := []*RouteHop{
+		{}, {}, {},
+	}
+	preimages := []SamplePreimage{
+		{1}, {2}, {3},
+		{4}, {5}, {6},
+		{7}, {8}, {9},
+	}
+	_, _ = hops, preimages
+}
+
 // Stubs to make the file compile
 type formatter struct{}
 
@@ -184,6 +197,8 @@ type requestResponse struct {
 	response *SwapInfo
 }
 type sampleMarker []string
+type RouteHop struct{}
+type SamplePreimage [32]byte
 type ReservationID struct{}
 type ReservationRequest struct {
 	ID ReservationID
