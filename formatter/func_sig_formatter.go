@@ -33,6 +33,12 @@ type FuncSigConfig struct {
 	// return lists (e.g. `([]T, error)`) on one line by breaking parameters
 	// earlier.
 	PreferInlineSmallReturnList bool
+	// PreferInlineReturnListByBreakingParams extends the inline-return
+	// preference to methods, single-parameter interface methods, and
+	// selected function literals. For function literals, it still avoids
+	// breaking a single named parameter because that creates poorly
+	// balanced signatures; in that case splitting returns is clearer.
+	PreferInlineReturnListByBreakingParams bool
 
 	// BreakLongFuncTypeParams enables breaking of function-typed parameters
 	// when their inner parameter list exceeds the column limit (even when
@@ -258,9 +264,10 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 		ReserveTrailingComma:       true,
 		// Prefer keeping very small return lists inline by breaking
 		// parameters earlier (when feasible).
-		PreferInlineSmallReturnList: true,
-		BreakLongFuncTypeParams:     true,
-		FormatInlineStructParams:    true,
+		PreferInlineSmallReturnList:            true,
+		PreferInlineReturnListByBreakingParams: true,
+		BreakLongFuncTypeParams:                true,
+		FormatInlineStructParams:               true,
 	})
 
 	// When the signature already contains newlines, prefer to collapse it
@@ -1520,7 +1527,7 @@ func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
 	hasParenReturns bool, paramList []string) bool {
 
 	if !f.cfg.PreferInlineSmallReturnList || !hasParenReturns ||
-		len(paramList) <= 1 || !isSmallParenReturnList(returns) ||
+		!isSmallParenReturnList(returns) ||
 		hasSharedNameParamGroup(paramList) {
 		return false
 	}
@@ -1528,13 +1535,32 @@ func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
 	sigAtFunc, hasFuncKeyword := signatureAtFunc(trimmedSig)
 	isFuncDeclNoRecv := strings.HasPrefix(sigAtFunc, "func ") &&
 		!strings.HasPrefix(sigAtFunc, "func (")
+	isMethodDecl := strings.HasPrefix(sigAtFunc, "func (")
 	isInterfaceMethod := !hasFuncKeyword
 	isFuncLit := isFuncLitSignature(sigAtFunc)
 
-	// Function literals are common in call-arg position; for readability we
-	// prefer keeping their parameter list intact and breaking the return
-	// list instead (matching the "next" golden spec).
-	return (isFuncDeclNoRecv || isInterfaceMethod) && !isFuncLit
+	if !f.cfg.PreferInlineReturnListByBreakingParams {
+		return len(paramList) > 1 &&
+			(isFuncDeclNoRecv || isInterfaceMethod) &&
+			!isFuncLit
+	}
+
+	if isFuncLit {
+		return funcLitCanBreakParamsForInlineReturns(paramList)
+	}
+
+	return isFuncDeclNoRecv || isMethodDecl || isInterfaceMethod
+}
+
+func funcLitCanBreakParamsForInlineReturns(paramList []string) bool {
+	if len(paramList) != 1 {
+		return false
+	}
+
+	// A single named closure parameter usually reads better kept compact,
+	// with the return list split if needed. An unnamed single parameter
+	// such as `context.Context` can move to a continuation line cleanly.
+	return !strings.ContainsAny(strings.TrimSpace(paramList[0]), " \t")
 }
 
 func hasSharedNameParamGroup(paramList []string) bool {
@@ -1732,9 +1758,87 @@ func (ctx *returnFormatContext) formatLegacyReturns(currentLine string) {
 		ctx.leftFlowPackReturns(ctx.contIndent)
 	} else {
 		// First return fits inline - use left-flow packing.
+		if ctx.tryFormatBalancedTwoLineReturns(currentLine) {
+			return
+		}
 		ctx.result.WriteString(" (")
 		ctx.leftFlowPackReturns(currentLine + ") (")
 	}
+}
+
+func (ctx *returnFormatContext) tryFormatBalancedTwoLineReturns(
+	currentLine string) bool {
+
+	if len(ctx.retList) < 3 {
+		return false
+	}
+
+	type candidate struct {
+		text string
+		diff int
+		max  int
+	}
+
+	best := candidate{diff: int(^uint(0) >> 1)}
+	for split := 1; split < len(ctx.retList); split++ {
+		firstParts := trimmedReturnParts(ctx.retList[:split])
+		secondParts := trimmedReturnParts(ctx.retList[split:])
+		if len(firstParts) == 0 || len(secondParts) == 0 {
+			continue
+		}
+
+		firstLine := currentLine + ") (" +
+			strings.Join(firstParts, ", ") + ","
+		secondLine := ctx.contIndent +
+			strings.Join(secondParts, ", ") + ")"
+		if ctx.hasBrace {
+			secondLine += " {"
+		}
+
+		firstLen := width.VisualLenWithTab(firstLine, ctx.tabStop)
+		secondLen := width.VisualLenWithTab(secondLine, ctx.tabStop)
+		if firstLen > ctx.colLimit || secondLen > ctx.colLimit {
+			continue
+		}
+
+		diff := firstLen - secondLen
+		if diff < 0 {
+			diff = -diff
+		}
+		maxLen := firstLen
+		if secondLen > maxLen {
+			maxLen = secondLen
+		}
+		if diff < best.diff || diff == best.diff && maxLen < best.max {
+			best = candidate{
+				text: " (" + strings.Join(firstParts, ", ") +
+					",\n" + ctx.contIndent +
+					strings.Join(secondParts, ", ") + ")",
+				diff: diff,
+				max:  maxLen,
+			}
+		}
+	}
+
+	if best.text == "" {
+		return false
+	}
+
+	ctx.result.WriteString(best.text)
+
+	return true
+}
+
+func trimmedReturnParts(parts []string) []string {
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+
+	return out
 }
 
 func isSmallParenReturnList(returns string) bool {
