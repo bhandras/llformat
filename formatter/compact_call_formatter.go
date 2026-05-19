@@ -1644,34 +1644,44 @@ func formatCallFirstStringArgInlineNext(head string, args []string, wsIndent,
 
 	var b strings.Builder
 	b.WriteString(firstLine)
-	b.WriteByte('\n')
-	b.WriteString(contIndent)
 
-	curLen := visualLen(contIndent)
+	firstRestAfterInlineString := strings.Contains(firstLine, "\n")
+	curLen := lastLineLen(firstLine)
+	if !firstRestAfterInlineString {
+		b.WriteByte('\n')
+		b.WriteString(contIndent)
+		curLen = visualLen(contIndent)
+	}
+
 	wroteRest := false
 	for _, raw := range args[1:] {
 		arg := strings.TrimSpace(raw)
 		if arg == "" || strings.Contains(arg, "\n") {
 			return "", false
 		}
-		need := firstLineLen(arg)
+		sep := ""
 		if wroteRest {
-			need += 2
+			sep = ", "
+		} else if firstRestAfterInlineString {
+			sep = " "
 		}
-		if wroteRest && curLen+need > lineWidth {
-			b.WriteByte(',')
+		need := firstLineLen(sep) + firstLineLen(arg)
+		if (wroteRest || firstRestAfterInlineString) &&
+			curLen+need > lineWidth {
+
+			if wroteRest {
+				b.WriteByte(',')
+			}
 			b.WriteByte('\n')
 			b.WriteString(contIndent)
 			b.WriteString(arg)
 			curLen = visualLen(contIndent) + firstLineLen(arg)
 		} else {
-			if wroteRest {
-				b.WriteString(", ")
-				curLen += 2
-			}
+			b.WriteString(sep)
 			b.WriteString(arg)
-			curLen += firstLineLen(arg)
+			curLen += need
 		}
+		firstRestAfterInlineString = false
 		wroteRest = true
 	}
 	if !wroteRest {

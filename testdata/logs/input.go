@@ -472,3 +472,17 @@ var f sampleErrorHandler
 type sampleErrorHandler struct{}
 
 func (sampleErrorHandler) HandleError(error) error { return nil }
+
+// example47: Nested fmt.Errorf with a split format string.
+func example47HandleSplitError(preimage Preimage, payReq PayReq) error {
+	if preimage.Hash() != payReq.Hash {
+		return f.HandleError(
+			fmt.Errorf(
+				"invalid swap invoice hash: expected %x got %x",
+				preimage.Hash(), payReq.Hash,
+			),
+		)
+	}
+
+	return nil
+}
