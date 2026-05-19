@@ -138,6 +138,26 @@ func (f *ReservationFSM) handleSubcriptions(ctx context.Context, blockHeightChan
 	return fsm.NoOp, nil
 }
 
+// Example 25: Function with one named parameter and long returns
+func rpcRouteCancel(
+	details *outCancelDetails) (
+	*veryLongRouteCancelResponseWithAdditionalSuffix, error) {
+
+	return nil, nil
+}
+
+// Example 26: Single-line input version of rpcRouteCancel should produce the same result.
+func rpcRouteCancel2(details *outCancelDetails) (*veryLongRouteCancelResponseWithAdditionalSuffix, error) {
+	return nil, nil
+}
+
+// Example 27: Multiline params with inline returns should remain unchanged
+func unmarshalFixedPoint(
+	fp *looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, error) {
+
+	return nil, nil
+}
+
 // Stub types to make the file compile
 type TapdClient struct{}
 type Server struct{}
@@ -200,5 +220,8 @@ type OperationQueueStats struct{}
 type ErrorRateMetrics struct{}
 type ServiceManager struct{}
 type ReservationFSM struct{}
+type outCancelDetails struct{}
+type routeCancelResp struct{}
+type veryLongRouteCancelResponseWithAdditionalSuffix struct{}
 
 func main() {}

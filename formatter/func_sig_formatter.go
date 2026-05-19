@@ -322,6 +322,17 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 			if width.VisualLenWithTab(indent+collapsed, tabStop) <= colLimit {
 				return indent + collapsed, false
 			}
+			if signatureLinesFit(
+				signature, indent, colLimit, tabStop,
+			) && !isFuncLitSignature(signature) &&
+				!shouldRebreakFailedMultilineSigCollapse(
+					f, signature, collapsed, indent, colLimit,
+					tabStop,
+				) {
+
+				return indent + signature,
+					hasNewlineOutsideBraces(signature)
+			}
 			// Even if it doesn't fit, collapsing whitespace makes
 			// subsequent breaking decisions more consistent.
 			signature = collapsed
@@ -356,6 +367,71 @@ func signatureLinesFit(signature, indent string, colLimit, tabStop int) bool {
 	}
 
 	return true
+}
+
+func shouldRebreakFailedMultilineSigCollapse(f *FuncSigFormatter, original,
+	collapsed, indent string, colLimit, tabStop int) bool {
+
+	if !hasSplitReturnOpenAfterMultilineParams(f, original) {
+		return false
+	}
+
+	funcPart, rest, _, ok := f.parseSigParts(collapsed)
+	if !ok {
+		return false
+	}
+	paramEnd := f.findMatchingParen(rest, 0)
+	if paramEnd == -1 {
+		return false
+	}
+
+	params := rest[1:paramEnd]
+	paramList := filterNonEmptyTrimmed(f.splitFuncParamList(params))
+	if len(paramList) == 0 || strings.Contains(paramList[0], "\n") {
+		return false
+	}
+
+	returns, afterReturns := f.parseSigReturns(rest[paramEnd+1:])
+	if !strings.HasPrefix(returns, "(") {
+		return false
+	}
+
+	hasBrace := sigHasBrace(afterReturns)
+	hasParenReturns := strings.HasPrefix(returns, "(")
+	trailingMinimal, _ := computeSigTrailing(
+		returns, hasBrace, hasParenReturns,
+	)
+
+	testLine := indent + funcPart + "(" + paramList[0]
+	if len(paramList) == 1 {
+		testLine += trailingMinimal
+	} else {
+		testLine += ","
+	}
+
+	return width.VisualLenWithTab(testLine, tabStop) <= colLimit
+}
+
+func hasSplitReturnOpenAfterMultilineParams(f *FuncSigFormatter,
+	signature string) bool {
+
+	_, rest, _, ok := f.parseSigParts(signature)
+	if !ok {
+		return false
+	}
+	paramEnd := f.findMatchingParen(rest, 0)
+	if paramEnd == -1 {
+		return false
+	}
+
+	params := rest[1:paramEnd]
+	if !strings.Contains(params, "\n") {
+		return false
+	}
+
+	afterParams := strings.TrimLeft(rest[paramEnd+1:], " \t")
+
+	return strings.HasPrefix(afterParams, "(\n")
 }
 
 func collapseMultilineParenReturnListIfFits(signature string, colLimit,
@@ -1548,8 +1624,19 @@ func (f *FuncSigFormatter) shouldUseInlineReturns(sig, returns string,
 	if isFuncLit {
 		return funcLitCanBreakParamsForInlineReturns(paramList)
 	}
+	if isFuncDeclNoRecv && hasSingleNamedParam(paramList) {
+		return false
+	}
 
 	return isFuncDeclNoRecv || isMethodDecl || isInterfaceMethod
+}
+
+func hasSingleNamedParam(paramList []string) bool {
+	if len(paramList) != 1 {
+		return false
+	}
+
+	return strings.ContainsAny(strings.TrimSpace(paramList[0]), " \t")
 }
 
 func funcLitCanBreakParamsForInlineReturns(paramList []string) bool {
