@@ -322,6 +322,12 @@ func FormatFuncSignatureNext(signature, indent string, colLimit,
 			if width.VisualLenWithTab(indent+collapsed, tabStop) <= colLimit {
 				return indent + collapsed, false
 			}
+			if formatted, ok := formatPartialSplitReturnsByBreakingParam(
+				f, signature, indent, colLimit, tabStop,
+			); ok {
+
+				return formatted, true
+			}
 			if signatureLinesFit(
 				signature, indent, colLimit, tabStop,
 			) && !isFuncLitSignature(signature) &&
@@ -367,6 +373,111 @@ func signatureLinesFit(signature, indent string, colLimit, tabStop int) bool {
 	}
 
 	return true
+}
+
+func formatPartialSplitReturnsByBreakingParam(f *FuncSigFormatter, signature,
+	indent string, colLimit, tabStop int) (string, bool) {
+
+	if !hasPartialSplitReturnList(signature) ||
+		isFuncLitSignature(signature) {
+
+		return "", false
+	}
+
+	sigAtFunc, hasFuncKeyword := signatureAtFunc(strings.TrimSpace(signature))
+	if !hasFuncKeyword || !strings.HasPrefix(sigAtFunc, "func ") ||
+		strings.HasPrefix(sigAtFunc, "func (") {
+
+		return "", false
+	}
+
+	funcPart, rest, _, ok := f.parseSigParts(signature)
+	if !ok {
+		return "", false
+	}
+	paramEnd := f.findMatchingParen(rest, 0)
+	if paramEnd == -1 {
+		return "", false
+	}
+
+	params := rest[1:paramEnd]
+	paramList := filterNonEmptyTrimmed(f.splitFuncParamList(params))
+	if len(paramList) != 1 || strings.Contains(paramList[0], "\n") ||
+		!hasSingleNamedParam(paramList) ||
+		hasSharedNameParamGroup(paramList) {
+
+		return "", false
+	}
+
+	returns, afterReturns := f.parseSigReturns(rest[paramEnd+1:])
+	collapsedReturns, ok := collapseSmallParenReturns(returns)
+	if !ok {
+		return "", false
+	}
+
+	tail := ""
+	if sigHasBrace(afterReturns) {
+		tail = " {"
+	} else if strings.TrimSpace(afterReturns) != "" {
+		return "", false
+	}
+
+	contIndent := indent + "\t"
+	firstLine := indent + funcPart + "("
+	secondLine := contIndent + strings.TrimSpace(paramList[0]) + ") " +
+		collapsedReturns + tail
+
+	if width.VisualLenWithTab(firstLine, tabStop) > colLimit ||
+		width.VisualLenWithTab(secondLine, tabStop) > colLimit {
+
+		return "", false
+	}
+
+	return firstLine + "\n" + secondLine, true
+}
+
+func hasPartialSplitReturnList(signature string) bool {
+	lines := strings.Split(signature, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimRight(line, " \t")
+		openIdx := strings.LastIndex(trimmed, ") (")
+		if openIdx < 0 {
+			continue
+		}
+		for _, restLine := range lines[i+1:] {
+			if strings.Contains(restLine, ")") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func collapseSmallParenReturns(returns string) (string, bool) {
+	trimmed := strings.TrimSpace(returns)
+	if len(trimmed) < 2 || trimmed[0] != '(' ||
+		trimmed[len(trimmed)-1] != ')' {
+
+		return "", false
+	}
+
+	content := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
+	if content == "" {
+		return "()", true
+	}
+	if strings.ContainsAny(content, "{}") ||
+		strings.Contains(content, "func(") {
+
+		return "", false
+	}
+
+	parts := filterNonEmptyTrimmed(scanner.SplitTopLevel(content))
+	if len(parts) == 0 || len(parts) > 2 {
+		return "", false
+	}
+
+	return "(" + strings.Join(parts, ", ") + ")", true
 }
 
 func shouldRebreakFailedMultilineSigCollapse(f *FuncSigFormatter, original,

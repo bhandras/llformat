@@ -242,6 +242,20 @@ func unmarshalFixedPoint(
 	return nil, nil
 }
 
+// Example 28: Partial return split should move the parameter down
+func unmarshalFixedPoint2(
+	fp *looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, error) {
+
+	return nil, nil
+}
+
+// Example 29: Partial return split should move the parameter down
+func unmarshalFixedPoint3(
+	fp *looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, error) {
+
+	return nil, nil
+}
+
 // Stub types to make the file compile
 type TapdClient struct{}
 type Server struct{}
