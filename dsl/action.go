@@ -314,9 +314,9 @@ func formatCallOnePerLine(call *ast.CallExpr, indent string,
 
 	argIndent := indent + "\t"
 
-	for i, arg := range call.Args {
+	for i := range call.Args {
 		b.WriteString(argIndent)
-		argSrc := renderNode(arg, ctx.Fset)
+		argSrc := renderCallArg(call, i, ctx)
 		// Handle multi-line arguments by re-indenting
 		lines := strings.Split(argSrc, "\n")
 		for j, line := range lines {
@@ -360,8 +360,8 @@ func formatCallLeftPack(call *ast.CallExpr, indent string,
 	lineWidth := indentWidth
 	firstOnLine := true
 
-	for i, arg := range call.Args {
-		argSrc := renderNode(arg, ctx.Fset)
+	for i := range call.Args {
+		argSrc := renderCallArg(call, i, ctx)
 		argWidth := visualLen(argSrc, ctx.TabStop)
 
 		if firstOnLine {
@@ -397,6 +397,21 @@ func formatCallLeftPack(call *ast.CallExpr, indent string,
 	b.WriteString(")")
 
 	return b.String()
+}
+
+// renderCallArg renders one call argument, including the variadic ellipsis
+// that the Go AST stores on CallExpr rather than on the final Args expression.
+func renderCallArg(call *ast.CallExpr, index int, ctx *Context) string {
+	if call == nil || ctx == nil || index < 0 || index >= len(call.Args) {
+		return ""
+	}
+
+	argSrc := renderNode(call.Args[index], ctx.Fset)
+	if index == len(call.Args)-1 && call.Ellipsis.IsValid() {
+		argSrc += "..."
+	}
+
+	return argSrc
 }
 
 // formatCallAdaptive chooses between one-per-line and left-pack.
@@ -1803,7 +1818,7 @@ func (a *BreakCallArgsLayoutAction) Execute(caps Captures, ctx *Context) (
 	startCol := prefixWidthAt(ctx.Source, start, ctx.TabStop)
 
 	funDoc := callFunDoc(call.Fun, ctx)
-	argDocs, ok := buildCallArgsDocs(call.Args, a.Grouping, ctx)
+	argDocs, ok := buildCallArgsDocs(call, a.Grouping, ctx)
 	if !ok {
 		return nil, false
 	}
@@ -1934,8 +1949,8 @@ func formatStructuredLogCallPacked(call *ast.CallExpr, pairStart int,
 	}
 
 	argTexts := make([]string, 0, len(call.Args))
-	for _, arg := range call.Args {
-		argText := renderNode(arg, ctx.Fset)
+	for i := range call.Args {
+		argText := renderCallArg(call, i, ctx)
 		if argText == "" || strings.Contains(argText, "\n") {
 			return "", false
 		}
@@ -2056,20 +2071,26 @@ func buildCallArgsGroupDocs(argDocs []layout.Doc, isMake bool) []layout.Doc {
 	return argsGroupDocs
 }
 
-func buildCallArgsDocs(args []ast.Expr, grouping string,
+func buildCallArgsDocs(call *ast.CallExpr, grouping string,
 	ctx *Context) ([]layout.Doc, bool) {
 
+	if call == nil {
+		return nil, false
+	}
+	args := call.Args
 	if len(args) == 0 {
 		return nil, false
 	}
 
+	var docs []layout.Doc
+	var ok bool
 	switch grouping {
 	case "pairs":
-		return buildCallArgPairs(args, ctx)
+		docs, ok = buildCallArgPairs(args, ctx)
 
 	default:
 		// Default: one argument per line (forced break).
-		docs := make([]layout.Doc, 0, len(args))
+		docs = make([]layout.Doc, 0, len(args))
 		for _, arg := range args {
 			argDoc, ok := callArgDoc(arg, ctx)
 			if !ok {
@@ -2077,9 +2098,18 @@ func buildCallArgsDocs(args []ast.Expr, grouping string,
 			}
 			docs = append(docs, argDoc)
 		}
-
-		return docs, true
+		ok = true
 	}
+	if !ok || len(docs) == 0 {
+		return nil, false
+	}
+	if call.Ellipsis.IsValid() {
+		docs[len(docs)-1] = layout.C(
+			docs[len(docs)-1], layout.T("..."),
+		)
+	}
+
+	return docs, true
 }
 
 func buildCallArgPairs(args []ast.Expr, ctx *Context) ([]layout.Doc, bool) {
@@ -3652,8 +3682,8 @@ func formatCallPackedSimple(call *ast.CallExpr, indent string,
 	lineWidth := contIndentWidth
 	b.WriteString(contIndent)
 
-	for i, arg := range call.Args {
-		argSrc := renderNode(arg, ctx.Fset)
+	for i := range call.Args {
+		argSrc := renderCallArg(call, i, ctx)
 		argWidth := visualLen(argSrc, ctx.TabStop)
 
 		if i > 0 {
@@ -3706,8 +3736,8 @@ func formatCallLeftFlowSimple(call *ast.CallExpr, indent string,
 	// Start on same line as opening paren
 	lineWidth := visualLen(indent, ctx.TabStop) + len(funcSrc) + 1
 
-	for i, arg := range call.Args {
-		argSrc := renderNode(arg, ctx.Fset)
+	for i := range call.Args {
+		argSrc := renderCallArg(call, i, ctx)
 
 		if nextWidth, handled := formatLeftFlowStringArg(
 			&b, argSrc, i == 0, lineWidth, contIndent,
@@ -6172,8 +6202,10 @@ func formatMethodChain(calls []*ast.CallExpr, indent string,
 
 		// Build the arguments part
 		var argParts []string
-		for _, arg := range call.Args {
-			argParts = append(argParts, renderNode(arg, ctx.Fset))
+		for argIndex := range call.Args {
+			argParts = append(
+				argParts, renderCallArg(call, argIndex, ctx),
+			)
 		}
 		argsInline := strings.Join(argParts, ", ")
 
