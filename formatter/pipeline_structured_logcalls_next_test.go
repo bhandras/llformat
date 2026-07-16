@@ -90,6 +90,44 @@ func f(log Logger, ctx any, batchID string, nextHeight int, blocksRemaining int)
 	)
 }
 
+func TestPipelineNext_StructuredLogCalls_PreservesVariadicArgument(
+	t *testing.T) {
+
+	t.Parallel()
+
+	const in = `package p
+
+type Logger interface { WarnS(any, string, error, ...any) }
+
+func f(log Logger, ctx any, wrapped error, logFields []any) {
+	log.WarnS(
+		ctx, "outbox dispatch failed after all retry attempts", wrapped,
+		logFields...,
+	)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		UseDSLLogCalls:       true,
+		UseDSLMultiLineCalls: false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out1 := p.Format([]byte(in))
+	out2 := p.Format(out1)
+	out := string(out1)
+
+	require.Contains(t, out, "\t\tlogFields...,\n")
+	require.NotContains(t, out, "\t\tlogFields,\n")
+	require.Equal(t, string(out1), string(out2), "not idempotent")
+	requireASTEquivalent(t, []byte(in), out1)
+}
+
 func TestPipelineNext_StructuredLogCalls_PacksSlogAttrs(t *testing.T) {
 	t.Parallel()
 

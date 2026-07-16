@@ -51,3 +51,35 @@ func f() {
 	_, err := parser.ParseFile(fset, "out.go", out, parser.AllErrors)
 	require.NoError(t, err)
 }
+
+func TestPipelineDSLMultiLineLayoutArgsPreservesVariadicArgument(t *testing.T) {
+	t.Parallel()
+
+	const in = `package p
+
+func f(prefix string, values []any) {
+	veryLongFunctionNameForTestingPurposes(prefix, values...)
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          30,
+		TabStop:              8,
+		UseDSLMultiLineCalls: true,
+		DSLMultiLineStyle:    "layout-args",
+		UseDSLLogCalls:       false,
+		UseDSLExpr:           false,
+		UseDSLComments:       false,
+		UseDSLFuncSigs:       false,
+		UseDSLBlankLines:     false,
+	})
+
+	out1 := p.Format([]byte(in))
+	out2 := p.Format(out1)
+	out := string(out1)
+
+	require.Contains(t, out, "\t\tvalues...,\n")
+	require.NotContains(t, out, "\t\tvalues,\n")
+	require.Equal(t, string(out1), string(out2), "not idempotent")
+	requireASTEquivalent(t, []byte(in), out1)
+}
