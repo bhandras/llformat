@@ -91,6 +91,45 @@ func getChainSyncInfo() (
 	)
 }
 
+func TestPipelineNext_Signatures_DoesNotMoveParamWithInlineReturns(
+	t *testing.T) {
+
+	const in = `package p
+
+func unmarshalFixedPoint(
+	fp *looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, error) {
+
+	return nil, nil
+}
+`
+
+	p := NewPipeline(PipelineConfig{
+		ColumnLimit:          80,
+		TabStop:              8,
+		UseDSLFuncSigs:       true,
+		UseDSLFuncSigsNative: true,
+		DSLSigsStyle:         "legacy",
+		// Keep other DSL stages off so this test stays focused.
+		UseDSLLogCalls:         false,
+		UseDSLMultiLineCalls:   false,
+		UseDSLExpr:             false,
+		UseDSLComments:         false,
+		UseDSLBlankLines:       false,
+		UseDSLBlankLinesNative: false,
+	})
+
+	out := string(p.Format([]byte(in)))
+
+	require.Contains(
+		t, out, "func unmarshalFixedPoint(\n	fp "+
+			"*looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, "+
+			"error) {",
+	)
+	require.NotContains(
+		t, out, "func unmarshalFixedPoint(fp *looprpc.FixedPoint) (",
+	)
+}
+
 func TestPipelineNext_Signatures_InsertsBlankLineAfterAlreadyMultilineSignature(
 	t *testing.T) {
 

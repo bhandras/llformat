@@ -268,9 +268,7 @@ func buildArgs(cfg runConfig, path string) []string {
 		"--col", fmt.Sprint(cfg.colLimit),
 		"--tab", fmt.Sprint(cfg.tabStop),
 		"--comments", cfg.commentMode,
-		"--logcalls-min-tail-len", fmt.Sprint(
-			cfg.logCallsMinTailLen,
-		),
+		"--logcalls-min-tail-len", fmt.Sprint(cfg.logCallsMinTailLen),
 		"--fixpoint-iters", fmt.Sprint(cfg.fixpointIters),
 	}
 

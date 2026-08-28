@@ -111,11 +111,9 @@ func TestApplyProfileAdoptionAddsGeneratedExcludes(t *testing.T) {
 	t.Parallel()
 
 	cfg := reportConfig{
-		Profile:     "adoption",
-		ExcludeDirs: defaultExcludeDirs([]string{"custom"}),
-		ExcludeSuffix: []string{
-			".custom.go",
-		},
+		Profile:       "adoption",
+		ExcludeDirs:   defaultExcludeDirs([]string{"custom"}),
+		ExcludeSuffix: []string{".custom.go"},
 	}
 	if err := applyProfile(&cfg); err != nil {
 		t.Fatalf("applyProfile returned error: %v", err)
@@ -139,11 +137,9 @@ func TestApplyProfileAllKeepsExplicitExcludesOnly(t *testing.T) {
 	t.Parallel()
 
 	cfg := reportConfig{
-		Profile:     "all",
-		ExcludeDirs: defaultExcludeDirs(nil),
-		ExcludeSuffix: []string{
-			".custom.go",
-		},
+		Profile:       "all",
+		ExcludeDirs:   defaultExcludeDirs(nil),
+		ExcludeSuffix: []string{".custom.go"},
 	}
 	if err := applyProfile(&cfg); err != nil {
 		t.Fatalf("applyProfile returned error: %v", err)

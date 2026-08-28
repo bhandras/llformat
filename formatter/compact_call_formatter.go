@@ -1387,6 +1387,15 @@ func stringLitArgNextWidth(cfg stringLitArgNextConfig, hasMore bool) int {
 func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	trailingComma bool) string {
 
+	return formatCallPackedMultiLineNextInternal(
+		call, wsIndent, fullPrefix, trailingComma, false,
+	)
+}
+
+func formatCallPackedMultiLineNextInternal(call []byte, wsIndent,
+	fullPrefix string, trailingComma bool,
+	firstStringArgInline bool) string {
+
 	s := string(call)
 	open := strings.IndexByte(s, '(')
 	if open == -1 || !strings.HasSuffix(s, ")") {
@@ -1437,6 +1446,13 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	); ok {
 
 		head = formattedHead
+	}
+	if firstStringArgInline {
+		if formatted, ok := formatCallFirstStringArgInlineNext(
+			head, args, wsIndent, contIndent, lineWidth,
+		); ok {
+			return formatted
+		}
 	}
 
 	var b strings.Builder
@@ -1601,6 +1617,129 @@ func formatCallPackedMultiLineNext(call []byte, wsIndent, fullPrefix string,
 	b.WriteByte(')')
 
 	return b.String()
+}
+
+func formatCallFirstStringArgInlineNext(head string, args []string, wsIndent,
+	contIndent string, lineWidth int) (string, bool) {
+
+	if strings.Contains(head, "\n") || len(args) < 2 {
+		return "", false
+	}
+
+	first := strings.TrimSpace(args[0])
+	firstText, ok := flattenedStringExprText(first)
+	if first == "" || !ok {
+		return "", false
+	}
+
+	firstLiteral := quoteGoString(firstText)
+	firstLine := head + "(" + firstLiteral + ","
+	if visualLen(wsIndent)+firstLineLen(firstLine) > lineWidth {
+		firstLine, ok = formatCallSplitFirstStringArgInlineNext(
+			head, firstText, wsIndent, contIndent, lineWidth,
+		)
+		if !ok {
+			return "", false
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(firstLine)
+
+	firstRestAfterInlineString := strings.Contains(firstLine, "\n")
+	curLen := lastLineLen(firstLine)
+	if !firstRestAfterInlineString {
+		b.WriteByte('\n')
+		b.WriteString(contIndent)
+		curLen = visualLen(contIndent)
+	}
+
+	wroteRest := false
+	for _, raw := range args[1:] {
+		arg := strings.TrimSpace(raw)
+		if arg == "" || strings.Contains(arg, "\n") {
+			return "", false
+		}
+		sep := ""
+		if wroteRest {
+			sep = ", "
+		} else if firstRestAfterInlineString {
+			sep = " "
+		}
+		need := firstLineLen(sep) + firstLineLen(arg)
+		if (wroteRest || firstRestAfterInlineString) &&
+			curLen+need > lineWidth {
+
+			if wroteRest {
+				b.WriteByte(',')
+			}
+			b.WriteByte('\n')
+			b.WriteString(contIndent)
+			b.WriteString(arg)
+			curLen = visualLen(contIndent) + firstLineLen(arg)
+		} else {
+			b.WriteString(sep)
+			b.WriteString(arg)
+			curLen += need
+		}
+		firstRestAfterInlineString = false
+		wroteRest = true
+	}
+	if !wroteRest {
+		return "", false
+	}
+	if curLen+1 > lineWidth {
+		b.WriteByte('\n')
+		b.WriteString(wsIndent)
+		b.WriteByte(')')
+	} else {
+		b.WriteByte(')')
+	}
+
+	return b.String(), true
+}
+
+func formatCallSplitFirstStringArgInlineNext(head, firstText, wsIndent,
+	contIndent string, lineWidth int) (string, bool) {
+
+	startCol := visualLen(wsIndent) + firstLineLen(head+"(")
+	split := buildSplitQuotedForCallArg(
+		firstText, startCol, contIndent, lineWidth, true,
+	)
+	if !strings.Contains(split, "\n") {
+		return "", false
+	}
+
+	firstLine := head + "(" + split + ","
+	if !replacementTextLinesFitWidth(wsIndent, firstLine, lineWidth) {
+		return "", false
+	}
+
+	return firstLine, true
+}
+
+func replacementTextLinesFitWidth(prefix, text string, lineWidth int) bool {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		candidate := line
+		if i == 0 {
+			candidate = prefix + line
+		}
+		if visualLen(candidate) > lineWidth {
+			return false
+		}
+	}
+
+	return true
+}
+
+func flattenedStringExprText(s string) (string, bool) {
+	expr, err := parser.ParseExpr(s)
+	if err != nil {
+		return "", false
+	}
+
+	return llast.FlattenStringExprAST(expr)
 }
 
 func formatGenericCallHeadNext(head, wsIndent,
@@ -1954,12 +2093,32 @@ func (s *callExprArgNextState) handleCallExprArgNext(a string) bool {
 	}
 
 	// Need to recursively format the nested call.
-	nested := formatCallPackedMultiLineNext(
+	nested := formatCallPackedMultiLineNextInternal(
 		[]byte(a), s.contIndent, s.contIndent, true,
+		isFmtErrorfCallText(a),
 	)
 	s.writeNestedCall(nested)
 
 	return true
+}
+
+func isFmtErrorfCallText(s string) bool {
+	expr, err := parser.ParseExpr(s)
+	if err != nil {
+		return false
+	}
+
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel == nil || sel.Sel.Name != "Errorf" {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+
+	return ok && ident.Name == "fmt"
 }
 
 // writeArgSimple writes an argument that fits inline.

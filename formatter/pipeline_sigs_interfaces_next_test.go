@@ -160,9 +160,11 @@ type I interface {
 	)
 }
 
-func TestPipelineNext_Signatures_InterfaceMethod_UsesCanonicalMultilineReturnListForLongReturns(
+func TestPipelineNext_Signatures_InterfaceMethod_PrefersInlineMapReturnListByBreakingSingleParam(
 	t *testing.T) {
 
+	// This uses lntypes.Hash as a representative real-world map key type.
+	// The implementation does not special-case either name.
 	const in = `package p
 
 import (
@@ -202,15 +204,13 @@ type I interface {
 			"parenthesized return list",
 	)
 
-	// For long returns, prefer gofmt-like multiline results.
+	// Even when the first return type is long, prefer keeping a two-item
+	// return list inline by breaking the single parameter first.
 	require.Contains(
-		t, out, ") "+
-			"("+
-			"\n"+
-			"		map[lntypes.Hash]Invoice,"+
-			"\n		error,\n	)", "next profile "+
-			"should use canonical multiline return lists for "+
-			"long return types",
+		t, out, "FetchPendingInvoices(\n		ctx "+
+			"context.Context) (map[lntypes.Hash]Invoice, error)",
+		"expected params to break before forcing a multiline "+
+			"two-item return list",
 	)
 
 	// No blank lines inside the return list.

@@ -130,6 +130,74 @@ func example18(x, y, z, w int, enabled, active bool) bool {
 	return x > 0 && y > 0 && z > 0 && w > 0 && x < 100 && y < 100 && z < 100 && w < 100 && enabled && active
 }
 
+// Example 19: Single-element composite literals should stay compact
+func example19SingleElementCompositeLiteral(swapRequest SwapRequest) {
+	expectedOut := []requestResponse{
+		{
+			request: swapRequest,
+			response: &SwapInfo{
+				SwapHash: lntypes.Hash{
+					1,
+				},
+				Marker: sampleMarker{
+					"ready",
+				},
+			},
+		},
+	}
+	_ = expectedOut
+}
+
+// Example 20: Keyed composite elements should not share a line
+func example20KeyedElements(resId1, resId2 ReservationID) {
+	requests := []ReservationRequest{
+		{
+			ID: resId1,
+		}, {
+			ID: resId2,
+		},
+	}
+	_ = requests
+}
+
+// Example 21: Simple elided composite elements should stay packed
+func example21PackedElidedElements() {
+	hops := []*RouteHop{
+		{},
+		{},
+		{},
+	}
+	preimages := []SamplePreimage{
+		{1}, {2}, {3},
+		{4}, {5}, {6},
+		{7}, {8}, {9},
+	}
+	_, _ = hops, preimages
+}
+
+// Example 22: Elided composite keyed values should expand outer braces
+func example22ElidedCompositeKeyedValues() {
+	requiredOps := map[string][]PermissionOp{
+		"/service/Action": {{
+			Entity: "swap",
+			Action: "execute",
+		}, {
+			Entity: "service",
+			Action: "read",
+		}},
+		"/service/Read": {{
+			Entity: "swap",
+			Action: "read",
+		}},
+	}
+	simpleIDs := map[SampleHash][]DepositID{
+		sampleHashA: {
+			depositID1,
+		},
+	}
+	_, _ = requiredOps, simpleIDs
+}
+
 // Stubs to make the file compile
 type formatter struct{}
 
@@ -143,6 +211,29 @@ func someVeryLongFunctionName(int, int) int               { return 0 }
 func anotherLongFunction(int, int) int                    { return 0 }
 func someCheck(int) bool                                  { return false }
 func anotherCheck(int) bool                               { return false }
+
+type SwapRequest struct{}
+type SwapInfo struct {
+	SwapHash interface{}
+	Marker   interface{}
+}
+type requestResponse struct {
+	request  SwapRequest
+	response *SwapInfo
+}
+type sampleMarker []string
+type RouteHop struct{}
+type SamplePreimage [32]byte
+type SampleHash [32]byte
+type DepositID int
+type PermissionOp struct {
+	Entity string
+	Action string
+}
+type ReservationID struct{}
+type ReservationRequest struct {
+	ID ReservationID
+}
 
 type clientType struct{}
 

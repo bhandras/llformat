@@ -45,6 +45,45 @@ func (c *IsCallFuncInListCond) Eval(caps Captures, ctx *Context) bool {
 	return stringInSlice(callExprFuncName(call), c.Names)
 }
 
+// CallArgCountCond checks the number of arguments in a CallExpr.
+type CallArgCountCond struct {
+	Target string
+	Op     string
+	Value  int
+}
+
+func (c *CallArgCountCond) Eval(caps Captures, ctx *Context) bool {
+	node := resolveTarget(caps, c.Target)
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+
+	got := len(call.Args)
+	switch c.Op {
+	case ">":
+		return got > c.Value
+
+	case ">=":
+		return got >= c.Value
+
+	case "<":
+		return got < c.Value
+
+	case "<=":
+		return got <= c.Value
+
+	case "==":
+		return got == c.Value
+
+	case "!=":
+		return got != c.Value
+
+	default:
+		return false
+	}
+}
+
 // IsCallFuncContainsAnyCond checks whether the target node is a CallExpr whose
 // callee name contains any of the provided substrings. This matches legacy
 // multiline-exclude semantics (strings.Contains).

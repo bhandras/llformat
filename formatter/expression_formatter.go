@@ -44,7 +44,8 @@ func FormatCompositeLiteralArg(arg, contIndent string,
 	isKV := isKeyedCompositeLiteral(elems)
 
 	if isKV {
-		return formatKeyedCompositeLiteral(before, contIndent, elems), true
+		return formatKeyedCompositeLiteral(before, contIndent, elems),
+			true
 	}
 
 	return formatSliceCompositeLiteral(
@@ -168,7 +169,8 @@ func formatCompositeLiteralValue(value, elemIndent string) (string, bool) {
 
 	elems := scanner.SplitTopLevelAny(inside)
 	if isKeyedCompositeLiteral(elems) {
-		return formatKeyedCompositeLiteral(before, elemIndent, elems), true
+		return formatKeyedCompositeLiteral(before, elemIndent, elems),
+			true
 	}
 
 	return formatSliceCompositeLiteral(

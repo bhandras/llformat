@@ -184,6 +184,39 @@ func main() {
 	chain2().Then("ok").Limit(100)
 }
 
+// Simple nested calls should not be over-expanded.
+func simpleNestedCalls(row Row, quote Quote) error {
+	maxPrepayRoutingFee := getMaxRoutingFee(
+		btcutil.Amount(quote.PrepayAmtSat),
+	)
+	_ = maxPrepayRoutingFee
+
+	err := finalizedHtlcTx.Deserialize(
+		bytes.NewReader(row.FinalizedHtlcTx),
+	)
+
+	return err
+}
+
+// A simple notification argument should stay with the call.
+func simpleNotifier(notifCtx context.Context) error {
+	blockHeightChan, errEpochChan, err := f.cfg.ChainNotifier.
+		RegisterBlockEpochNtfn(notifCtx)
+	_, _ = blockHeightChan, errEpochChan
+
+	return err
+}
+
+// Mock returns should pack args.Error(2) when it fits.
+func mockReturn(mock Args) (chan *chainntnfs.TxConfirmation,
+	chan error, error) {
+
+	args := m.Called(ctx, txid, pkScript, numConfs, heightHint)
+
+	return args.Get(0).(chan *chainntnfs.TxConfirmation),
+		args.Get(1).(chan error), args.Error(2)
+}
+
 func someFunction(arg1, arg2, arg3, arg4 string) string {
 	return ""
 }

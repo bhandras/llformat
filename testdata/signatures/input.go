@@ -116,7 +116,64 @@ func getComprehensiveSystemStatus() (systemHealth SystemHealthStatus, resourceUt
 	return
 }
 
+// Example 21: Method with one short parameter and short returns
+func (c *TapdClient) GetAssetName(ctx context.Context, assetId []byte) (string, error) {
+	return "", nil
+}
+
+// Example 22: Interface method with a long row slice return
+type InstantOutStore interface {
+	GetInstantOutSwaps(ctx context.Context) ([]sqlc.GetInstantOutSwapsRow, error)
+}
+
+// Example 23: Function literal assigned through a long selector prefix
+func configureManager(manager *ServiceManager) {
+	manager.reallyLongNestedConfig.FetchLiquidityParams = func(context.Context) ([]byte, error) {
+		return nil, nil
+	}
+}
+
+// Example 24: Reservation subscription helper with channel parameters
+func (f *ReservationFSM) handleSubcriptions(ctx context.Context, blockHeightChan <-chan int32, spendChan <-chan *chainntnfs.SpendDetail, errEpochChan <-chan error, errSpendChan <-chan error) (fsm.EventType, error) {
+	return fsm.NoOp, nil
+}
+
+// Example 25: Function with one named parameter and long returns
+func rpcRouteCancel(
+	details *outCancelDetails) (
+	*veryLongRouteCancelResponseWithAdditionalSuffix, error) {
+
+	return nil, nil
+}
+
+// Example 26: Single-line input version of rpcRouteCancel should produce the same result.
+func rpcRouteCancel2(details *outCancelDetails) (*veryLongRouteCancelResponseWithAdditionalSuffix, error) {
+	return nil, nil
+}
+
+// Example 27: Multiline params with inline returns should remain unchanged
+func unmarshalFixedPoint(
+	fp *looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint, error) {
+
+	return nil, nil
+}
+
+// Example 28: Partial return split should move the parameter down
+func unmarshalFixedPoint2(fp *looprpc.FixedPoint) (*rfqmath.BigIntFixedPoint,
+	error) {
+
+	return nil, nil
+}
+
+// Example 29: Partial return split should move the parameter down
+func unmarshalFixedPoint3(fp *looprpc.FixedPoint) (
+	*rfqmath.BigIntFixedPoint, error) {
+
+	return nil, nil
+}
+
 // Stub types to make the file compile
+type TapdClient struct{}
 type Server struct{}
 type Request struct{}
 type Options struct{}
@@ -175,5 +232,10 @@ type ResourceUtilizationMetrics struct{}
 type ConnectionPoolStats struct{}
 type OperationQueueStats struct{}
 type ErrorRateMetrics struct{}
+type ServiceManager struct{}
+type ReservationFSM struct{}
+type outCancelDetails struct{}
+type routeCancelResp struct{}
+type veryLongRouteCancelResponseWithAdditionalSuffix struct{}
 
 func main() {}
